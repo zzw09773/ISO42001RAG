@@ -1,0 +1,162 @@
+==========================================
+  離線 Image 打包
+==========================================
+
+⏳ 建置 rag-api, embed-proxy 和 jupyter images（包含 pip install）...
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.49kB done
+#1 DONE 0.0s
+
+#2 [jupyter internal] load build definition from Dockerfile
+#2 transferring dockerfile: 863B done
+#2 DONE 0.0s
+
+#3 [embed-proxy internal] load build definition from Dockerfile
+#3 transferring dockerfile: 194B done
+#3 DONE 0.0s
+
+#4 [rag-api internal] load build definition from Dockerfile.api
+#4 transferring dockerfile: 393B done
+#4 DONE 0.0s
+
+#5 [rag-api internal] load metadata for docker.io/library/python:3.11-slim
+#5 ...
+
+#6 [jupyter internal] load metadata for quay.io/jupyter/minimal-notebook:2025-09-30
+#6 DONE 0.7s
+
+#7 [rag-api internal] load .dockerignore
+#7 transferring context: 2B done
+#7 DONE 0.0s
+
+#5 [rag-api internal] load metadata for docker.io/library/python:3.11-slim
+#5 DONE 0.7s
+
+#8 [embed-proxy internal] load .dockerignore
+#8 transferring context: 2B done
+#8 DONE 0.0s
+
+#9 [rag-api internal] load build context
+#9 transferring context: 56.18kB done
+#9 DONE 0.0s
+
+#10 [embed-proxy internal] load build context
+#10 transferring context: 65B done
+#10 DONE 0.0s
+
+#11 [embed-proxy 1/5] FROM docker.io/library/python:3.11-slim@sha256:4057d02a202f69bfbfe10f65300519f612eb00fc595b8499f77d3cfe5b1b9fd4
+#11 resolve docker.io/library/python:3.11-slim@sha256:4057d02a202f69bfbfe10f65300519f612eb00fc595b8499f77d3cfe5b1b9fd4 0.0s done
+#11 DONE 0.0s
+
+#12 [rag-api 3/5] COPY requirements.txt .
+#12 CACHED
+
+#13 [rag-api 4/5] RUN apt-get update && apt-get install -y --no-install-recommends     libpq-dev gcc &&     pip install --no-cache-dir -r requirements.txt &&     apt-get purge -y gcc &&     apt-get autoremove -y &&     rm -rf /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [jupyter 1/5] FROM quay.io/jupyter/minimal-notebook:2025-09-30@sha256:40d4175df5ccbf92e648d422d2a4fe511f373aa3e1b1c0404ac68f029463ea3b
+#14 resolve quay.io/jupyter/minimal-notebook:2025-09-30@sha256:40d4175df5ccbf92e648d422d2a4fe511f373aa3e1b1c0404ac68f029463ea3b 0.0s done
+#14 DONE 0.0s
+
+#15 [embed-proxy 3/5] COPY requirements.txt .
+#15 CACHED
+
+#16 [rag-api 2/5] WORKDIR /app
+#16 CACHED
+
+#17 [embed-proxy 4/5] RUN pip install --no-cache-dir -r requirements.txt
+#17 CACHED
+
+#18 [embed-proxy 5/5] COPY proxy.py .
+#18 CACHED
+
+#19 [jupyter internal] load build context
+#19 transferring context: 38B done
+#19 DONE 0.0s
+
+#20 [jupyter 3/5] RUN apt-get update && apt-get install -yq build-essential libpq-dev &&     pip install --no-cache-dir -r /tmp/requirements.txt &&     rm /tmp/requirements.txt &&     echo "jovyan ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers &&     apt-get clean && rm -rf /var/lib/apt/lists/*
+#20 CACHED
+
+#21 [jupyter 4/5] RUN chmod -R a+rX /home/jovyan/work || true
+#21 CACHED
+
+#22 [jupyter 2/5] COPY requirements.txt /tmp/requirements.txt
+#22 CACHED
+
+#23 [jupyter 5/5] WORKDIR /home/jovyan/work
+#23 CACHED
+
+#24 [rag-api 5/5] COPY . .
+#24 DONE 0.1s
+
+#25 [jupyter] exporting to image
+#25 exporting layers done
+#25 exporting manifest sha256:b9cac878b0a3c28df1bda6ece56a629735b829730e3edfaa708bb4963f270c4a done
+#25 exporting config sha256:57e2aed7bb3dc8f004d9d0b260e6d723027f0c16c7747721d6751b7c2ea54572 done
+#25 exporting attestation manifest sha256:9099e2b5d461005941f19fa92a549cc57cb2502ca0195105f62bd3a702e40714
+#25 ...
+
+#26 [embed-proxy] exporting to image
+#26 exporting layers done
+#26 exporting manifest sha256:d3fb5ff419657032194c6572466a19b242db3ebab98f800782837ffa885175fe done
+#26 exporting config sha256:4863ac8bfc27967593e642c4bce17d33e6f640bc81c9cb436a6f9111dbf47b31 done
+#26 exporting attestation manifest sha256:8472a3e405783cbe537069dbabe9ecfff51dbf4b7f2aca8d2b982721aef0c2ef 0.0s done
+#26 exporting manifest list sha256:f12d2374fecb828ec2ddff98bbcfa68fbd35006675f457c4746114bdf7d18ee9 0.0s done
+#26 naming to docker.io/library/iso42001deploy-embed-proxy:latest done
+#26 unpacking to docker.io/library/iso42001deploy-embed-proxy:latest done
+#26 DONE 0.1s
+
+#25 [jupyter] exporting to image
+#25 exporting attestation manifest sha256:9099e2b5d461005941f19fa92a549cc57cb2502ca0195105f62bd3a702e40714 0.0s done
+#25 exporting manifest list sha256:adb75afa344569e5ac986d90c65d87204e1a71a4dfa64860418e83f0933f7d16 done
+#25 naming to docker.io/library/iso42001deploy-jupyter:latest done
+#25 unpacking to docker.io/library/iso42001deploy-jupyter:latest 0.1s done
+#25 DONE 0.2s
+
+#27 [embed-proxy] resolving provenance for metadata file
+#27 DONE 0.0s
+
+#28 [rag-api] exporting to image
+#28 exporting layers 0.1s done
+#28 exporting manifest sha256:a1e06f92409f0ee90e71433843cb60bbde314f140a7df753b7a620bd914cbf73 0.0s done
+#28 exporting config sha256:334ad1fa27b123fc2cc3103cf6b0081de3c4d804a999dbfc093bef74b3026236 done
+#28 exporting attestation manifest sha256:353447290062a88a8b70d43b5e2408659cf5b69803009b26516f1ca0d1583069 0.0s done
+#28 exporting manifest list sha256:fd5c311bce75cb7a6d471bc9c96c9ca98564a79f1c01650b30ecf38c0fea9bfd done
+#28 naming to docker.io/library/iso42001deploy-rag-api:latest done
+#28 unpacking to docker.io/library/iso42001deploy-rag-api:latest 0.1s done
+#28 DONE 0.3s
+
+#29 [jupyter] resolving provenance for metadata file
+#29 DONE 0.0s
+
+#30 [rag-api] resolving provenance for metadata file
+#30 DONE 0.0s
+✅ Build 完成
+
+⏳ 匯出所有 images...
+  📦 匯出 pgvector/pgvector:pg17 → images/pgvector.tar
+  📦 匯出 nginx:alpine → images/nginx.tar
+  📦 匯出 ghcr.io/open-webui/open-webui:0.7.2 → images/openwebui.tar
+  📦 匯出 iso42001deploy-rag-api:latest → images/rag-api.tar
+  📦 匯出 iso42001deploy-embed-proxy:latest → images/embed-proxy.tar
+  📦 匯出 iso42001deploy-jupyter:latest → images/jupyter.tar
+
+==========================================
+  打包完成
+==========================================
+
+total 5.3G
+-rw------- 1 aia aia  88M Mar  5 01:42 embed-proxy.tar
+-rw------- 1 aia aia 711M Mar  5 01:42 jupyter.tar
+-rw------- 1 aia aia  26M Mar  5 01:41 nginx.tar
+-rw------- 1 aia aia 4.2G Mar  5 01:42 openwebui.tar
+-rw------- 1 aia aia 151M Mar  5 01:41 pgvector.tar
+-rw------- 1 aia aia 156M Mar  5 01:42 rag-api.tar
+
+  📁 images/ 總大小: 5.3G
+
+  ✅ 所有 images 已打包（含 pip 套件）。
+  📋 離線部署步驟：
+     1. 將整個 ISO42001Deploy/ 複製到內網機器
+     2. 執行 ./deploy.sh
+==========================================

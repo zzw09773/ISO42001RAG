@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+.env.local
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Data directories
+data/input/*
+data/output/*
+data/processed/*
+!data/input/.gitkeep
+!data/output/.gitkeep
+!data/processed/.gitkeep
+
+# Legacy data locations (keep for backward compatibility)
+rag_system/processed_md/
+rag_system/output/
+rag_system/documents/
+
+# Temporary files
+*.tmp
+.~lock.*
+*.log
+
+# Docker
+.dockerignore
+
+# Database
+*.db
+*.sqlite3
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+.gemini/
+gha-creds-*.json
+.genkit/traces_idx/genkit.metadata

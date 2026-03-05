@@ -1,0 +1,31 @@
+services:
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_jupyter
+    network_mode: "host"   # 配合 Codex OAuth callback 與本機 DB 連線
+    volumes:
+      - .:/home/jovyan/work
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - JUPYTER_PORT=25678
+      - PGVECTOR_URL=${PGVECTOR_URL:-postgresql://postgres:postgres@localhost:15432/Judge}
+
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: Judge_pgvector
+    ports:
+      - "15432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=Judge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

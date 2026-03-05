@@ -1,0 +1,151 @@
+# =============================================================
+# ISO42001 系統 — 統一 Docker Compose
+# 6 個服務：db, rag-api, embed-proxy, openwebui, nginx, jupyter
+# =============================================================
+
+services:
+  # ---------- 1. PostgreSQL + pgvector ----------
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: ISO42001_pgvector
+    restart: unless-stopped
+    ports:
+      - "15432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-Judge}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- 2. Embedding Proxy (OpenAI ↔ Triton) ----------
+  embed-proxy:
+    build:
+      context: ./embed_proxy
+    container_name: ISO42001_embed_proxy
+    restart: unless-stopped
+    environment:
+      TRITON_GRPC_URL: "${LLM_HOST}:${EMBED_GRPC_PORT:-9001}"
+      TRITON_MODEL: ${TRITON_MODEL_NAME:-nv-embed-v2}
+      PROXY_PORT: "8100"
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8100/health')\" 2>/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------- 3. RAG Agent API ----------
+  rag-api:
+    build:
+      context: ./RAG
+      dockerfile: Dockerfile.api
+    container_name: ISO42001_rag_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      embed-proxy:
+        condition: service_healthy
+    environment:
+      # DB — 使用 service name
+      PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
+      # Embed — 透過 embed-proxy 轉譯到 Triton
+      EMBED_API_KEY: ${EMBED_API_KEY}
+      EMBED_API_BASE: "http://embed-proxy:8100/v1"
+      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
+      # LLM — 直接連線 LLM 服務
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_API_BASE: "http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+      # RAG 配置
+      TOP_K: ${TOP_K:-5}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+    volumes:
+      - ./RAG/data:/app/data
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ---------- 4. Open WebUI ----------
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:0.7.2
+    container_name: ISO42001_openwebui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      rag-api:
+        condition: service_healthy
+    environment:
+      # 連接 RAG API (service name) 和外部 LLM (LLM_HOST + LLM_PORT 變數)
+      OPENAI_API_BASE_URLS: "http://rag-api:8000/v1;http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+      OPENAI_API_KEYS: ${OPENAI_API_KEYS:-dummy-key;dummy-key}
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-your-secret-key-here}
+      WEBUI_URL: "https://judge.local"
+      ENABLE_RAG_WEB_SEARCH: "false"
+      ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION: "false"
+    volumes:
+      - openwebui_data:/app/backend/data
+
+  # ---------- 5. Nginx (HTTPS 反向代理) ----------
+  nginx:
+    image: nginx:alpine
+    container_name: ISO42001_nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "443:443"
+    depends_on:
+      - openwebui
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+
+  # ---------- 6. Jupyter Notebook ----------
+  jupyter:
+    build:
+      context: ./RAG
+      dockerfile: Dockerfile
+    container_name: ISO42001_jupyter
+    restart: unless-stopped
+    ports:
+      - "${JUPYTER_PORT:-25678}:${JUPYTER_PORT:-25678}"
+    depends_on:
+      db:
+        condition: service_healthy
+      embed-proxy:
+        condition: service_healthy
+    environment:
+      # 執行時 UID/GID — 由 deploy.sh 自動偵測寫入 .env
+      NB_UID: ${HOST_UID:-1001}
+      NB_GID: ${HOST_GID:-1001}
+      NB_USER: jovyan
+      GRANT_SUDO: "yes"
+      JUPYTER_PORT: "${JUPYTER_PORT:-25678}"
+      PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
+      # Embed — 透過 embed-proxy 轉譯到 Triton
+      EMBED_API_KEY: ${EMBED_API_KEY}
+      EMBED_API_BASE: "http://embed-proxy:8100/v1"
+      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_API_BASE: "http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+      TOP_K: ${TOP_K:-5}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+    volumes:
+      - ./RAG:/home/jovyan/work
+
+volumes:
+  pgdata:
+  openwebui_data:

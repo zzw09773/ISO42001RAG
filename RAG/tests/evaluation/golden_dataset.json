@@ -1,0 +1,20 @@
+[
+    {
+        "id": "eval_001",
+        "question": "現役軍人酒駕會有什麼懲罰？",
+        "expected_keywords": ["酒駕", "酒精", "懲罰", "悔過", "罰款"],
+        "expected_articles": ["陸海空軍懲罰法"]
+    },
+    {
+        "id": "eval_002",
+        "question": "軍人對於懲罰結果不服，可以如何救濟？",
+        "expected_keywords": ["申訴", "救濟", "提審", "行政訴訟"],
+        "expected_articles": ["權益保障"]
+    },
+    {
+        "id": "eval_003",
+        "question": "士官長降級的規定是什麼？",
+        "expected_keywords": ["士官長", "降級", "懲罰"],
+        "expected_articles": []
+    }
+]

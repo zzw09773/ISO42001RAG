@@ -1,0 +1,37 @@
+# Document Processing
+PyMuPDF>=1.23.0
+striprtf>=0.0.26
+python-docx>=1.0.0
+
+# Database & Vector Store
+psycopg2-binary>=2.9.9
+psycopg[binary]>=3.1.0
+pgvector>=0.2.0
+
+# LangChain Ecosystem (Pinned for Stability)
+# langchain-core>=1.2.11 and langchain-openai>=1.1.9 required to fix SSRF (GHSA-2g6r-c272-w58r)
+langchain==1.2.10
+langchain-core>=1.2.11
+langchain-community
+langchain-text-splitters
+langchain-openai>=1.1.9
+langchain-postgres
+
+# Orchestration
+langgraph
+
+# Core Dependencies
+pydantic>=2.7.4,<2.10.0
+
+# HTTP & API
+requests>=2.25.0
+httpx>=0.24.0
+fastapi
+uvicorn
+python-multipart
+
+# Utilities
+python-dotenv>=1.0.0
+orjson>=3.10.0
+tiktoken>=0.7.0
+rank_bm25>=0.2.2
