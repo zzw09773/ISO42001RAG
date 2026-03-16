@@ -36,20 +36,15 @@ def embed_texts(texts: list[str], input_type: str = "passage") -> list[list[floa
     all_embeddings = []
 
     for text in texts:
-        # Triton config: max_batch_size=1 means client must send 2D shape [batch_size, -1]
-        # input_text: shape [1, 1]
-        input_text = grpcclient.InferInput("input_text", [1, 1], "BYTES")
-        input_text.set_data_from_numpy(np.array([[text]], dtype=object))
-
-        # input_type: shape [1, 1]
-        input_type_tensor = grpcclient.InferInput("input_type", [1, 1], "BYTES")
-        input_type_tensor.set_data_from_numpy(np.array([[input_type]], dtype=object))
+        # 根據內網報錯，Triton 上的 nv-embed-v2 預期有 1 個名為 'text' 的輸入
+        input_tensor = grpcclient.InferInput("text", [1, 1], "BYTES")
+        input_tensor.set_data_from_numpy(np.array([[text]], dtype=object))
 
         output = grpcclient.InferRequestedOutput("embeddings")
 
         result = client.infer(
             model_name=TRITON_MODEL,
-            inputs=[input_text, input_type_tensor],
+            inputs=[input_tensor],
             outputs=[output],
             client_timeout=120,
         )
