@@ -72,8 +72,8 @@ services:
       ALLOW_INTRANET_MODE: ${ALLOW_INTRANET_MODE:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1}
     volumes:
-      - ./RAG:/app          # 掛載整個 RAG 原始碼目錄，讓宿主機修改即時生效
-      - ./RAG/data:/app/data  # 明確保留 data/ 可寫掛載（覆蓋上方唯讀層）
+      - ./RAG:/app 
+      - ./RAG/data:/app/data
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1" ]
       interval: 15s
