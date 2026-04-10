@@ -30,7 +30,7 @@ services:
     container_name: ISO42001_embed_proxy
     restart: unless-stopped
     environment:
-      TRITON_GRPC_URL: "${LLM_HOST}:${EMBED_GRPC_PORT:-9001}"
+      TRITON_GRPC_URL: "${LLM_HOST}:${EMBED_GRPC_PORT:-9000}"
       TRITON_MODEL: ${TRITON_MODEL_NAME:-nv-embed-v2}
       PROXY_PORT: "8100"
     healthcheck:
@@ -48,7 +48,7 @@ services:
     container_name: ISO42001_rag_api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8043:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -68,8 +68,12 @@ services:
       # RAG 配置
       TOP_K: ${TOP_K:-5}
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+      # 認證模式（內網部署無 API Key 時需明確啟用）
+      ALLOW_INTRANET_MODE: ${ALLOW_INTRANET_MODE:-false}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1}
     volumes:
-      - ./RAG/data:/app/data
+      - ./RAG:/app          # 掛載整個 RAG 原始碼目錄，讓宿主機修改即時生效
+      - ./RAG/data:/app/data  # 明確保留 data/ 可寫掛載（覆蓋上方唯讀層）
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1" ]
       interval: 15s

@@ -1,0 +1,66 @@
+# =============================================================
+# ISO42001 RAG — 根目錄 .gitignore
+# =============================================================
+
+# 環境變數（含機密 IP / Key，絕對不上傳）
+.env
+.env.*
+.env.local
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# 虛擬環境
+venv/
+.venv/
+env/
+ENV/
+
+# IDE 設定
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker tar 映像（檔案很大，不需進版控）
+images/*.tar
+
+# 日誌與暫存
+*.log
+*.tmp
+logs.txt
+
+# 資料目錄（執行期產生，不進版控）
+RAG/data/audit_logs/
+RAG/data/reports/
+RAG/data/versions/*.tar.gz
+RAG/data/input/*
+RAG/data/output/*
+RAG/data/processed/*
+!RAG/data/input/.gitkeep
+!RAG/data/output/.gitkeep
+!RAG/data/processed/.gitkeep
+
+# SSL 憑證私鑰
+nginx/ssl/*.key
+nginx/ssl/*.crt
+nginx/ssl/*.csr
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 其他工具快取
+.gemini/
+.genkit/
+gha-creds-*.json

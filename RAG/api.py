@@ -3,7 +3,8 @@ import uuid
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Security
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import uvicorn
@@ -12,12 +13,25 @@ from dotenv import load_dotenv
 
 from rag_system.core.config import RAGConfig
 from rag_system.core.audit_logger import AuditLogger, QueryTimer
+from rag_system.core.auth import get_api_key, key_prefix
+from rag_system.core.rate_limiter import check_rate_limit
 from rag_system.agent.graph import run_query, astream_query
 from rag_system.services.converter import FileConverter, ConversionPipeline, ConversionError
 from rag_system.services.conversation_store import ConversationStore
 
 # Initialize FastAPI app
 app = FastAPI(title="RAG Agent API", description="OpenAI-compatible API for Agentic RAG")
+
+# CORS — restrict origins via ALLOWED_ORIGINS env (comma-separated)
+import os as _os
+_allowed_origins = [o.strip() for o in _os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load Config globally to avoid reloading on every request
 load_dotenv(override=True)
@@ -33,6 +47,16 @@ try:
     print("RAG Configuration loaded successfully.")
 except Exception as e:
     print(f"Warning: Configuration load failed: {e}. Ensure .env is set.")
+
+# Warn operators when running without API key authentication
+_intranet_mode = _os.environ.get("ALLOW_INTRANET_MODE", "").lower() in ("true", "1", "yes")
+_api_keys_set = bool(_os.environ.get("API_KEYS", "").strip())
+if _intranet_mode and not _api_keys_set:
+    print(
+        "⚠️  WARNING: Running in INTRANET MODE — no Bearer token required. "
+        "All requests are accepted based on network perimeter trust. "
+        "Set API_KEYS to enable credential-based authentication."
+    )
 
 # --- Pydantic Models for OpenAI API Compatibility ---
 
@@ -81,9 +105,20 @@ async def list_models():
     }
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest, raw_request: Request = None):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    raw_request: Request = None,
+    api_key: str = Security(get_api_key),
+):
     if not config:
         raise HTTPException(status_code=500, detail="Server configuration invalid.")
+
+    # Rate limit check
+    check_rate_limit(api_key)
+
+    # Audit: auth success
+    if audit:
+        audit.log_auth_event("success", key_prefix(api_key), "/v1/chat/completions")
 
     # Generate session_id from request header or create a new one
     session_id = ""
@@ -290,7 +325,8 @@ async def chat_completions(request: ChatCompletionRequest, raw_request: Request 
 async def upload_file(
     file: UploadFile = File(...),
     index_after_convert: bool = Form(default=True),
-    overwrite: bool = Form(default=False)
+    overwrite: bool = Form(default=False),
+    api_key: str = Security(get_api_key),
 ):
     """
     Upload a document file to be converted to Markdown and optionally indexed.
@@ -391,7 +427,7 @@ async def upload_file(
 
 
 @app.delete("/v1/documents/{filename}")
-async def delete_document(filename: str):
+async def delete_document(filename: str, api_key: str = Security(get_api_key)):
     """
     Delete a document from the RAG index and local storage.
     """
@@ -444,7 +480,8 @@ async def delete_document(filename: str):
 @app.post("/v1/upload/batch")
 async def upload_files_batch(
     files: List[UploadFile] = File(...),
-    index_after_convert: bool = Form(default=True)
+    index_after_convert: bool = Form(default=True),
+    api_key: str = Security(get_api_key),
 ):
     """
     Upload multiple document files for batch conversion and indexing.
@@ -526,7 +563,7 @@ async def upload_files_batch(
 
 
 @app.get("/v1/documents")
-async def list_documents():
+async def list_documents(api_key: str = Security(get_api_key)):
     """
     List all indexed documents in the converted_md directory.
     """
@@ -554,7 +591,7 @@ async def list_documents():
 
 
 @app.post("/v1/reindex")
-async def reindex_all():
+async def reindex_all(api_key: str = Security(get_api_key)):
     """
     Reindex all documents in the converted_md directory.
     This clears the existing index and rebuilds it.

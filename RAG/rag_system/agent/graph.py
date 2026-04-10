@@ -18,10 +18,12 @@ from langchain_openai import ChatOpenAI
 
 from ..core.config import RAGConfig
 from ..core.factory import ComponentFactory
+from ..core.audit_logger import AuditLogger
 from .state import GraphState
 from .nodes import (
     create_classify_node,
     create_reject_node,
+    create_security_block_node,
     create_passthrough_node,
     create_retrieve_node,
     create_generate_node,
@@ -47,6 +49,8 @@ def _route_after_classify(state: GraphState) -> str:
         return "reject"
     if scope == "passthrough":
         return "passthrough"
+    if scope == "security_block":
+        return "security_block"
     return "retrieve"
 
 
@@ -85,6 +89,7 @@ def create_rag_workflow(
     # Create nodes
     classify = create_classify_node()
     reject = create_reject_node()
+    security_block = create_security_block_node(audit=AuditLogger(config.audit_log_dir))
     passthrough = create_passthrough_node(llm)
     retrieve = create_retrieve_node(config)
     generate = create_generate_node(llm, config)
@@ -95,6 +100,7 @@ def create_rag_workflow(
 
     workflow.add_node("classify", classify)
     workflow.add_node("reject", reject)
+    workflow.add_node("security_block", security_block)
     workflow.add_node("passthrough", passthrough)
     workflow.add_node("retrieve", retrieve)
     workflow.add_node("generate", generate)
@@ -106,9 +112,10 @@ def create_rag_workflow(
     workflow.add_conditional_edges(
         "classify",
         _route_after_classify,
-        {"retrieve": "retrieve", "reject": "reject", "passthrough": "passthrough"},
+        {"retrieve": "retrieve", "reject": "reject", "passthrough": "passthrough", "security_block": "security_block"},
     )
     workflow.add_edge("reject", END)
+    workflow.add_edge("security_block", END)
     workflow.add_edge("passthrough", END)
     workflow.add_edge("retrieve", "generate")
     workflow.add_edge("generate", "verify")

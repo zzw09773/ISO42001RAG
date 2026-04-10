@@ -87,28 +87,6 @@ class AuditLogger:
 
     # ---- High-level event methods ----
 
-    def log_query(
-        self,
-        session_id: str,
-        user_query: str,
-        scope_check: str,
-        model_name: str,
-        retrieved_docs: Optional[List[str]] = None,
-        tokens_used: Optional[int] = None,
-        response_time_ms: Optional[int] = None,
-    ) -> None:
-        """Log a user query event."""
-        self._write({
-            "event_type": "query",
-            "session_id": session_id,
-            "user_query": user_query,
-            "scope_check": scope_check,
-            "model_name": model_name,
-            "retrieved_docs": retrieved_docs or [],
-            "tokens_used": tokens_used,
-            "response_time_ms": response_time_ms,
-        })
-
     def log_rejection(
         self,
         session_id: str,
@@ -149,6 +127,69 @@ class AuditLogger:
             "success_count": success,
             "failed_count": failed,
             "message": f"Reindexed {success} documents ({failed} failed)",
+        })
+
+    def log_security_alert(
+        self,
+        session_id: str,
+        user_query: str,
+        threat_type: str,
+        reason: str,
+        stage: str = "input",
+    ) -> None:
+        """Log a security alert (prompt injection / system probe / output leak)."""
+        self._write({
+            "event_type": "security_alert",
+            "session_id": session_id,
+            "user_query": user_query[:200],
+            "threat_type": threat_type,
+            "reason": reason,
+            "stage": stage,
+        })
+
+    def log_auth_event(
+        self,
+        event: str,
+        api_key_prefix: str,
+        path: str,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Log an authentication/authorization event (success or failure)."""
+        self._write({
+            "event_type": f"auth_{event}",
+            "api_key_prefix": api_key_prefix,
+            "path": path,
+            "reason": reason,
+        })
+
+    def log_query(
+        self,
+        session_id: str,
+        user_query: str,
+        scope_check: str,
+        model_name: str,
+        retrieved_docs: Optional[List[str]] = None,
+        tokens_used: Optional[int] = None,
+        response_time_ms: Optional[int] = None,
+        retrieval_doc_count: Optional[int] = None,
+        citation_count: Optional[int] = None,
+        retry_count: int = 0,
+        anomaly_flags: Optional[List[str]] = None,
+    ) -> None:
+        """Log a user query event with extended monitoring metrics."""
+        self._write({
+            "event_type": "query",
+            "session_id": session_id,
+            "user_query": user_query,
+            "scope_check": scope_check,
+            "model_name": model_name,
+            "retrieved_docs": retrieved_docs or [],
+            "tokens_used": tokens_used,
+            "response_time_ms": response_time_ms,
+            "retrieval_doc_count": retrieval_doc_count,
+            "citation_count": citation_count,
+            "retry_count": retry_count,
+            "anomaly_flags": anomaly_flags or [],
         })
 
 

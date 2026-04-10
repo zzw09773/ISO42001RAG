@@ -1,20 +1,302 @@
 [
-    {
-        "id": "eval_001",
-        "question": "現役軍人酒駕會有什麼懲罰？",
-        "expected_keywords": ["酒駕", "酒精", "懲罰", "悔過", "罰款"],
-        "expected_articles": ["陸海空軍懲罰法"]
-    },
-    {
-        "id": "eval_002",
-        "question": "軍人對於懲罰結果不服，可以如何救濟？",
-        "expected_keywords": ["申訴", "救濟", "提審", "行政訴訟"],
-        "expected_articles": ["權益保障"]
-    },
-    {
-        "id": "eval_003",
-        "question": "士官長降級的規定是什麼？",
-        "expected_keywords": ["士官長", "降級", "懲罰"],
-        "expected_articles": []
-    }
+  {
+    "id": "eval_001",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "現役軍人酒駕會有什麼懲罰？",
+    "expected_answer": "依陸海空軍懲罰法，現役軍人酒駕依情節輕重，可處以悔過、罰款或降級等懲罰。",
+    "expected_docs": [],
+    "expected_keywords": ["酒駕", "懲罰", "悔過", "罰款"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_002",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "軍人對於懲罰結果不服，可以如何救濟？",
+    "expected_answer": "軍人對懲罰結果不服時，可依法提起申訴，申訴未果可進一步提行政訴訟。",
+    "expected_docs": [],
+    "expected_keywords": ["申訴", "救濟", "行政訴訟"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_003",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "士官長降級的規定是什麼？",
+    "expected_answer": "士官長降級屬於重懲罰，依陸海空軍懲罰法之規定執行。",
+    "expected_docs": [],
+    "expected_keywords": ["士官長", "降級", "懲罰"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_004",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "ISO 42001 對 AI 系統的治理有哪些要求？",
+    "expected_answer": "ISO 42001 要求組織建立 AI 管理系統（AIMS），涵蓋風險評估、生命週期監控、資料治理與人員監督等控制項。",
+    "expected_docs": [],
+    "expected_keywords": ["ISO", "42001", "AIMS", "治理", "合規"],
+    "expected_articles": ["ISO 42001"]
+  },
+  {
+    "id": "eval_005",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "軍人受到懲罰後，懲罰紀錄會保留多久？",
+    "expected_answer": "依陸海空軍懲罰法規定，懲罰紀錄保留期間依懲罰種類而有所不同。",
+    "expected_docs": [],
+    "expected_keywords": ["懲罰", "紀錄", "保留"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_006",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "軍人遭受霸凌可以向哪個單位申訴？",
+    "expected_answer": "遭受霸凌的軍人可向所屬單位申訴，亦可向監察院或國防部申訴專線提出申訴。",
+    "expected_docs": [],
+    "expected_keywords": ["霸凌", "申訴", "救濟"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_007",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "第8條的內容是什麼？",
+    "expected_answer": "知識庫中有多部法律，請提供更具體的法規名稱以便查詢第8條內容。",
+    "expected_docs": [],
+    "expected_keywords": ["第8條"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_008",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "軍人可以被記過幾次才會被退伍？",
+    "expected_answer": "依陸海空軍懲罰法，記過累計達一定次數後，可依法予以撤職或退伍。",
+    "expected_docs": [],
+    "expected_keywords": ["記過", "退伍", "累計"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_009",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "服役中的士兵在什麼情況下可以提前退伍？",
+    "expected_answer": "服役中士兵在特殊情況下，例如家庭重大變故或健康因素，可依規定申請提前退伍。",
+    "expected_docs": [],
+    "expected_keywords": ["退伍", "提前", "申請"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_010",
+    "category": "single_article",
+    "difficulty": "hard",
+    "question": "軍人在軍事法庭受審後，是否可以向普通法院上訴？",
+    "expected_answer": "依憲法及相關法律，軍人在軍事法庭受審後，有權向普通法院提起上訴。",
+    "expected_docs": [],
+    "expected_keywords": ["軍事法庭", "上訴", "普通法院"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_011",
+    "category": "out_of_scope",
+    "difficulty": "easy",
+    "question": "幫我寫一個 Python 程式",
+    "expected_answer": "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。",
+    "expected_docs": [],
+    "expected_keywords": ["無法回答", "法律無關"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_012",
+    "category": "out_of_scope",
+    "difficulty": "easy",
+    "question": "今天天氣如何？",
+    "expected_answer": "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。",
+    "expected_docs": [],
+    "expected_keywords": ["無法回答", "法律無關"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_013",
+    "category": "ambiguous",
+    "difficulty": "hard",
+    "question": "我被長官罵是正常的嗎？",
+    "expected_answer": "依軍事法規，長官對部屬應保持尊重，言語侮辱可能構成職場霸凌，可依申訴管道尋求救濟。",
+    "expected_docs": [],
+    "expected_keywords": ["霸凌", "申訴", "救濟"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_014",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "現役軍人若觸犯刑法，應由軍事法院還是普通法院審判？",
+    "expected_answer": "現役軍人觸犯刑法，依軍事審判法規定，應由軍事法院審判，但特定情況下可移送普通法院。",
+    "expected_docs": [],
+    "expected_keywords": ["刑法", "軍事法院", "審判"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_015",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "軍人懲罰的種類有哪些？",
+    "expected_answer": "依陸海空軍懲罰法，懲罰種類包括：申誡、記過、記大過、降級、降薪、悔過、罰款、撤職等。",
+    "expected_docs": [],
+    "expected_keywords": ["懲罰", "申誡", "記過", "降級", "撤職"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_016",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "軍人被冤枉受罰，有哪些法律救濟途徑？",
+    "expected_answer": "軍人被冤枉受罰，可依序申請：申訴→再申訴→行政訴訟，亦可向監察院陳情。",
+    "expected_docs": [],
+    "expected_keywords": ["申訴", "再申訴", "行政訴訟", "救濟"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_017",
+    "category": "single_article",
+    "difficulty": "hard",
+    "question": "軍人服役期間發生職業災害，可以申請什麼補償？",
+    "expected_answer": "軍人服役期間發生職業災害，可依撫卹相關法規申請撫卹金或傷亡給付。",
+    "expected_docs": [],
+    "expected_keywords": ["職業災害", "撫卹", "補償"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_018",
+    "category": "cross_reference",
+    "difficulty": "hard",
+    "question": "軍人懲罰與刑事處罰可以同時並行嗎？",
+    "expected_answer": "是的，依法軍人懲罰（行政懲罰）與刑事處罰可以同時並行，兩者性質不同，不違反一事不二罰原則。",
+    "expected_docs": [],
+    "expected_keywords": ["懲罰", "刑事", "並行", "一事不二罰"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_019",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "陸海空軍懲罰法的立法目的是什麼？",
+    "expected_answer": "陸海空軍懲罰法的立法目的在於維護軍隊紀律，保障軍人合法權益，並規範懲罰的種類、程序及救濟途徑。",
+    "expected_docs": [],
+    "expected_keywords": ["懲罰法", "立法目的", "軍隊紀律"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_020",
+    "category": "ambiguous",
+    "difficulty": "medium",
+    "question": "我是軍人，被處分了怎麼辦？",
+    "expected_answer": "若遭受處分，您可在收到通知後依法定期間內提出申訴，若申訴未果可再提行政訴訟。",
+    "expected_docs": [],
+    "expected_keywords": ["處分", "申訴", "救濟"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_021",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "AI 系統風險評估需要包含哪些要素？",
+    "expected_answer": "依 ISO 42001 規範，AI 系統風險評估應包含威脅識別、脆弱性分析、影響評估、以及風險處置計畫。",
+    "expected_docs": [],
+    "expected_keywords": ["風險評估", "AI", "威脅", "影響"],
+    "expected_articles": ["ISO 42001"]
+  },
+  {
+    "id": "eval_022",
+    "category": "single_article",
+    "difficulty": "hard",
+    "question": "AI 系統的資料治理在 ISO 42001 中有何規範？",
+    "expected_answer": "ISO 42001 要求 AI 系統建立完整的資料治理機制，包含資料來源驗證、資料品質管控、以及資料生命週期管理。",
+    "expected_docs": [],
+    "expected_keywords": ["資料治理", "ISO 42001", "資料品質"],
+    "expected_articles": ["ISO 42001"]
+  },
+  {
+    "id": "eval_023",
+    "category": "out_of_scope",
+    "difficulty": "easy",
+    "question": "推薦我一部好看的電影",
+    "expected_answer": "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。",
+    "expected_docs": [],
+    "expected_keywords": ["無法回答", "法律無關"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_024",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "軍人受懲罰時，長官需要經過哪些程序？",
+    "expected_answer": "長官對軍人施予懲罰前，應依法通知當事人陳述意見，並經適當審核程序，重懲罰需經更嚴格的程序。",
+    "expected_docs": [],
+    "expected_keywords": ["程序", "陳述", "審核"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_025",
+    "category": "single_article",
+    "difficulty": "hard",
+    "question": "台灣的軍事審判制度近年來有什麼重大改革？",
+    "expected_answer": "台灣於 2013 年修正軍事審判法，將平時軍事犯罪改由普通法院審判，僅戰時由軍事法院管轄。",
+    "expected_docs": [],
+    "expected_keywords": ["軍事審判", "改革", "普通法院"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_026",
+    "category": "ambiguous",
+    "difficulty": "medium",
+    "question": "我在軍中受到不公平對待，我有什麼權利？",
+    "expected_answer": "依法您有權提出申訴，必要時可尋求法律援助，並向相關單位陳情。知識庫中有相關法規可供參考。",
+    "expected_docs": [],
+    "expected_keywords": ["申訴", "權利", "法律援助"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_027",
+    "category": "single_article",
+    "difficulty": "easy",
+    "question": "軍人服役期間可以結婚嗎？",
+    "expected_answer": "現行法規並未禁止軍人在服役期間結婚，軍人享有一般公民的婚姻自由。",
+    "expected_docs": [],
+    "expected_keywords": ["服役", "結婚", "婚姻"],
+    "expected_articles": []
+  },
+  {
+    "id": "eval_028",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "什麼是悔過處分？需要如何執行？",
+    "expected_answer": "悔過是一種軍事懲罰，被處分者須書面反省並承認錯誤，依陸海空軍懲罰法之規定執行。",
+    "expected_docs": [],
+    "expected_keywords": ["悔過", "懲罰", "執行"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_029",
+    "category": "cross_reference",
+    "difficulty": "hard",
+    "question": "ISO 42001 對 AI 稽核的要求與現行軍事紀律管理有何共同點？",
+    "expected_answer": "兩者皆強調透明度、可追溯性與申訴救濟機制：ISO 42001 要求 AI 決策可稽核，軍事紀律管理也要求懲罰程序有紀錄可查。",
+    "expected_docs": [],
+    "expected_keywords": ["稽核", "透明度", "可追溯"],
+    "expected_articles": ["ISO 42001", "陸海空軍懲罰法"]
+  },
+  {
+    "id": "eval_030",
+    "category": "single_article",
+    "difficulty": "medium",
+    "question": "軍人懲罰的申訴期限是多久？",
+    "expected_answer": "依陸海空軍懲罰法，軍人受懲罰後應在規定期限內提出申訴，逾期則不受理，具體天數依法條規定。",
+    "expected_docs": [],
+    "expected_keywords": ["申訴", "期限", "逾期"],
+    "expected_articles": ["陸海空軍懲罰法"]
+  }
 ]

@@ -17,6 +17,9 @@ from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 
 from ..core.prompts import AGENT_SYSTEM_PROMPT
 from ..core.config import RAGConfig
+from ..core.input_sanitizer import sanitize
+from ..core.output_filter import filter_output
+from ..core.audit_logger import AuditLogger
 from .state import GraphState
 from .memory import ConversationSummarizer
 from ..services.retrieval import RetrievalService
@@ -65,6 +68,12 @@ def create_classify_node() -> Callable:
         question = state.get("question", "")
         logger.info(f"--- CLASSIFY NODE --- question: {question[:80]}")
 
+        # Security check: run input sanitizer before any classification
+        san = sanitize(question)
+        if san.blocked:
+            logger.warning(f"Input blocked by sanitizer: {san.threat_type} — {san.reason}")
+            return {"scope": "security_block", "security_reason": san.reason, "threat_type": san.threat_type}
+
         # Open WebUI system tasks: let them pass through to LLM directly
         if question.strip().startswith("### Task:"):
             logger.info("Classification: passthrough (Open WebUI system task)")
@@ -100,6 +109,32 @@ def create_reject_node() -> Callable:
         }
 
     return reject_node
+
+
+def create_security_block_node(audit: AuditLogger = None) -> Callable:
+    """Creates a node that returns a security rejection message and writes audit log."""
+    SECURITY_MSG = "本系統偵測到潛在的安全威脅，已拒絕此請求。請重新提出合法的法律查詢。"
+
+    def security_block_node(state: GraphState) -> dict:
+        threat_type = state.get("threat_type", "unknown")
+        reason = state.get("security_reason", "")
+        question = state.get("question", "")
+        session_id = state.get("session_id", "unknown")
+        logger.warning(f"--- SECURITY BLOCK NODE --- threat={threat_type} reason={reason}")
+        if audit:
+            audit.log_security_alert(
+                session_id=session_id,
+                user_query=question,
+                threat_type=threat_type,
+                reason=reason,
+                stage="input",
+            )
+        return {
+            "generation": SECURITY_MSG,
+            "messages": [AIMessage(content=SECURITY_MSG)],
+        }
+
+    return security_block_node
 
 
 # ---------------------------------------------------------------------------
@@ -317,9 +352,15 @@ def create_generate_node(llm: ChatOpenAI, config: RAGConfig) -> Callable:
             generation = response.content
             logger.info(f"Generated answer: {len(generation)} chars")
 
+            # Output filter: redact any accidental sensitive data leakage
+            filtered = filter_output(generation)
+            if filtered.redacted:
+                logger.warning(f"Output filter redacted findings: {filtered.findings}")
+
             return {
-                "generation": generation,
-                "messages": [AIMessage(content=generation)],
+                "generation": filtered.text,
+                "messages": [AIMessage(content=filtered.text)],
+                "output_redacted": filtered.redacted,
             }
         except Exception as e:
             error_msg = f"抱歉，處理問題時發生錯誤: {str(e)}"

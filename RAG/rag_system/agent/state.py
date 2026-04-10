@@ -23,6 +23,9 @@ class GraphState(MessagesState):
     generation: str = ""
     collection: str = ""
     retrieved_docs: list = []
-    scope: str = ""       # 'legal' or 'reject'
+    scope: str = ""       # 'legal' | 'reject' | 'security_block' | 'passthrough'
     retry_count: int = 0
     feedback: str = ""
+    session_id: str = ""
+    threat_type: str = ""   # set by classify_node on security block
+    security_reason: str = ""  # human-readable block reason

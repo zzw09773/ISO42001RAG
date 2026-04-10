@@ -107,8 +107,8 @@ class RAGConfig:
     llm_api_base: Optional[str] = None  # Separate base for LLM
     embed_api_key: Optional[str] = None
 
-    # SSL settings
-    verify_ssl: bool = False
+    # SSL settings — default True; set VERIFY_SSL=false to disable (dev only)
+    verify_ssl: bool = True
 
     # Agent settings
     summary_threshold: int = DEFAULT_SUMMARY_THRESHOLD
@@ -158,6 +158,9 @@ class RAGConfig:
         top_k = int(os.environ.get("TOP_K", DEFAULT_TOP_K))
         chunk_size = int(os.environ.get("CHUNK_SIZE", DEFAULT_CHUNK_SIZE))
 
+        verify_ssl_env = os.environ.get("VERIFY_SSL", "true").lower()
+        verify_ssl = verify_ssl_env not in ("false", "0", "no")
+
         return cls(
             conn_string=os.environ.get("PGVECTOR_URL"),
             embed_api_base=embed_base,
@@ -169,6 +172,7 @@ class RAGConfig:
             chunk_size=chunk_size,
             rerank_top_n=int(os.environ.get("RERANK_TOP_N", DEFAULT_RERANK_TOP_N)),
             max_retrieval_tokens=int(os.environ.get("MAX_RETRIEVAL_TOKENS", DEFAULT_MAX_RETRIEVAL_TOKENS)),
+            verify_ssl=verify_ssl,
         )
 
     def validate(self) -> None:
