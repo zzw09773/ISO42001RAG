@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>ISO 42001 Monitoring Dashboard — 2026-05-26</title>
+<style>
+  :root {
+    --c-text:#1a1f2c; --c-muted:#5b6578; --c-border:#d9dee6;
+    --c-bg:#fff; --c-bg-soft:#f6f8fc; --c-accent:#1e3a8a;
+  }
+  *,*::before,*::after { box-sizing:border-box; }
+  body { font-family:"Noto Sans TC","Inter",-apple-system,sans-serif;
+         margin:0; background:var(--c-bg-soft); color:var(--c-text); }
+  .page { max-width:1180px; margin:0 auto; padding:32px 36px; background:var(--c-bg); border-left:1px solid var(--c-border); border-right:1px solid var(--c-border); }
+  h1 { font-size:24px; font-weight:900; margin:0 0 4px; }
+  .sub { color:var(--c-muted); font-size:13px; margin-bottom:24px; }
+  h2 { font-size:17px; font-weight:800; color:var(--c-accent); margin:28px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--c-accent); }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:8px; }
+  .kpi { background:var(--c-bg-soft); border:1px solid var(--c-border); border-radius:6px; padding:14px 16px; }
+  .kpi .label { font-size:11px; color:var(--c-muted); letter-spacing:0.08em; text-transform:uppercase; }
+  .kpi .val { font-size:26px; font-weight:800; margin-top:4px; }
+  .kpi.danger .val { color:#991b1b; }
+  .kpi.warn .val { color:#92400e; }
+  .severity-banner { display:inline-block; padding:6px 14px; border-radius:4px; font-weight:700; font-size:13px;
+                      background:#fef3c7; color:#92400e; border:1px solid #92400e33; }
+  .goal-card { padding:18px 22px; border-radius:6px; margin:6px 0 4px; }
+  .goal-card .goal-title { font-size:18px; font-weight:800; margin-bottom:6px; }
+  .goal-card .goal-target,
+  .goal-card .goal-current { font-size:14px; margin:2px 0; }
+  .goal-card .goal-reason { font-size:12px; color:#5b6578; margin-top:8px; font-style:italic; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin:8px 0 16px; }
+  th { background:var(--c-accent); color:#fff; text-align:left; padding:7px 10px; font-size:12px; }
+  td { padding:6px 10px; border-bottom:1px solid var(--c-border); vertical-align:top; }
+  tr:nth-child(even) td { background:var(--c-bg-soft); }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  .card { border:1px solid var(--c-border); border-radius:6px; padding:14px 16px; }
+  .card h3 { margin:0 0 8px; font-size:13px; color:var(--c-muted); letter-spacing:0.06em; text-transform:uppercase; }
+  .reasons { background:#fafbfd; border:1px dashed var(--c-border); padding:10px 14px; margin-top:6px; font-size:13px; color:#3b4252; }
+  .reasons li { margin:2px 0; }
+  .footer { margin-top:32px; padding-top:16px; border-top:1px solid var(--c-border); font-size:11px; color:var(--c-muted); text-align:center; }
+  @media print { body { background:#fff; } .page { border:0; padding:14px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>ISO 42001 Monitoring Dashboard</h1>
+  <div class="sub">產生時間 2026-05-26T23:37:09.216622+00:00 · 視窗 90 天 · 載入 10 個稽核日誌檔</div>
+
+  <span class="severity-banner">漂移嚴重度：⚠️ WARNING</span>
+
+  <h2>業務目標</h2>
+  <div class="goal-card" style="background:#dcfce7; border:1px solid #16653433; border-left:6px solid #166534;">
+    <div class="goal-title" style="color:#166534;">✅ 目標達成</div>
+    <div class="goal-target">目標：<strong>Hit Rate ≥ 0.9</strong></div>
+    <div class="goal-current">當前：<strong style="color:#166534;">Hit Rate = 0.9032</strong></div>
+    <div class="goal-reason">Hit Rate 0.9032 ≥ 0.9</div>
+  </div>
+
+  <h2>關鍵指標 (KPI)</h2>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="label">總查詢數</div><div class="val">546</div></div>
+    <div class="kpi"><div class="label">拒絕數</div><div class="val">55</div></div>
+    <div class="kpi"><div class="label">拒絕率</div><div class="val">9.15%</div></div>
+    <div class="kpi danger"><div class="label">安全告警</div><div class="val">3</div></div>
+    <div class="kpi"><div class="label">異常事件</div><div class="val">0</div></div>
+    <div class="kpi"><div class="label">P95 延遲 (ms)</div><div class="val">28508</div></div>
+  </div>
+
+  <h2>時序趨勢</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3>每日查詢數</h3>
+      <svg viewBox="0 0 720 180" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="background:#fff"><line x1="44" x2="704" y1="152.0" y2="152.0" stroke="#eef2f7"/><text x="38" y="155.0" text-anchor="end" fill="#5b6578" font-size="10">0.000</text><line x1="44" x2="704" y1="83.0" y2="83.0" stroke="#eef2f7"/><text x="38" y="86.0" text-anchor="end" fill="#5b6578" font-size="10">110.0</text><line x1="44" x2="704" y1="14.0" y2="14.0" stroke="#eef2f7"/><text x="38" y="17.0" text-anchor="end" fill="#5b6578" font-size="10">220.0</text><path d="M44.0,14.0 L117.3,120.6 L190.7,140.7 L264.0,135.7 L337.3,152.0 L410.7,137.6 L484.0,151.4 L557.3,151.4 L630.7,149.5 L704.0,24.7 L704.0,152.0 L44.0,152.0 Z" fill="#1e3a8a" fill-opacity="0.10" stroke="none"/><path d="M44.0,14.0 L117.3,120.6 L190.7,140.7 L264.0,135.7 L337.3,152.0 L410.7,137.6 L484.0,151.4 L557.3,151.4 L630.7,149.5 L704.0,24.7" fill="none" stroke="#1e3a8a" stroke-width="2" stroke-linejoin="round"/><text x="44.0" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-03-02</text><text x="704.0" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-05-26</text><text x="410.7" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-04-23</text></svg>
+    </div>
+    <div class="card">
+      <h3>每日拒絕率</h3>
+      <svg viewBox="0 0 720 180" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="background:#fff"><line x1="44" x2="704" y1="152.0" y2="152.0" stroke="#eef2f7"/><text x="38" y="155.0" text-anchor="end" fill="#5b6578" font-size="10">0.000</text><line x1="44" x2="704" y1="83.0" y2="83.0" stroke="#eef2f7"/><text x="38" y="86.0" text-anchor="end" fill="#5b6578" font-size="10">0.500</text><line x1="44" x2="704" y1="14.0" y2="14.0" stroke="#eef2f7"/><text x="38" y="17.0" text-anchor="end" fill="#5b6578" font-size="10">1.00</text><path d="M44.0,136.4 L117.3,141.8 L190.7,152.0 L264.0,152.0 L337.3,14.0 L410.7,131.6 L484.0,152.0 L557.3,152.0 L630.7,152.0 L704.0,140.8 L704.0,152.0 L44.0,152.0 Z" fill="#b45309" fill-opacity="0.10" stroke="none"/><path d="M44.0,136.4 L117.3,141.8 L190.7,152.0 L264.0,152.0 L337.3,14.0 L410.7,131.6 L484.0,152.0 L557.3,152.0 L630.7,152.0 L704.0,140.8" fill="none" stroke="#b45309" stroke-width="2" stroke-linejoin="round"/><text x="44.0" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-03-02</text><text x="704.0" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-05-26</text><text x="410.7" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-04-23</text></svg>
+    </div>
+    <div class="card">
+      <h3>每日平均延遲 (ms)</h3>
+      <svg viewBox="0 0 720 180" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="background:#fff"><line x1="44" x2="704" y1="152.0" y2="152.0" stroke="#eef2f7"/><text x="38" y="155.0" text-anchor="end" fill="#5b6578" font-size="10">1639</text><line x1="44" x2="704" y1="83.0" y2="83.0" stroke="#eef2f7"/><text x="38" y="86.0" text-anchor="end" fill="#5b6578" font-size="10">5959</text><line x1="44" x2="704" y1="14.0" y2="14.0" stroke="#eef2f7"/><text x="38" y="17.0" text-anchor="end" fill="#5b6578" font-size="10">10279</text><path d="M44.0,140.1 L117.3,152.0 L190.7,139.9 L264.0,129.7 M410.7,109.7 L484.0,140.0 L557.3,135.7 L630.7,87.1 L704.0,14.0 L704.0,152.0 L44.0,152.0 Z" fill="#0891b2" fill-opacity="0.10" stroke="none"/><path d="M44.0,140.1 L117.3,152.0 L190.7,139.9 L264.0,129.7 M410.7,109.7 L484.0,140.0 L557.3,135.7 L630.7,87.1 L704.0,14.0" fill="none" stroke="#0891b2" stroke-width="2" stroke-linejoin="round"/><text x="44.0" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-03-02</text><text x="704.0" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-05-26</text><text x="410.7" y="172" text-anchor="middle" fill="#5b6578" font-size="10">2026-04-23</text></svg>
+    </div>
+    <div class="card">
+      <h3>查詢長度分佈</h3>
+      <svg viewBox="0 0 720 220" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="background:#fff"><text x="92" y="36.6" text-anchor="end" fill="#1a1f2c" font-size="11">0-20</text><rect x="100" y="16.0" width="604.0" height="31.2" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="710.0" y="36.6" fill="#5b6578" font-size="11">310</text><text x="92" y="73.80000000000001" text-anchor="end" fill="#1a1f2c" font-size="11">21-50</text><rect x="100" y="53.2" width="118.9" height="31.2" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="224.9" y="73.80000000000001" fill="#5b6578" font-size="11">61</text><text x="92" y="111.0" text-anchor="end" fill="#1a1f2c" font-size="11">51-100</text><rect x="100" y="90.4" width="21.4" height="31.2" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="127.4" y="111.0" fill="#5b6578" font-size="11">11</text><text x="92" y="148.20000000000002" text-anchor="end" fill="#1a1f2c" font-size="11">101-200</text><rect x="100" y="127.60000000000001" width="1.9" height="31.2" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="107.9" y="148.20000000000002" fill="#5b6578" font-size="11">1</text><text x="92" y="185.4" text-anchor="end" fill="#1a1f2c" font-size="11">200+</text><rect x="100" y="164.8" width="424.7" height="31.2" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="530.7" y="185.4" fill="#5b6578" font-size="11">218</text></svg>
+    </div>
+  </div>
+
+  <h2>條文頻率 Top-15</h2>
+  <div class="card">
+    <svg viewBox="0 0 720 220" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="background:#fff"><text x="92" y="24.2" text-anchor="end" fill="#1a1f2c" font-size="11">第8條</text><rect x="100" y="16.0" width="604.0" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="710.0" y="24.2" fill="#5b6578" font-size="11">187</text><text x="92" y="36.6" text-anchor="end" fill="#1a1f2c" font-size="11">第9條</text><rect x="100" y="28.4" width="442.5" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="548.5" y="36.6" fill="#5b6578" font-size="11">137</text><text x="92" y="49.0" text-anchor="end" fill="#1a1f2c" font-size="11">第 50 條</text><rect x="100" y="40.8" width="242.2" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="348.2" y="49.0" fill="#5b6578" font-size="11">75</text><text x="92" y="61.400000000000006" text-anchor="end" fill="#1a1f2c" font-size="11">第 57 條</text><rect x="100" y="53.2" width="242.2" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="348.2" y="61.400000000000006" fill="#5b6578" font-size="11">75</text><text x="92" y="73.8" text-anchor="end" fill="#1a1f2c" font-size="11">第57條</text><rect x="100" y="65.6" width="209.9" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="315.9" y="73.8" fill="#5b6578" font-size="11">65</text><text x="92" y="86.2" text-anchor="end" fill="#1a1f2c" font-size="11">第 57 條</text><rect x="100" y="78.0" width="161.5" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="267.5" y="86.2" fill="#5b6578" font-size="11">50</text><text x="92" y="98.60000000000001" text-anchor="end" fill="#1a1f2c" font-size="11">第 76 條</text><rect x="100" y="90.4" width="145.3" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="251.3" y="98.60000000000001" fill="#5b6578" font-size="11">45</text><text x="92" y="111.0" text-anchor="end" fill="#1a1f2c" font-size="11">第 56 條</text><rect x="100" y="102.8" width="145.3" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="251.3" y="111.0" fill="#5b6578" font-size="11">45</text><text x="92" y="123.4" text-anchor="end" fill="#1a1f2c" font-size="11">第58條</text><rect x="100" y="115.2" width="138.9" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="244.9" y="123.4" fill="#5b6578" font-size="11">43</text><text x="92" y="135.8" text-anchor="end" fill="#1a1f2c" font-size="11">第59條</text><rect x="100" y="127.60000000000001" width="138.9" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="244.9" y="135.8" fill="#5b6578" font-size="11">43</text><text x="92" y="148.2" text-anchor="end" fill="#1a1f2c" font-size="11">第 13 條</text><rect x="100" y="140.0" width="135.7" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="241.7" y="148.2" fill="#5b6578" font-size="11">42</text><text x="92" y="160.6" text-anchor="end" fill="#1a1f2c" font-size="11">第 9 條</text><rect x="100" y="152.4" width="126.0" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="232.0" y="160.6" fill="#5b6578" font-size="11">39</text><text x="92" y="173.0" text-anchor="end" fill="#1a1f2c" font-size="11">第 12 條</text><rect x="100" y="164.8" width="122.7" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="228.7" y="173.0" fill="#5b6578" font-size="11">38</text><text x="92" y="185.4" text-anchor="end" fill="#1a1f2c" font-size="11">第 3 條</text><rect x="100" y="177.20000000000002" width="119.5" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="225.5" y="185.4" fill="#5b6578" font-size="11">37</text><text x="92" y="197.79999999999998" text-anchor="end" fill="#1a1f2c" font-size="11">第 13 條</text><rect x="100" y="189.6" width="119.5" height="6.4" fill="#1e3a8a" fill-opacity="0.85" rx="2"/><text x="225.5" y="197.79999999999998" fill="#5b6578" font-size="11">37</text></svg>
+  </div>
+
+  <h2>漂移監測（與 V&amp;V 黃金資料集基線比較）</h2>
+  <div class="reasons">
+    <strong>判定理由：</strong>
+    <ul><li>article_freq_psi=10.5178 &gt; 0.25 (data drift)</li><li>embedding_pc1_psi=5.8347 &gt; 0.25</li></ul>
+  </div>
+
+  <table>
+    <thead><tr><th>類別</th><th>指標</th><th>基線</th><th>當期</th><th>變動 / 評估</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="4">Performance</td><td>拒絕率</td><td>0.05</td><td>0.0915</td><td>+0.0415</td></tr>
+      <tr><td>引用率</td><td>0.9032</td><td>0.0</td><td>-0.9032</td></tr>
+      <tr><td>平均延遲 (ms)</td><td>—</td><td>5388.4</td><td>—</td></tr>
+      <tr><td>安全告警率</td><td>—</td><td>0.005</td><td>—</td></tr>
+      <tr><td rowspan="3">Data</td><td>查詢長度 PSI</td><td>0.0</td><td>3.2653</td><td>PSI &gt; 0.25 嚴重</td></tr>
+      <tr><td>條文頻率 PSI</td><td>0.0</td><td>10.5178</td><td>同上</td></tr>
+      <tr><td>字元 unigram KL</td><td>0.0</td><td>1.208</td><td>越大越異常</td></tr>
+      <tr><td rowspan="2">Embedding</td><td>後端</td><td colspan="2">char_ngram (samples=200)</td><td>—</td></tr>
+      <tr><td>PC1 投影 PSI</td><td>0.0</td><td>5.8347</td><td>PSI &gt; 0.25 嚴重</td></tr>
+    </tbody>
+  </table>
+
+  <h2>V&amp;V 基線快照</h2>
+  <table><thead><tr><th>指標</th><th>分數</th></tr></thead><tbody><tr><td>hit_rate</td><td>0.9032</td></tr><tr><td>precision_at_k</td><td>0.7043</td></tr><tr><td>recall_at_k</td><td>0.871</td></tr><tr><td>f1_at_k</td><td>0.7538</td></tr><tr><td>mrr</td><td>0.0</td></tr><tr><td>evaluated</td><td>31</td></tr><tr><td>skipped</td><td>0</td></tr></tbody></table>
+
+  <h2>異常旗標彙總</h2>
+  <div class="reasons">視窗內無異常旗標。</div>
+
+  <div class="footer">
+    Generated by <code>monitoring_addon</code> · do NOT modify <code>RAG/</code> · audit log dir: <code>../RAG/data/audit_logs</code>
+  </div>
+</div>
+</body>
+</html>

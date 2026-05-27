@@ -8,6 +8,11 @@ followed by LLM reranking for top-N selection, then parent document fetch.
 Special case: When the query contains article numbers (e.g., "第46條"),
 BM25 exact-match hits are returned directly WITHOUT LLM reranking to
 ensure precise article retrieval.
+
+BM25 index is built per-article (one chunk per statute article) with a
+"【法規名稱·第N條】" prefix injected at the start of each chunk to give
+the keyword search a strong identifier signal — same convention as
+IngestionService._split_law_by_article().
 """
 import logging
 import re
@@ -18,11 +23,17 @@ from typing import List, Optional, Set
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_community.retrievers import BM25Retriever
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ..core.config import RAGConfig
 from ..core.factory import ComponentFactory
 from ..core.prompts import RERANK_SYSTEM_MSG, RERANK_PROMPT_TEMPLATE
+
+# Same regex as IngestionService._split_law_by_article(): match a line that
+# IS an article header (e.g., "第 4 條", "第46條").
+_ARTICLE_HEADER_RE = re.compile(
+    r'^\s*第\s*([0-9一二三四五六七八九十百零兩]+)\s*條\s*$',
+    re.MULTILINE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +71,13 @@ class RetrievalService:
         self.bm25_retriever = self._build_bm25_index()
 
     def _build_bm25_index(self) -> Optional[BM25Retriever]:
-        """Build a BM25 index from all converted markdown files."""
+        """Build a BM25 index from all converted markdown files.
+
+        Uses article-aware splitting: one BM25 chunk per statute article
+        (matching the IngestionService convention). Each chunk's content
+        starts with "【法規名稱·第N條】" so keyword searches that mention
+        the law name OR an article number score those chunks high.
+        """
         md_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__)))),
@@ -72,23 +89,13 @@ class RetrievalService:
             logger.warning(f"No markdown files found in {md_dir}, BM25 disabled")
             return None
 
-        # Split each file into per-article chunks for BM25
-        all_chunks = []
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=50,
-            separators=["\n第 ", "\n\n", "\n", "。", " "],
-        )
-
+        all_chunks: List[Document] = []
         for filepath in md_files:
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     content = f.read()
-
                 source = os.path.basename(filepath)
-                doc = Document(page_content=content, metadata={"source": source})
-                chunks = splitter.split_documents([doc])
-                all_chunks.extend(chunks)
+                all_chunks.extend(self._split_law_by_article_for_bm25(content, source))
             except Exception as e:
                 logger.error(f"Error reading {filepath} for BM25: {e}")
 
@@ -97,8 +104,51 @@ class RetrievalService:
             return None
 
         bm25 = BM25Retriever.from_documents(all_chunks, k=self.config.summary_top_k)
-        logger.info(f"BM25 index built: {len(all_chunks)} chunks from {len(md_files)} files")
+        logger.info(
+            f"BM25 index built: {len(all_chunks)} article-chunks "
+            f"from {len(md_files)} files"
+        )
         return bm25
+
+    @staticmethod
+    def _split_law_by_article_for_bm25(content: str, source: str) -> List[Document]:
+        """Split a single law markdown into one Document per article.
+
+        Mirrors IngestionService._split_law_by_article so BM25 and vector
+        indices stay aligned. Content kept pristine (no prefix injection) —
+        article identity lives in metadata.
+        """
+        law_name = source[:-3] if source.endswith(".md") else source
+        matches = list(_ARTICLE_HEADER_RE.finditer(content))
+        if not matches:
+            return [Document(page_content=content, metadata={"source": source})]
+
+        docs: List[Document] = []
+        preamble = content[: matches[0].start()].strip()
+        if preamble:
+            docs.append(
+                Document(
+                    page_content=preamble,
+                    metadata={"source": source, "article_id": "preamble"},
+                )
+            )
+
+        for i, m in enumerate(matches):
+            start = m.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+            article_text = content[start:end].strip()
+            article_id = f"第{m.group(1).strip()}條"
+            docs.append(
+                Document(
+                    page_content=article_text,
+                    metadata={
+                        "source": source,
+                        "article_id": article_id,
+                        "law_name": law_name,
+                    },
+                )
+            )
+        return docs
 
     # ─── Chinese numeral mapping ───────────────────────────────────────────
     _CN_NUM = {

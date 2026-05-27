@@ -1,0 +1,214 @@
+================================================================
+ ISO42001 RAG 系統 — 內網部署 Patch (intranet_deployment.diff)
+================================================================
+
+來源版本 : v1.0.1-optimized (HTTPS gateway 架構，外網 GPU 172.16.120.35)
+目標版本 : 內網部署 (Triton gRPC + 本地 embed-proxy 中介)
+產生時間 : 2026-05-27
+
+----------------------------------------------------------------
+ 套用方式
+----------------------------------------------------------------
+
+cd ISO42001Deploy
+git apply intranet_deployment.diff           # 或 patch -p1 < intranet_deployment.diff
+
+# 套用後必填以下 3 個 placeholder：
+sed -i 's|<INTRANET_GPU_IP>|192.168.X.Y|g' .env
+sed -i 's|<DB_PASSWORD>|your-strong-db-password|g' .env
+sed -i 's|<WEBUI_SECRET>|your-strong-webui-secret|g' .env
+
+# 載入離線映像（如內網無外網）
+for f in images/*.tar; do docker load -i "$f"; done
+
+# 啟動
+./deploy.sh
+
+# 索引法規（一次性）
+docker exec -w /home/jovyan/work ISO42001_jupyter python scripts/reindex.py
+
+# 驗證（可選但建議）
+cd monitoring_addon
+python3 scripts/run_online_vv.py --rag-url http://localhost:8043
+# Hit Rate 應 ≥ 0.9032（與外網版相同，因為程式碼不變）
+
+----------------------------------------------------------------
+ 改動摘要
+----------------------------------------------------------------
+
+.env (15 處修改)：
+  • LLM_HOST: 172.16.120.35 → <INTRANET_GPU_IP>
+  • LLM_PORT: 443 → 7000 (HTTP)
+  • CHAT_MODEL_NAME: gpt-oss-20b → openai/gpt-oss-20b (Triton 用前綴)
+  • EMBED_MODEL_NAME: nvidia/NV-embed-V2 → nvidia/nv-embed-v2 (小寫)
+  • LLM_API_KEY / EMBED_API_KEY: 真實 sk-... → dummy-key (內網不需 token)
+  • EMBED_API_BASE: https://gateway → http://localhost:17100/v1
+  • LLM_API_BASE:   https://gateway → http://<IP>:7000/v1
+  • POSTGRES_PASSWORD / WEBUI_SECRET_KEY: 改 placeholder
+
+docker-compose.yaml (rag-api + jupyter 各 4 處)：
+  • EMBED_API_BASE: https://${LLM_HOST}/v1 → http://embed-proxy:7100/v1
+  • EMBED_MODEL_NAME 預設值: 改回 nvidia/nv-embed-v2 (小寫)
+  • LLM_API_BASE: https://${LLM_HOST}/v1 → http://${LLM_HOST}:${LLM_PORT:-7000}/v1
+  • 對應註解更新
+
+----------------------------------------------------------------
+ 不動到的東西（程式碼層級無變動）
+----------------------------------------------------------------
+
+✅ RAG/rag_system/                  — 全部優化過的程式碼跟著走
+   ✓ services/ingestion.py          — article-aware chunking (v1.0.1)
+   ✓ services/retrieval.py          — BM25 per-article + rerank
+   ✓ core/prompts.py                — 強化 rerank prompt
+✅ monitoring_addon/                — 監測系統完整跟過去
+✅ embed_proxy/                     — Triton gRPC 轉換層
+✅ 黃金資料集、V&V 腳本、儀表板     — 全部跟著走
+
+----------------------------------------------------------------
+ 回滾方式（若內網部署失敗，回到外網 HTTPS gateway 版）
+----------------------------------------------------------------
+
+cd ISO42001Deploy
+git apply -R intranet_deployment.diff
+
+# 然後手動把 .env 裡的 token 填回去
+# 或從備份還原：
+tar xzf RAG/data/versions/backup_2026-05-27_073723.tar.gz -C RAG/
+
+================================================================
+ 以下為 git-style unified diff，可 git apply 直接套用
+================================================================
+
+--- a/.env	2026-05-27 09:26:58.989234973 +0800
++++ b/.env	2026-05-27 09:27:15.007384630 +0800
+@@ -1,52 +1,53 @@
+ # =============================================================
+-# ISO42001 RAG 系統 — 環境變數
+-# GPU 推論伺服器：172.16.120.35
++# ISO42001 RAG 系統 — 環境變數（內網部署版）
++# 架構：Triton gRPC + 本地 embed-proxy
+ # =============================================================
+ 
+-# ── GPU 推論伺服器 IP ─────────────────────────────────────────
+-LLM_HOST=172.16.120.35
++# ── GPU 推論伺服器 IP（必改）─────────────────────────────────
++LLM_HOST=<INTRANET_GPU_IP>
+ 
+-# ── LLM 服務（OpenAI 相容 HTTPS gateway） ─────────────────────
+-# 新架構：GPU 主機提供統一 HTTPS gateway，chat + embedding 同一端點
+-# 不再走本地 embed-proxy → Triton gRPC 路徑
+-LLM_PORT=443
+-CHAT_MODEL_NAME=gpt-oss-20b
+-# 可選模型：gpt-oss-20b / gemma4 / nvidia/NV-embed-V2 / image-generator
+-
+-# ── Embedding 服務（同一 HTTPS gateway） ──────────────────────
+-EMBED_GRPC_PORT=7002                  # 保留供 embed-proxy 容器啟動，不再實際使用
+-EMBED_MODEL_NAME=nvidia/NV-embed-V2   # 注意大寫，gateway 模型清單顯示為此名
++# ── LLM 服務（TensorRT-LLM, OpenAI 相容 HTTP）───────────────
++LLM_PORT=7000
++CHAT_MODEL_NAME=openai/gpt-oss-20b
++# 若要改用 Gemma4：
++# LLM_PORT=7010
++# CHAT_MODEL_NAME=google/gemma-3-27b-it
++
++# ── Embedding 服務（本地 embed-proxy → Triton gRPC）──────────
++# Triton gRPC port 是 7002（對外），不是預設的 9000
++EMBED_GRPC_PORT=7002
++EMBED_MODEL_NAME=nvidia/nv-embed-v2
+ TRITON_MODEL_NAME=nv-embed-v2
+ 
+-# ── API Keys（GPU gateway 要求真實 token） ────────────────────
+-LLM_API_KEY=sk-16hQaRMxsaIUkBzT3p-MDw4jUmY6zkVfUC_bdEvktURF6L1diEOMTlZ5FAmMHDuV
+-EMBED_API_KEY=sk-16hQaRMxsaIUkBzT3p-MDw4jUmY6zkVfUC_bdEvktURF6L1diEOMTlZ5FAmMHDuV
++# ── API Keys（內網服務無需驗證時填 dummy 值即可）─────────────
++LLM_API_KEY=dummy-key
++EMBED_API_KEY=dummy-key
+ OPENAI_API_KEYS=dummy-key;dummy-key
+ 
+-# ── 內網模式（無真實 API Key 時必須設為 true） ────────────────
++# ── 內網模式（無真實 API Key 時必須設為 true）────────────────
+ ALLOW_INTRANET_MODE=true
+ TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12
+ 
+-# ── SSL 驗證（GPU gateway 是 self-signed cert，必須關閉驗證） ─
++# ── SSL（內網走 HTTP，不需驗證）──────────────────────────────
+ VERIFY_SSL=false
+ 
+-# ── 本機腳本直連（reindex.py 等在 Docker 外執行時使用） ──────
++# ── 本機腳本直連（reindex.py 等在 Docker 外執行時使用）──────
+ PGVECTOR_URL=postgresql+psycopg2://postgres:postgres@localhost:15432/Judge
+-EMBED_API_BASE=https://172.16.120.35/v1
+-LLM_API_BASE=https://172.16.120.35/v1
++EMBED_API_BASE=http://localhost:17100/v1
++LLM_API_BASE=http://<INTRANET_GPU_IP>:7000/v1
+ 
+-# ── PostgreSQL ────────────────────────────────────────────────
++# ── PostgreSQL（生產建議改強密碼）────────────────────────────
+ POSTGRES_USER=postgres
+-POSTGRES_PASSWORD=postgres
++POSTGRES_PASSWORD=<DB_PASSWORD>
+ POSTGRES_DB=Judge
+ 
+-# ── WebUI ─────────────────────────────────────────────────────
+-WEBUI_SECRET_KEY=iso42001-secret-change-me
++# ── WebUI（生產建議改 secret）────────────────────────────────
++WEBUI_SECRET_KEY=<WEBUI_SECRET>
+ 
+ # ── Ports ────────────────────────────────────────────────────
+ HTTP_PORT=80
+ JUPYTER_PORT=25678
+ 
+-# ── UID/GID（deploy.sh 會自動覆寫這兩行） ────────────────────
++# ── UID/GID（deploy.sh 會自動覆寫這兩行）────────────────────
+ HOST_UID=1000
+ HOST_GID=1000
+--- a/docker-compose.yaml	2026-05-27 09:26:58.989234973 +0800
++++ b/docker-compose.yaml	2026-05-27 09:27:44.237657726 +0800
+@@ -59,15 +59,15 @@
+     environment:
+       # DB — 使用 service name
+       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
+-      # Embed — 直接打 GPU gateway HTTPS 端點（bypass embed-proxy）
++      # Embed — 透過本地 embed-proxy 轉譯到 Triton gRPC
+       EMBED_API_KEY: ${EMBED_API_KEY}
+-      EMBED_API_BASE: "https://${LLM_HOST}/v1"
+-      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
+-      # LLM — 同一 HTTPS gateway
++      EMBED_API_BASE: "http://embed-proxy:7100/v1"
++      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
++      # LLM — 直接連線 LLM 服務（HTTP, OpenAI 相容）
+       LLM_API_KEY: ${LLM_API_KEY}
+-      LLM_API_BASE: "https://${LLM_HOST}/v1"
++      LLM_API_BASE: "http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+       CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+-      # SSL — gateway 是 self-signed，必須關閉驗證
++      # SSL — 內網走 HTTP，保留設定不影響
+       VERIFY_SSL: ${VERIFY_SSL:-false}
+       # RAG 配置
+       TOP_K: ${TOP_K:-5}
+@@ -76,7 +76,7 @@
+       ALLOW_INTRANET_MODE: ${ALLOW_INTRANET_MODE:-false}
+       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1}
+     volumes:
+-      - ./RAG:/app 
++      - ./RAG:/app
+       - ./RAG/data:/app/data
+     healthcheck:
+       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1" ]
+@@ -142,12 +142,12 @@
+       GRANT_SUDO: "yes"
+       JUPYTER_PORT: "${JUPYTER_PORT:-25678}"
+       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
+-      # Embed — 直接打 GPU gateway HTTPS 端點（bypass embed-proxy）
++      # Embed — 透過本地 embed-proxy 轉譯到 Triton gRPC
+       EMBED_API_KEY: ${EMBED_API_KEY}
+-      EMBED_API_BASE: "https://${LLM_HOST}/v1"
+-      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
++      EMBED_API_BASE: "http://embed-proxy:7100/v1"
++      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
+       LLM_API_KEY: ${LLM_API_KEY}
+-      LLM_API_BASE: "https://${LLM_HOST}/v1"
++      LLM_API_BASE: "http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+       CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+       VERIFY_SSL: ${VERIFY_SSL:-false}
+       TOP_K: ${TOP_K:-5}

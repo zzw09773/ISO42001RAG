@@ -1,0 +1,300 @@
+{
+  "generated_at": "2026-05-26T23:37:09.216622+00:00",
+  "window_days": 90,
+  "audit_dir": "../RAG/data/audit_logs",
+  "files_loaded": 10,
+  "business_goal": {
+    "metric": "hit_rate",
+    "target": 0.9,
+    "current": 0.9032,
+    "status": "met",
+    "reason": "Hit Rate 0.9032 ≥ 0.9"
+  },
+  "kpi": {
+    "queries": 546,
+    "rejections": 55,
+    "rejection_rate": 0.0915,
+    "security_alerts": 3,
+    "anomalies": 0,
+    "p95_latency_ms": 28508,
+    "drift_severity": "warning"
+  },
+  "daily_series": [
+    {
+      "date": "2026-03-02",
+      "queries": 220,
+      "rejections": 28,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 2384,
+      "rejection_rate": 0.1129
+    },
+    {
+      "date": "2026-03-03",
+      "queries": 50,
+      "rejections": 4,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 1639,
+      "rejection_rate": 0.0741
+    },
+    {
+      "date": "2026-03-04",
+      "queries": 18,
+      "rejections": 0,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 2394,
+      "rejection_rate": 0.0
+    },
+    {
+      "date": "2026-03-05",
+      "queries": 26,
+      "rejections": 0,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 3038,
+      "rejection_rate": 0.0
+    },
+    {
+      "date": "2026-03-06",
+      "queries": 0,
+      "rejections": 1,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": null,
+      "rejection_rate": 1.0
+    },
+    {
+      "date": "2026-04-23",
+      "queries": 23,
+      "rejections": 4,
+      "security_alerts": 3,
+      "anomalies": 0,
+      "avg_latency_ms": 4289,
+      "rejection_rate": 0.1481
+    },
+    {
+      "date": "2026-04-30",
+      "queries": 1,
+      "rejections": 0,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 2389,
+      "rejection_rate": 0.0
+    },
+    {
+      "date": "2026-05-05",
+      "queries": 1,
+      "rejections": 0,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 2658,
+      "rejection_rate": 0.0
+    },
+    {
+      "date": "2026-05-06",
+      "queries": 4,
+      "rejections": 0,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 5701,
+      "rejection_rate": 0.0
+    },
+    {
+      "date": "2026-05-26",
+      "queries": 203,
+      "rejections": 18,
+      "security_alerts": 0,
+      "anomalies": 0,
+      "avg_latency_ms": 10279,
+      "rejection_rate": 0.0814
+    }
+  ],
+  "article_distribution": [
+    {
+      "label": "第8條",
+      "count": 187
+    },
+    {
+      "label": "第9條",
+      "count": 137
+    },
+    {
+      "label": "第 50 條",
+      "count": 75
+    },
+    {
+      "label": "第 57 條",
+      "count": 75
+    },
+    {
+      "label": "第57條",
+      "count": 65
+    },
+    {
+      "label": "第 57 條",
+      "count": 50
+    },
+    {
+      "label": "第 76 條",
+      "count": 45
+    },
+    {
+      "label": "第 56 條",
+      "count": 45
+    },
+    {
+      "label": "第58條",
+      "count": 43
+    },
+    {
+      "label": "第59條",
+      "count": 43
+    },
+    {
+      "label": "第 13 條",
+      "count": 42
+    },
+    {
+      "label": "第 9 條",
+      "count": 39
+    },
+    {
+      "label": "第 12 條",
+      "count": 38
+    },
+    {
+      "label": "第 3 條",
+      "count": 37
+    },
+    {
+      "label": "第 13 條",
+      "count": 37
+    }
+  ],
+  "length_histogram": [
+    {
+      "label": "0-20",
+      "count": 310
+    },
+    {
+      "label": "21-50",
+      "count": 61
+    },
+    {
+      "label": "51-100",
+      "count": 11
+    },
+    {
+      "label": "101-200",
+      "count": 1
+    },
+    {
+      "label": "200+",
+      "count": 218
+    }
+  ],
+  "anomalies": [],
+  "vv": {
+    "available": true,
+    "snapshot": {
+      "generated_at": "2026-05-26T23:36:43.653928+00:00",
+      "dataset_size": 34,
+      "retrieval": {
+        "hit_rate": 0.9032,
+        "precision_at_k": 0.7043,
+        "recall_at_k": 0.871,
+        "f1_at_k": 0.7538,
+        "mrr": 0.0,
+        "evaluated": 31,
+        "skipped": 0
+      },
+      "answer_quality_baseline": {
+        "avg_article_match": 0.9032
+      },
+      "rejection_accuracy": 1.0,
+      "source": "online_vv"
+    }
+  },
+  "drift": {
+    "generated_at": "2026-05-26T23:37:09.216552+00:00",
+    "baseline_label": "/home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy/monitoring_addon/data/golden_dataset.json",
+    "window_days": 90,
+    "queries_in_window": 601,
+    "severity": "warning",
+    "severity_reasons": [
+      "article_freq_psi=10.5178 > 0.25 (data drift)",
+      "embedding_pc1_psi=5.8347 > 0.25"
+    ],
+    "perf": {
+      "rejection_rate_baseline": 0.05,
+      "rejection_rate_current": 0.0915,
+      "rejection_rate_delta": 0.0415,
+      "avg_latency_baseline_ms": null,
+      "avg_latency_current_ms": 5388.4,
+      "avg_latency_delta_pct": null,
+      "p95_latency_current_ms": 28508,
+      "citation_rate_baseline": 0.9032,
+      "citation_rate_current": 0.0,
+      "citation_rate_delta": -0.9032,
+      "security_alert_rate_current": 0.005,
+      "retry_rate_current": 0.0,
+      "queries_observed": 546
+    },
+    "data": {
+      "query_length_psi": 3.2653,
+      "article_freq_psi": 10.5178,
+      "char_unigram_kl": 1.208,
+      "top_drift_articles": [
+        [
+          "第5條",
+          -0.9961
+        ],
+        [
+          "第8條",
+          0.0902
+        ],
+        [
+          "第9條",
+          0.0661
+        ],
+        [
+          "第 57 條",
+          0.0362
+        ],
+        [
+          "第 50 條",
+          0.0362
+        ],
+        [
+          "第57條",
+          0.0313
+        ],
+        [
+          "第 57 條",
+          0.0241
+        ],
+        [
+          "第 76 條",
+          0.0217
+        ],
+        [
+          "第 56 條",
+          0.0217
+        ],
+        [
+          "第59條",
+          0.0207
+        ]
+      ],
+      "queries_observed": 601
+    },
+    "embedding": {
+      "centroid_cosine_distance": 0.0,
+      "pca_first_component_psi": 5.8347,
+      "samples": 200,
+      "backend": "char_ngram"
+    }
+  }
+}

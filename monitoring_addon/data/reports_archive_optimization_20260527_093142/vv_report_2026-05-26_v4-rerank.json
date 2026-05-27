@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-05-26T13:23:56.503752+00:00",
+  "dataset_size": 34,
+  "retrieval": {
+    "hit_rate": 0.9032,
+    "precision_at_k": 0.6183,
+    "recall_at_k": 0.871,
+    "f1_at_k": 0.6892,
+    "mrr": 0.0,
+    "evaluated": 31,
+    "skipped": 0
+  },
+  "answer_quality_baseline": {
+    "avg_article_match": 0.9032
+  },
+  "rejection_accuracy": 1.0,
+  "source": "online_vv"
+}

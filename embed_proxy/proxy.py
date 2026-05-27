@@ -36,9 +36,14 @@ def embed_texts(texts: list[str], input_type: str = "passage") -> list[list[floa
     all_embeddings = []
 
     for text in texts:
-        # 根據內網報錯，Triton 上的 nv-embed-v2 預期有 1 個名為 'text' 的輸入
-        input_tensor = grpcclient.InferInput("text", [1, 1], "BYTES")
-        input_tensor.set_data_from_numpy(np.array([[text]], dtype=object))
+        if input_type == "query":
+            # query 輸入：dims [1]，單字串
+            input_tensor = grpcclient.InferInput("query", [1], "BYTES")
+            input_tensor.set_data_from_numpy(np.array([text], dtype=object))
+        else:
+            # documents 輸入：dims [1, -1]，文件批次
+            input_tensor = grpcclient.InferInput("documents", [1, 1], "BYTES")
+            input_tensor.set_data_from_numpy(np.array([[text]], dtype=object))
 
         output = grpcclient.InferRequestedOutput("embeddings")
 
@@ -89,8 +94,11 @@ async def create_embeddings(request: Request):
     else:
         texts = [str(raw_input)]
 
+    # input_type: "query" 或 "passage"（預設），對應 Triton 的 query/documents input
+    input_type = body.get("input_type", "passage")
+
     try:
-        embeddings = embed_texts(texts, input_type="passage")
+        embeddings = embed_texts(texts, input_type=input_type)
     except Exception as e:
         return JSONResponse(
             status_code=500,

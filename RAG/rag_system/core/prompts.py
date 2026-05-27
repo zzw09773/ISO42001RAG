@@ -64,13 +64,25 @@ SUMMARY_PROMPT_TEMPLATE = """請將以下對話歷史濃縮為精簡的摘要，
 # RETRIEVAL / RERANKING PROMPTS
 # ============================================================================
 
-RERANK_SYSTEM_MSG = "You are a precise legal retrieval assistant."
+RERANK_SYSTEM_MSG = (
+    "你是中華民國法律文件的精準檢索助理。你的任務是從候選條文中挑出**最直接**回答查詢的條文。"
+)
 
-RERANK_PROMPT_TEMPLATE = """Target Query: {question}
+RERANK_PROMPT_TEMPLATE = """查詢：{question}
 
-Candidates:
+候選條文：
 {options_text}
 
-Analyze the candidates above. Rank the top {top_n} candidates most likely to contain relevant information for answering the query.
-Return ONLY a comma-separated list of candidate numbers in order of relevance (e.g., "3,1,5").
-If none are relevant, return "0"."""
+排序原則（依序套用，前項優先於後項）：
+
+1. **直接命中優於相關**：若候選中存在「定義／適用範圍／程序種類／立法目的／救濟途徑／提起期限」等**綱領性條文**，且查詢正在問這類抽象問題，**該綱領條文必須優先選**——即使後段條文（如施行細則、特殊情形）字面相似度更高。
+
+2. **編號小優於編號大**：當兩條候選都看起來相關，選擇條文**編號較小（如第 1-20 條）**的綱領條文；中段以後的條文通常是「特定情形」「附則」「罰則」，回答抽象問題時容易誤導。
+
+3. **內容直答優於延伸**：避開「準用」「依前條」「除前項規定外」這類**依賴前條成立**的延伸條文，除非查詢明顯在問例外情形。
+
+4. **同一法規內優先**：若查詢提及具體法規名稱（如「軍人權益事件處理法」），優先該法規內候選；跨法引用只在查詢明顯跨主題時才選。
+
+請從候選中排出最相關的前 {top_n} 名，按相關性由高到低排列。
+**只回傳逗號分隔的編號**（例：「3,1,5」），不要解釋。
+若全部候選皆不相關，回傳「0」。"""

@@ -1,0 +1,342 @@
+[
+  {
+    "id": "eval_c01",
+    "query": "陸海空軍懲罰法的立法目的是什麼？",
+    "expected_answer": "為維護軍紀，鞏固戰力，兼顧人權保障，導正軍人之違紀行為。",
+    "expected_keywords": ["維護軍紀", "鞏固戰力", "人權保障", "違紀"],
+    "expected_articles": ["第1條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_c02",
+    "query": "軍人違紀行為的懲罰，主要依據哪部法律？",
+    "expected_answer": "除其他法律另有規定外，依陸海空軍懲罰法行之。",
+    "expected_keywords": ["懲罰", "本法"],
+    "expected_articles": ["第2條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_c03",
+    "query": "軍人非經彈劾是否可受懲戒？",
+    "expected_answer": "軍人非經彈劾，不受懲戒。",
+    "expected_keywords": ["彈劾", "懲戒"],
+    "expected_articles": ["第3條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_c04",
+    "query": "陸海空軍懲罰法所稱「重大懲罰」的定義為何？",
+    "expected_answer": "指撤職、廢止起役、降階、記大過、悔過或逾受懲罰人二個月本俸（薪額）之財產懲罰。",
+    "expected_keywords": ["撤職", "降階", "記大過", "悔過", "本俸"],
+    "expected_articles": ["第4條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c05",
+    "query": "什麼是勤務上違紀行為？",
+    "expected_answer": "違背或逾越法令執行勤務；違反權責長官職務命令或服役機關管理規範；怠於監督所屬人員等行為。",
+    "expected_keywords": ["勤務", "法令", "職務命令", "監督"],
+    "expected_articles": ["第5條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c06",
+    "query": "勤務外的違紀行為有哪些？",
+    "expected_answer": "故意觸犯刑事法律；持有毒品；酒駕；性騷擾或性霸凌；違反廉政倫理；未依法令兼職等。",
+    "expected_keywords": ["刑事法律", "毒品", "性騷擾", "兼職"],
+    "expected_articles": ["第6條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c07",
+    "query": "違紀行為的懲罰，是否以行為時有明文規定為限？",
+    "expected_answer": "違紀行為之懲罰，以行為時本法有明文規定者為限。",
+    "expected_keywords": ["明文規定", "行為時"],
+    "expected_articles": ["第7條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_c08",
+    "query": "軍人違紀行為若非出於故意或過失，是否受懲罰？",
+    "expected_answer": "非出於故意或過失者，不受懲罰。因過失而應受重大懲罰者，以重大過失為限。",
+    "expected_keywords": ["故意", "過失", "重大過失"],
+    "expected_articles": ["第8條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c09",
+    "query": "正當防衛或緊急避難下的違紀行為是否要受懲罰？",
+    "expected_answer": "對於現在不法之侵害出於防衛、或為避免緊急危難之不得已行為，不受懲罰。",
+    "expected_keywords": ["防衛", "緊急", "危難", "不受懲罰"],
+    "expected_articles": ["第9條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c10",
+    "query": "軍人對長官違法命令是否要服從？",
+    "expected_answer": "認為命令違法應向長官表示意見；命令違反刑事法律者，除依法行使武力外，無服從義務。",
+    "expected_keywords": ["長官", "違法命令", "刑事法律", "服從"],
+    "expected_articles": ["第10條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_c11",
+    "query": "精神障礙或心智缺陷下的違紀行為，如何處理？",
+    "expected_answer": "致不能辨識行為違法或欠缺辨識行為能力者，不受懲罰。辨識能力顯著減低者，得從輕懲罰。",
+    "expected_keywords": ["精神障礙", "辨識", "從輕"],
+    "expected_articles": ["第11條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c12",
+    "query": "辦理懲罰事件時應審酌哪些事項？",
+    "expected_answer": "行為動機目的、行為手段、生活狀況、品行智識程度、對紀律影響、與被害人關係、違反義務程度、危險損害、行為後態度等。",
+    "expected_keywords": ["動機", "手段", "品行", "比例原則"],
+    "expected_articles": ["第12條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_c13",
+    "query": "主動向長官坦承違紀行為，可以減輕懲罰嗎？",
+    "expected_answer": "對未經發覺之違紀行為主動向長官坦承並願受懲罰者，得減輕懲罰。",
+    "expected_keywords": ["主動", "坦承", "減輕"],
+    "expected_articles": ["第13條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_c14",
+    "query": "懲罰處分送達後三個月內又再違紀，會怎麼樣？",
+    "expected_answer": "三個月內故意再為違紀行為者，得從重懲罰。",
+    "expected_keywords": ["三個月", "從重"],
+    "expected_articles": ["第14條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_m01",
+    "query": "軍人權益事件處理法的立法目的是什麼？",
+    "expected_answer": "為妥適、迅速、統合處理軍人權益爭議事件，保障軍人權益，兼顧部隊紀律，並鞏固戰力。",
+    "expected_keywords": ["妥適", "迅速", "保障", "部隊紀律"],
+    "expected_articles": ["第1條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_m02",
+    "query": "軍人權益事件處理法的適用範圍為何？",
+    "expected_answer": "軍人與權責機關間關於身分、公法上財產請求、獎懲、考績及其他行政處分或管理措施之爭議。",
+    "expected_keywords": ["身分", "財產請求", "獎懲", "考績", "行政處分"],
+    "expected_articles": ["第2條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_m03",
+    "query": "軍人權益救濟有哪幾種程序？",
+    "expected_answer": "依本法所定復審、申訴、再申訴及行政訴訟程序行之。",
+    "expected_keywords": ["復審", "申訴", "再申訴", "行政訴訟"],
+    "expected_articles": ["第3條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_m04",
+    "query": "對提起復審的人是否有歧視保護？",
+    "expected_answer": "權責機關對依本法提起復審、申訴、再申訴或行政訴訟之人，不得予以歧視或不公平待遇。",
+    "expected_keywords": ["歧視", "不公平待遇", "保護"],
+    "expected_articles": ["第4條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_m05",
+    "query": "原行政處分執行是否會因進行復審而停止？",
+    "expected_answer": "原則上不停止；合法性顯有疑義或立即執行將發生難以回復損害且非為維護重大公共利益所必要者，得停止執行。",
+    "expected_keywords": ["停止執行", "難以回復", "公共利益"],
+    "expected_articles": ["第6條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_m06",
+    "query": "地方軍事法院的官兵權益保障會由誰組成？",
+    "expected_answer": "由專任及兼任權保委員組成；專任由國防法務官擔任，兼任由社會公正人士或學者專家擔任，任期三年。",
+    "expected_keywords": ["專任", "兼任", "國防法務官", "三年"],
+    "expected_articles": ["第8條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_m07",
+    "query": "復審事件由哪個權保會管轄？",
+    "expected_answer": "由原處分機關或原措施機關所在地之權保會管轄。",
+    "expected_keywords": ["原處分機關", "所在地", "管轄"],
+    "expected_articles": ["第9條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_m08",
+    "query": "權保會審議復審事件需要多少人合議？",
+    "expected_answer": "由專任權保委員二人及兼任權保委員三人合議決定之；委員任一性別比例不得少於五分之二。",
+    "expected_keywords": ["專任", "兼任", "性別比例", "五分之二"],
+    "expected_articles": ["第10條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_m09",
+    "query": "權保委員應自行迴避的事由有哪些？",
+    "expected_answer": "與當事人有親屬關係、曾參與該事件處理、曾為當事人代理人或證人、與事件有法律上利害關係等。",
+    "expected_keywords": ["迴避", "親屬", "代理人", "利害關係"],
+    "expected_articles": ["第11條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_m10",
+    "query": "軍人在什麼情況下可以提起復審？",
+    "expected_answer": "對權責機關所為涉及軍人身分變更、公法上財產請求、獎懲或考績事項之行政處分，認為違法或顯然不當致損害權利者，得依本法提起復審。",
+    "expected_keywords": ["身分變更", "財產請求", "獎懲", "考績", "違法"],
+    "expected_articles": ["第13條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_m11",
+    "query": "復審的提起期限多久？",
+    "expected_answer": "自行政處分送達之次日起三十日內為之。於艦艇航行期間送達者，自艦艇返抵國內港口次日起算。",
+    "expected_keywords": ["三十日", "次日", "艦艇"],
+    "expected_articles": ["第15條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_m12",
+    "query": "復審書應該載明哪些事項？",
+    "expected_answer": "復審人姓名與基本資料、原處分機關、復審請求事項、事實及理由、收受處分日期、證據等。",
+    "expected_keywords": ["復審人", "原處分機關", "請求事項", "證據"],
+    "expected_articles": ["第16條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "single_article",
+    "difficulty": "medium"
+  },
+  {
+    "id": "eval_cr01",
+    "query": "軍人勤務上違紀與勤務外違紀如何區分？",
+    "expected_answer": "勤務上違紀指違背法令執行勤務、違反職務命令等；勤務外違紀指非執行勤務時故意觸犯刑事法律、毒品、酒駕、性騷擾等。",
+    "expected_keywords": ["勤務上", "勤務外", "刑事法律", "毒品"],
+    "expected_articles": ["第5條", "第6條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "cross_reference",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_cr02",
+    "query": "軍人違紀受懲罰後，如不服懲罰處分要如何救濟？",
+    "expected_answer": "依軍人權益事件處理法提起復審；對復審決定不服可再申訴或提起行政訴訟。",
+    "expected_keywords": ["復審", "再申訴", "行政訴訟", "救濟"],
+    "expected_articles": ["第3條", "第13條"],
+    "expected_docs": ["軍人權益事件處理法.md"],
+    "category": "cross_reference",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_cr03",
+    "query": "軍人因過失導致違紀，會被怎麼處理？",
+    "expected_answer": "非出於故意或過失不受懲罰；因過失而應受重大懲罰者，以重大過失為限。可審酌動機、手段、品行等情節決定懲罰。",
+    "expected_keywords": ["故意", "過失", "重大過失", "審酌"],
+    "expected_articles": ["第8條", "第12條"],
+    "expected_docs": ["陸海空軍懲罰法.md"],
+    "category": "cross_reference",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_cr04",
+    "query": "權保委員與懲罰權責長官是不是同一人？",
+    "expected_answer": "不是。權責長官指對軍人有指揮監督或實施懲罰權限者（陸海空軍懲罰法第4條）；權保委員是地方軍事法院審議復審/再申訴的合議成員（軍人權益事件處理法第8條）。",
+    "expected_keywords": ["權責長官", "權保委員", "指揮監督", "合議"],
+    "expected_articles": ["第4條", "第8條"],
+    "expected_docs": ["陸海空軍懲罰法.md", "軍人權益事件處理法.md"],
+    "category": "cross_reference",
+    "difficulty": "hard"
+  },
+  {
+    "id": "eval_oos01",
+    "query": "今天天氣如何？",
+    "expected_answer": "本系統僅提供法律文件相關問答，無法回答此類問題。",
+    "expected_keywords": [],
+    "expected_articles": [],
+    "expected_docs": [],
+    "category": "out_of_scope",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_oos02",
+    "query": "請推薦一道紅燒牛肉的做法",
+    "expected_answer": "本系統僅提供法律文件相關問答，無法回答此類問題。",
+    "expected_keywords": [],
+    "expected_articles": [],
+    "expected_docs": [],
+    "category": "out_of_scope",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_oos03",
+    "query": "幫我寫一個 Python 排序演算法",
+    "expected_answer": "本系統僅提供法律文件相關問答，無法回答此類問題。",
+    "expected_keywords": [],
+    "expected_articles": [],
+    "expected_docs": [],
+    "category": "out_of_scope",
+    "difficulty": "easy"
+  },
+  {
+    "id": "eval_amb01",
+    "query": "第5條的規定是什麼？",
+    "expected_answer": "陸海空軍懲罰法第5條規範勤務上違紀行為；軍人權益事件處理法第5條規範不利益變更禁止原則。請指明法規。",
+    "expected_keywords": ["勤務", "違紀", "不利益"],
+    "expected_articles": ["第5條"],
+    "expected_docs": ["陸海空軍懲罰法.md", "軍人權益事件處理法.md"],
+    "category": "ambiguous",
+    "difficulty": "hard"
+  }
+]

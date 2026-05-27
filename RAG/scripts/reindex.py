@@ -28,7 +28,9 @@ from rag_system.services.ingestion import IngestionService
 
 def build_config() -> RAGConfig:
     """Load and validate configuration from environment."""
-    load_dotenv(override=True)
+    # .env 放在 ISO42001Deploy/，即 repo_root 的上一層
+    dotenv_path = repo_root.parent / ".env"
+    load_dotenv(dotenv_path=dotenv_path, override=True)
     try:
         config = RAGConfig.from_env()
         config.docstore_path = repo_root / "data/processed/docstore"

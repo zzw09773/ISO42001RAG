@@ -1,0 +1,654 @@
+{
+  "generated_at": "2026-05-26T23:36:43.653928+00:00",
+  "rag_url": "http://localhost:8043",
+  "dataset_path": "/home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy/monitoring_addon/data/golden_dataset.json",
+  "dataset_size": 34,
+  "business_goal": {
+    "metric": "hit_rate",
+    "target": 0.9,
+    "current": 0.9032,
+    "status": "met"
+  },
+  "aggregate": {
+    "metrics": {
+      "evaluated": 31,
+      "skipped": 0,
+      "k": 5,
+      "hit_rate": 0.9032,
+      "precision_at_k": 0.7043,
+      "recall_at_k": 0.871,
+      "f1_at_k": 0.7538,
+      "mrr": 0.0,
+      "map": 0.0
+    },
+    "oos_total": 3,
+    "oos_correct_rejections": 3,
+    "rejection_accuracy": 1.0
+  },
+  "per_query": [
+    {
+      "id": "eval_c01",
+      "query": "陸海空軍懲罰法的立法目的是什麼？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第1條"
+      ],
+      "cited_articles": [
+        "第1條",
+        "第77條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.5,
+      "recall@k": 1.0,
+      "f1@k": 0.6666666666666666,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「陸海空軍懲罰法的立法目的是什麼？」屬於法律文件內容的查詢。  \n- 檢索到的文件中，文件 1 的第 1 條明確說明了立法目的。  \n- 其他文件（第 1 章總則、第 77 條）雖提供法規結構與特定情況，但不直接說明立法目的。  \n- 因此，答案將以文件 1 的第 1 條為依據。\n\n## **問題答案**  \n陸海空軍懲罰法的立法目的是「為維護軍紀，鞏"
+    },
+    {
+      "id": "eval_c02",
+      "query": "軍人違紀行為的懲罰，主要依據哪部法律？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第2條"
+      ],
+      "cited_articles": [
+        "第2條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人違紀行為的懲罰，主要依據哪部法律？」屬於法律相關問題。  \n- 檢索到的文件中，文件 1、2、3 均來自《陸海空軍懲罰法》並提及軍人違紀行為的懲罰。  \n- 這三個文件共同表明，軍人違紀行為的懲罰主要依據《陸海空軍懲罰法》。  \n- 於回答中直接引用文件 1 的第 2 條作為主要依據，並簡述其內容。\n\n## **問題答案**  \n軍人違紀行為的懲"
+    },
+    {
+      "id": "eval_c03",
+      "query": "軍人非經彈劾是否可受懲戒？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第3條"
+      ],
+      "cited_articles": [
+        "第3條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人非經彈劾是否可受懲戒？」屬於法律相關問題。  \n- 檢索到的文件中，陸海空軍懲罰法第3條明確說明「軍人非經彈劾，不受懲戒。」  \n- 這條文直接回答了問題，無需引用其他條文。  \n\n## **問題答案**  \n根據陸海空軍懲罰法第3條，軍人若未經彈劾，則不受懲戒。  \n\n## **具體條文**  \n- 陸海空軍懲罰法 第3 條  \n  - 「軍人"
+    },
+    {
+      "id": "eval_c04",
+      "query": "陸海空軍懲罰法所稱「重大懲罰」的定義為何？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第4條"
+      ],
+      "cited_articles": [
+        "第4條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 這是法律相關問題。  \n- 只需引用檢索到的文件。  \n- 相關條文為「陸海空軍懲罰法」第4條中「重大懲罰」的定義。  \n\n## **問題答案**  \n陸海空軍懲罰法所稱「重大懲罰」的定義為：撤職、廢止起役、降階、記大過、悔過或逾受懲罰人二個月本俸（薪額）之財產懲罰。  \n\n## **具體條文**  \n- **陸海空軍懲罰法 第4條**  \n  - 「重大懲罰：指撤職、廢"
+    },
+    {
+      "id": "eval_c05",
+      "query": "什麼是勤務上違紀行為？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第5條"
+      ],
+      "cited_articles": [
+        "第5條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：使用者詢問「什麼是勤務上違紀行為？」屬於法律概念說明，符合範圍。  \n- 檢索到的文件中，文件 1 第 5 條列出了「勤務上違紀行為」的具體行為。  \n- 這些條文直接回答問題，無需引用其他文件。  \n\n**問題答案**  \n勤務上違紀行為是指軍人在服役期間，因違反勤務相關規範而被視為違紀的行為。根據《陸海空軍懲罰法》第 5 條，具體包括以下情形：  \n1"
+    },
+    {
+      "id": "eval_c06",
+      "query": "勤務外的違紀行為有哪些？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第6條"
+      ],
+      "cited_articles": [
+        "第6條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 這個問題直接詢問「勤務外的違紀行為有哪些？」  \n- 從檢索到的文件中，陸海空軍懲罰法第6條列出了「勤務外違紀行為」的七項具體行為。  \n- 只需將這七項列出即可，並說明它們屬於勤務外違紀行為。  \n\n## **問題答案**  \n勤務外的違紀行為包括以下七項：\n\n1. 故意觸犯刑事法律。  \n2. 無故施用或持有毒品、迷幻藥、麻醉藥品或其他相類似之管制藥品。  \n3. 服"
+    },
+    {
+      "id": "eval_c07",
+      "query": "違紀行為的懲罰，是否以行為時有明文規定為限？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第7條"
+      ],
+      "cited_articles": [
+        "第7條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問違紀行為懲罰是否以行為時有明文規定為限，屬於法律條文的直接應用。  \n- 檢索到的文件中，陸海空軍懲罰法第7條正是關於違紀行為懲罰的規定。  \n- 逐句閱讀第7條，確認「以行為時本法有明文規定者為限」的表述。  \n- 同時注意條文後半段「行為後本法或應適用之法令有變更者，適用行為時之規定。但行為後之規定有利於行為人者，適用最有利於行為人之規定」的補充說"
+    },
+    {
+      "id": "eval_c08",
+      "query": "軍人違紀行為若非出於故意或過失，是否受懲罰？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第8條"
+      ],
+      "cited_articles": [
+        "第8條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問軍人違紀行為是否受懲罰，屬於法律相關問題。  \n- 檢索到的文件為《陸海空軍懲罰法》第8條，直接說明非故意或過失的違紀行為不受懲罰。  \n- 依此條文組織答案，說明「非故意或過失」即不受懲罰，並簡述條文內容以佐證。\n\n## **問題答案**  \n根據《陸海空軍懲罰法》第8條，若軍人違紀行為非出於故意或過失，則不受懲罰。\n\n## **具體條文**  \n-"
+    },
+    {
+      "id": "eval_c09",
+      "query": "正當防衛或緊急避難下的違紀行為是否要受懲罰？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第9條"
+      ],
+      "cited_articles": [
+        "第9條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n1. **判斷問題範圍**：使用者詢問「正當防衛或緊急避難下的違紀行為是否要受懲罰？」屬於法律相關問題。  \n2. **檢索文件**：已提供三篇文件，最相關的是《陸海空軍懲罰法》第9條，該條列出正當防衛、緊急避難等情形不受懲罰。  \n3. **組織回答**：直接引用第9條的內容，說明在上述情形下違紀行為不受懲罰，並指出若行為過當可從輕或免除懲罰。  \n\n## **問題答案**"
+    },
+    {
+      "id": "eval_c10",
+      "query": "軍人對長官違法命令是否要服從？",
+      "category": "single_article",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第10條"
+      ],
+      "cited_articles": [
+        "第10條",
+        "第5條",
+        "第37條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.3333333333333333,
+      "recall@k": 1.0,
+      "f1@k": 0.5,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人對長官違法命令是否要服從？」屬於法律相關問題。  \n- 檢索到的文件中，最相關的是《陸海空軍懲罰法》第10條，該條明確說明軍人對違法命令的服從義務。  \n- 其餘文件（第5條、第37條）雖說明違紀行為與調查程序，但並未直接回答服從義務。  \n- 因此以第10條為主要依據組織答案。\n\n## **問題答案**  \n根據《陸海空軍懲罰法》第10條，若長"
+    },
+    {
+      "id": "eval_c11",
+      "query": "精神障礙或心智缺陷下的違紀行為，如何處理？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第11條"
+      ],
+      "cited_articles": [
+        "第11條",
+        "第12條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.5,
+      "recall@k": 1.0,
+      "f1@k": 0.6666666666666666,
+      "answer_preview": "**思考過程**  \n1. **問題範圍判斷**：使用者詢問「精神障礙或心智缺陷下的違紀行為，如何處理？」屬於法律相關問題。  \n2. **檢索文件**：已提供三份文件，其中文件 1（陸海空軍懲罰法第 11 條）直接說明精神障礙或心智缺陷對違紀行為的處理。文件 2（第 12 條）提供懲罰時的考量因素，亦可作為補充說明。文件 3 與此問題無關。  \n3. **相關條文選取**：以文件 1 的第 11"
+    },
+    {
+      "id": "eval_c12",
+      "query": "辦理懲罰事件時應審酌哪些事項？",
+      "category": "single_article",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第12條"
+      ],
+      "cited_articles": [
+        "第12條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 這個問題直接詢問「辦理懲罰事件時應審酌哪些事項？」  \n- 從檢索到的文件中，只有「陸海空軍懲罰法」第12條列出了審酌事項。  \n- 只需將該條文中列出的十項事項完整列出即可。\n\n## **問題答案**  \n辦理懲罰事件時，應審酌以下十項事項：  \n1. 行為之動機、目的。  \n2. 行為時所受之刺激。  \n3. 行為之手段。  \n4. 行為人之生活狀況。  \n5. 行為"
+    },
+    {
+      "id": "eval_c13",
+      "query": "主動向長官坦承違紀行為，可以減輕懲罰嗎？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第13條"
+      ],
+      "cited_articles": [
+        "第13條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問是否能因主動坦承違紀行為而減輕懲罰，屬於法律相關問題。  \n- 檢索到的文件中，陸海空軍懲罰法第13條明確提到「對於未經發覺之違紀行為，主動向長官坦承，並願受懲罰者，得減輕懲罰。」  \n- 這條文直接回答了問題，且沒有其他更相關的條文。  \n- 因此答案為肯定，並引用該條文作為依據。\n\n## **問題答案**  \n是的，根據陸海空軍懲罰法第13條，若違"
+    },
+    {
+      "id": "eval_c14",
+      "query": "懲罰處分送達後三個月內又再違紀，會怎麼樣？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第14條"
+      ],
+      "cited_articles": [
+        "第14條",
+        "第67條",
+        "第55條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.3333333333333333,
+      "recall@k": 1.0,
+      "f1@k": 0.5,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「懲罰處分送達後三個月內又再違紀，會怎麼樣？」屬於法律相關問題。  \n- 檢索到的文件中，文件 1（《陸海空軍懲罰法》第 14 條）直接說明此情況。  \n- 其他文件（第 67 條、第 55 條）雖涉及懲罰程序的效力與合一評價，但與「三個月內再違紀」的具體處理方式無直接關聯。  \n- 因此，答案主要依據第 14 條。\n\n## **問題答案**  \n根據"
+    },
+    {
+      "id": "eval_m01",
+      "query": "軍人權益事件處理法的立法目的是什麼？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第1條"
+      ],
+      "cited_articles": [
+        "第1條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人權益事件處理法的立法目的是什麼？」屬於法律文件內容的查詢，符合系統範圍。  \n- 檢索到的相關文件中，文件 1 為《軍人權益事件處理法》之第 1 條，直接說明立法目的。  \n- 只需引用該條文即可回答。\n\n## **問題答案**  \n《軍人權益事件處理法》的立法目的是為妥適、迅速、統合處理軍人權益之爭議事件，保障軍人權益，兼顧部隊紀律，並鞏固戰力"
+    },
+    {
+      "id": "eval_m02",
+      "query": "軍人權益事件處理法的適用範圍為何？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第2條"
+      ],
+      "cited_articles": [
+        "第2條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人權益事件處理法的適用範圍為何？」屬於法律條文的範圍。  \n- 檢索到的文件中，文件 1 的第 2 條明確說明了本法的適用對象與情形。  \n- 其餘文件僅提供法規名稱與公布日期，並未涉及適用範圍。  \n- 因此，答案將以文件 1 的內容為主，並引用該條文作為依據。\n\n## **問題答案**  \n軍人權益事件處理法的適用範圍為：  \n- 任何軍人與其"
+    },
+    {
+      "id": "eval_m03",
+      "query": "軍人權益救濟有哪幾種程序？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第3條"
+      ],
+      "cited_articles": [
+        "第13條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 0.0,
+      "precision@k": 0.0,
+      "recall@k": 0.0,
+      "f1@k": 0.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人權益救濟有哪幾種程序？」屬於法律相關問題。  \n- 檢索到的文件中，只有《軍人權益事件處理法》相關條文。  \n- 第13條列出兩種救濟方式：  \n  1. 依本法提起「復審」。  \n  2. 若權責機關未作為或駁回，得「請求該機關應為行政處分或特定內容行政處分之復審」。  \n- 這兩項即為本法所規定的救濟程序。  \n- 其餘救濟程序（如行政訴訟、"
+    },
+    {
+      "id": "eval_m04",
+      "query": "對提起復審的人是否有歧視保護？",
+      "category": "single_article",
+      "difficulty": "easy",
+      "expected_articles": [
+        "第4條"
+      ],
+      "cited_articles": [
+        "第4條",
+        "第5條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.5,
+      "recall@k": 1.0,
+      "f1@k": 0.6666666666666666,
+      "answer_preview": "**思考過程**  \n1. **判斷問題範圍**：使用者詢問「對提起復審的人是否有歧視保護？」屬於法律相關問題。  \n2. **檢索文件**：已提供三條相關條文，均來自《軍人權益事件處理法》。  \n3. **相關條文**：  \n   - 第4條明確規定「權責機關對依本法提起復審、申訴、再申訴或行政訴訟之人，不得予以歧視或不公平待遇。」  \n   - 第5條則說明「申訴管轄機關、權保會及勤務法庭對於"
+    },
+    {
+      "id": "eval_m05",
+      "query": "原行政處分執行是否會因進行復審而停止？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第6條"
+      ],
+      "cited_articles": [
+        "第6條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n1. **問題範圍判斷**：使用者詢問「原行政處分執行是否會因進行復審而停止？」屬於法律相關問題，需以檢索到的法條為依據。  \n2. **檢索到的相關條文**：  \n   - 文件 1 第 6 條第 1 款說明「原行政處分或原管理措施之執行，不因依本法所進行之各項程序而停止。」  \n   - 文件 1 第 6 條第 2 款提到在特定情況下（合法性顯有疑義、即時執行會造成難以回"
+    },
+    {
+      "id": "eval_m06",
+      "query": "地方軍事法院的官兵權益保障會由誰組成？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第8條"
+      ],
+      "cited_articles": [
+        "第8條",
+        "第3條",
+        "第2條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.3333333333333333,
+      "recall@k": 1.0,
+      "f1@k": 0.5,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「地方軍事法院的官兵權益保障會由誰組成？」屬於法律相關問題。  \n- 檢索到的文件中，文件 1 的第 8 條明確說明「地方軍事法院置專任及兼任官兵權益保障委員」並說明其任命方式。  \n- 這些委員組成「權保會」或其分會，故可推斷「官兵權益保障會」即為由這些委員組成。  \n- 其他文件（第 3 條、第 2 條）說明程序與適用範圍，並未直接說明組成方式，故"
+    },
+    {
+      "id": "eval_m07",
+      "query": "復審事件由哪個權保會管轄？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第9條"
+      ],
+      "cited_articles": [
+        "第9條",
+        "第67條",
+        "第23條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.3333333333333333,
+      "recall@k": 1.0,
+      "f1@k": 0.5,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「復審事件由哪個權保會管轄？」屬於法律範疇。  \n- 檢索到的文件中，文件 1（軍人權益事件處理法）第 9 條直接說明復審及再申訴事件的管轄權。  \n- 其餘文件（第 67 條、第 23 條）雖提及復審或申訴程序，但未說明管轄權。  \n- 因此，最相關的條文是第 9 條。\n\n## **問題答案**  \n復審事件由「原處分機關或原措施機關所在地之權保會」"
+    },
+    {
+      "id": "eval_m08",
+      "query": "權保會審議復審事件需要多少人合議？",
+      "category": "single_article",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第10條"
+      ],
+      "cited_articles": [
+        "第10條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「權保會審議復審事件需要多少人合議？」屬於法律條文相關問題。  \n- 檢索到的文件中，軍人權益事件處理法第10條明確說明審議復審及再申訴事件的決定方式。  \n- 相關條文指出：專任權保委員二人 + 兼任權保委員三人合議決定。  \n- 因此合議人數為 2 + 3 = 5 人。\n\n## **問題答案**  \n權保會審議復審事件需要 **5 人合議**。\n\n"
+    },
+    {
+      "id": "eval_m09",
+      "query": "權保委員應自行迴避的事由有哪些？",
+      "category": "single_article",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第11條"
+      ],
+      "cited_articles": [
+        "第11條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 這是一個法律相關問題，需依據檢索到的「軍人權益事件處理法」第11條回答。  \n- 只需列出「權保委員應自行迴避」的事由，對應第11條第1項的五項。  \n- 其餘條文說明程序與申請，非本問題範圍。\n\n## **問題答案**  \n權保委員應自行迴避的事由包括以下五項：\n\n1. 與提起復審或再申訴之人有配偶、四親等內血親、三親等內姻親、家長、家屬或曾有此關係。  \n2. 曾參與"
+    },
+    {
+      "id": "eval_m10",
+      "query": "軍人在什麼情況下可以提起復審？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第13條"
+      ],
+      "cited_articles": [
+        "第13條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人在什麼情況下可以提起復審？」屬於法律相關問題。  \n- 檢索到的文件中，只有「軍人權益事件處理法」第13條直接說明了軍人提起復審的情況。  \n- 其餘文件（第76、75條）雖提及軍人權益與暫停適用，但並未直接說明復審條件。  \n- 因此以第13條為主要依據，整理條文內容並回答。\n\n## **問題答案**  \n軍人可在以下兩種情況下提起復審：  \n"
+    },
+    {
+      "id": "eval_m11",
+      "query": "復審的提起期限多久？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第15條"
+      ],
+      "cited_articles": [
+        "第31條",
+        "第30條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 0.0,
+      "precision@k": 0.0,
+      "recall@k": 0.0,
+      "f1@k": 0.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「復審的提起期限多久？」屬於法律相關問題。  \n- 檢索到的文件中，**文件 1**（第 31 條）直接說明「如於處分書送達之次日起一年內提起復審，視為於復審期間內所為。」  \n- **文件 2**（第 30 條）提到因不可歸責於己之事由遲誤復審期間者，若遲誤已逾一年則不得為之，亦暗示一年為上限。  \n- 兩條文皆以「一年」為提起期限的上限，且文件 1"
+    },
+    {
+      "id": "eval_m12",
+      "query": "復審書應該載明哪些事項？",
+      "category": "single_article",
+      "difficulty": "medium",
+      "expected_articles": [
+        "第16條"
+      ],
+      "cited_articles": [
+        "第16條",
+        "第13條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.5,
+      "recall@k": 1.0,
+      "f1@k": 0.6666666666666666,
+      "answer_preview": "**思考過程**  \n- 這個問題直接詢問「復審書應該載明哪些事項？」  \n- 在檢索到的文件中，**文件 1**（軍人權益事件處理法）第 16 條明確列出了復審書必須載明的事項。  \n- 只需將該條文中列出的項目整理回覆即可，無需額外推論或引用其他條文。\n\n## **問題答案**  \n復審書必須載明以下事項：\n\n1. **復審人資訊**  \n   - 姓名、出生年月日、服役單位、職階或職業、住居"
+    },
+    {
+      "id": "eval_cr01",
+      "query": "軍人勤務上違紀與勤務外違紀如何區分？",
+      "category": "cross_reference",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第5條",
+        "第6條"
+      ],
+      "cited_articles": [
+        "第4條",
+        "第5條",
+        "第6條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.6666666666666666,
+      "recall@k": 1.0,
+      "f1@k": 0.8,
+      "answer_preview": "**思考過程**  \n1. **判斷問題範圍**：問題詢問「軍人勤務上違紀與勤務外違紀如何區分？」屬於法律相關問題，需以檢索到的《陸海空軍懲罰法》條文為依據。  \n2. **檢索相關條文**：  \n   - 第4條「定義」中明確說明「違紀行為」的範疇，並區分「勤務上」與「勤務外」兩種情形。  \n   - 第5條與第6條分別列舉「勤務上違紀行為」與「勤務外違紀行為」的具體項目。  \n3. **組織回"
+    },
+    {
+      "id": "eval_cr02",
+      "query": "軍人違紀受懲罰後，如不服懲罰處分要如何救濟？",
+      "category": "cross_reference",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第3條",
+        "第13條"
+      ],
+      "cited_articles": [
+        "第77條",
+        "第57條",
+        "第18條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 0.0,
+      "precision@k": 0.0,
+      "recall@k": 0.0,
+      "f1@k": 0.0,
+      "answer_preview": "**思考過程**  \n1. **判斷問題範圍**：使用者詢問「軍人違紀受懲罰後，如不服懲罰處分要如何救濟？」屬於法律相關問題。  \n2. **檢索文件**：已提供三份文件。  \n   - **文件 1**（陸海空軍懲罰法第77條）說明在特定情況下可即時執行懲罰，但未提及救濟程序。  \n   - **文件 2**（軍人權益事件處理法第57條）明確規定軍人對行政處分不服時可提起申訴。  \n   - *"
+    },
+    {
+      "id": "eval_cr03",
+      "query": "軍人因過失導致違紀，會被怎麼處理？",
+      "category": "cross_reference",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第8條",
+        "第12條"
+      ],
+      "cited_articles": [
+        "第8條",
+        "第18條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.5,
+      "recall@k": 0.5,
+      "f1@k": 0.5,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：詢問「軍人因過失導致違紀，會被怎麼處理？」屬於法律相關問題。  \n- 檢索到的文件中，**第 8 條**直接說明過失情形下的懲罰限制；**第 18 條**列出可採用的懲罰種類。  \n- 這兩條文足以回答問題，無需引用其他文件。  \n\n## **問題答案**  \n若軍人因過失（非故意）而違紀，根據《陸海空軍懲罰法》第 8 條，將會受到懲罰，但懲罰的程度僅限於"
+    },
+    {
+      "id": "eval_cr04",
+      "query": "權保委員與懲罰權責長官是不是同一人？",
+      "category": "cross_reference",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第4條",
+        "第8條"
+      ],
+      "cited_articles": [
+        "第8條",
+        "第57條",
+        "第58條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 0.3333333333333333,
+      "recall@k": 0.5,
+      "f1@k": 0.4,
+      "answer_preview": "**思考過程**  \n1. **問題範圍判斷**：詢問「權保委員與懲罰權責長官是不是同一人？」屬於法律實務問題，需以檢索文件中的條文為依據。  \n2. **檢索結果**：  \n   - **文件 1**（軍人權益事件處理法）說明「地方軍事法院置專任及兼任官兵權益保障委員（權保委員）」，並說明其任命方式。  \n   - **文件 2**（陸海空軍懲罰法）說明「權責長官」的職責與組成懲罰諮詢會的規定。"
+    },
+    {
+      "id": "eval_oos01",
+      "query": "今天天氣如何？",
+      "category": "out_of_scope",
+      "difficulty": "easy",
+      "expected_articles": [],
+      "cited_articles": [],
+      "is_rejection_correct": true,
+      "hit_rate": null,
+      "precision@k": null,
+      "recall@k": null,
+      "f1@k": null,
+      "answer_preview": "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。請提出與法律相關的查詢。"
+    },
+    {
+      "id": "eval_oos02",
+      "query": "請推薦一道紅燒牛肉的做法",
+      "category": "out_of_scope",
+      "difficulty": "easy",
+      "expected_articles": [],
+      "cited_articles": [],
+      "is_rejection_correct": true,
+      "hit_rate": null,
+      "precision@k": null,
+      "recall@k": null,
+      "f1@k": null,
+      "answer_preview": "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。請提出與法律相關的查詢。"
+    },
+    {
+      "id": "eval_oos03",
+      "query": "幫我寫一個 Python 排序演算法",
+      "category": "out_of_scope",
+      "difficulty": "easy",
+      "expected_articles": [],
+      "cited_articles": [],
+      "is_rejection_correct": true,
+      "hit_rate": null,
+      "precision@k": null,
+      "recall@k": null,
+      "f1@k": null,
+      "answer_preview": "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。請提出與法律相關的查詢。"
+    },
+    {
+      "id": "eval_amb01",
+      "query": "第5條的規定是什麼？",
+      "category": "ambiguous",
+      "difficulty": "hard",
+      "expected_articles": [
+        "第5條"
+      ],
+      "cited_articles": [
+        "第5條"
+      ],
+      "is_rejection_correct": null,
+      "hit_rate": 1.0,
+      "precision@k": 1.0,
+      "recall@k": 1.0,
+      "f1@k": 1.0,
+      "answer_preview": "**思考過程**  \n- 先判斷問題範圍：使用者詢問「第5條的規定是什麼？」並已提供兩份文件，皆包含「第 5 條」的內容。  \n- 兩份文件分別屬於不同法規：  \n  1. 《軍人權益事件處理法》  \n  2. 《陸海空軍懲罰法》  \n- 需要同時列出兩條第5條的規定，並說明其適用範圍。  \n- 依照規則，僅引用檢索到的條文，不加入額外資訊。\n\n## **問題答案**  \n- 《軍人權益事件處理法"
+    }
+  ]
+}

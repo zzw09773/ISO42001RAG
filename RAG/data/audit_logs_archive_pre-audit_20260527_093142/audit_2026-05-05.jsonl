@@ -1,0 +1,2 @@
+{"event_type": "auth_success", "api_key_prefix": "intranet:172.16.120.35", "path": "/v1/chat/completions", "reason": null, "timestamp": "2026-05-05T05:47:04.767143+00:00"}
+{"event_type": "query", "session_id": "b457700d-a410-42c4-95f7-e6a3fc0401e4", "user_query": "jo", "scope_check": "in_scope", "model_name": "openai/gpt-oss-20b", "retrieved_docs": [], "tokens_used": null, "response_time_ms": 2658, "retrieval_doc_count": null, "citation_count": null, "retry_count": 0, "anomaly_flags": [], "timestamp": "2026-05-05T05:47:07.453245+00:00"}

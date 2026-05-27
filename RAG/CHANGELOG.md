@@ -126,3 +126,33 @@
 - `tests/evaluation/test_prompt_security.py`
 
 ---
+
+## [v1.0.0-baseline] - 2026-05-26 20:41
+**操作者**：Hsiu-Ying,Kung + Claude  
+**說明**：Baseline v1.0.0 索引完成（Hit Rate 0.7742），準備優化檢索品質至 ≥ 0.90  
+**審核簽名**：＿＿＿＿＿＿＿＿  
+
+### 新增檔案
+- `docs/requirements_review_report.html`
+- `docs/requirements_review_report.md`
+
+### 修改檔案
+- `scripts/reindex.py`
+
+### 刪除檔案
+- `.env.example`
+- `.ruff_cache/.gitignore`
+
+---
+
+## [v1.0.1-optimized] - 2026-05-27 07:37
+**操作者**：Hsiu-Ying,Kung + Claude  
+**說明**：RAG 檢索品質優化：article-aware chunking (services/ingestion.py + services/retrieval.py) + 強化 rerank prompt (core/prompts.py)。Hit Rate 0.7742 → 0.9032 達成 ≥ 0.90 業務目標。  
+**審核簽名**：＿＿＿＿＿＿＿＿  
+
+### 修改檔案
+- `rag_system/core/prompts.py`
+- `rag_system/services/ingestion.py`
+- `rag_system/services/retrieval.py`
+
+---

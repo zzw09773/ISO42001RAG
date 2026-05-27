@@ -1,6 +1,10 @@
 # =============================================================
 # ISO42001 系統 — 統一 Docker Compose
-# 6 個服務：db, rag-api, embed-proxy, openwebui, nginx, jupyter
+# 7 個服務：db, rag-api, embed-proxy, openwebui, nginx, jupyter, monitoring
+#
+# 精簡部署（save_images.sh + deploy.sh）：只動 RAG 組 + monitoring
+#   - 啟動：rag-api、jupyter、monitoring（自動拉起 db、embed-proxy）
+#   - 不啟動：openwebui、nginx（內網側自行管理前端代理）
 # =============================================================
 
 services:
@@ -29,12 +33,14 @@ services:
       context: ./embed_proxy
     container_name: ISO42001_embed_proxy
     restart: unless-stopped
+    ports:
+      - "17100:7100"
     environment:
       TRITON_GRPC_URL: "${LLM_HOST}:${EMBED_GRPC_PORT:-9000}"
       TRITON_MODEL: ${TRITON_MODEL_NAME:-nv-embed-v2}
-      PROXY_PORT: "8100"
+      PROXY_PORT: "7100"
     healthcheck:
-      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8100/health')\" 2>/dev/null || exit 1" ]
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:7100/health')\" 2>/dev/null || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -57,14 +63,16 @@ services:
     environment:
       # DB — 使用 service name
       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
-      # Embed — 透過 embed-proxy 轉譯到 Triton
+      # Embed — 直接打 GPU gateway HTTPS 端點（bypass embed-proxy）
       EMBED_API_KEY: ${EMBED_API_KEY}
-      EMBED_API_BASE: "http://embed-proxy:8100/v1"
-      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
-      # LLM — 直接連線 LLM 服務
+      EMBED_API_BASE: "https://${LLM_HOST}/v1"
+      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
+      # LLM — 同一 HTTPS gateway
       LLM_API_KEY: ${LLM_API_KEY}
-      LLM_API_BASE: "http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+      LLM_API_BASE: "https://${LLM_HOST}/v1"
       CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+      # SSL — gateway 是 self-signed，必須關閉驗證
+      VERIFY_SSL: ${VERIFY_SSL:-false}
       # RAG 配置
       TOP_K: ${TOP_K:-5}
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
@@ -138,17 +146,43 @@ services:
       GRANT_SUDO: "yes"
       JUPYTER_PORT: "${JUPYTER_PORT:-25678}"
       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
-      # Embed — 透過 embed-proxy 轉譯到 Triton
+      # Embed — 直接打 GPU gateway HTTPS 端點（bypass embed-proxy）
       EMBED_API_KEY: ${EMBED_API_KEY}
-      EMBED_API_BASE: "http://embed-proxy:8100/v1"
-      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
+      EMBED_API_BASE: "https://${LLM_HOST}/v1"
+      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
       LLM_API_KEY: ${LLM_API_KEY}
-      LLM_API_BASE: "http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
+      LLM_API_BASE: "https://${LLM_HOST}/v1"
       CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+      VERIFY_SSL: ${VERIFY_SSL:-false}
       TOP_K: ${TOP_K:-5}
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
     volumes:
       - ./RAG:/home/jovyan/work
+
+  # ---------- 7. Monitoring Addon (ISO 42001 A.6.2.4 儀表板) ----------
+  monitoring:
+    build:
+      context: ./monitoring_addon
+    container_name: ISO42001_monitoring
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    depends_on:
+      rag-api:
+        condition: service_healthy
+    environment:
+      # 唯讀掛載 RAG/data 進來，路徑透過 RAG_DATA_DIR 統一
+      RAG_DATA_DIR: /rag_data
+      MONITORING_PORT: "8200"
+      # Embedding drift（可選）— 沿用主系統 embed-proxy
+      EMBED_API_KEY: ${EMBED_API_KEY}
+      EMBED_API_BASE: "http://embed-proxy:7100/v1"
+      EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
+    volumes:
+      # RAG audit_logs + reports — 唯讀（monitoring 不該寫主系統）
+      - ./RAG/data:/rag_data:ro
+      # monitoring 自己的輸出（dashboard / drift / online_vv 報告）
+      - ./monitoring_addon/data:/app/data
 
 volumes:
   pgdata:

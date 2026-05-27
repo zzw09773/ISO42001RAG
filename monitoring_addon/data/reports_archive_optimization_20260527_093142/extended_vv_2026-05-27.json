@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-05-27T01:34:06.430258+00:00",
+  "dataset_size": 34,
+  "dataset_path": "/home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy/monitoring_addon/data/golden_dataset.json",
+  "business_goal": {
+    "metric": "hit_rate",
+    "target": 0.9,
+    "current": 0.0,
+    "met": false
+  },
+  "thresholds": {
+    "hit_rate": 0.9,
+    "precision_at_k": 0.5,
+    "recall_at_k": 0.5,
+    "f1_at_k": 0.5,
+    "mrr": 0.4,
+    "map": 0.4
+  },
+  "gating_metrics": [
+    "hit_rate"
+  ],
+  "metrics": {
+    "hit_rate": 0.0,
+    "precision_at_k": 0.0,
+    "recall_at_k": 0.0,
+    "f1_at_k": 0.0,
+    "mrr": 0.0,
+    "map": 0.0,
+    "evaluated": 31,
+    "skipped": 3,
+    "k": 5
+  },
+  "status": "fail"
+}

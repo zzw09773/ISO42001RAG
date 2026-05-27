@@ -3,10 +3,14 @@
 # ISO42001 系統 — 離線 Image 打包腳本
 # 用法: ./save_images.sh
 #
-# 功能：
-#   1. 先 build rag-api 和 jupyter images（含 pip install）
-#   2. 將所有 6 個 images 匯出為 tar 至 images/
-#   3. 打包後整個 ISO42001Deploy/ 即為完整離線部署包
+# 範圍：只打包 RAG + monitoring 相關 images
+#   ✓ rag-api      (iso42001deploy-rag-api)
+#   ✓ jupyter      (iso42001deploy-jupyter)
+#   ✓ monitoring   (iso42001deploy-monitoring)
+#   ✗ openwebui / nginx — 內網側自行處理前端代理，本腳本不打包
+#
+# pgvector / embed-proxy 等基礎服務若也要離線部署，可自行加入
+# 但通常內網已有相容映像，這裡保持精簡。
 # =============================================================
 set -e
 
@@ -17,49 +21,31 @@ IMAGES_DIR="$SCRIPT_DIR/images"
 mkdir -p "$IMAGES_DIR"
 
 echo "=========================================="
-echo "  離線 Image 打包"
+echo "  離線 Image 打包（RAG + Monitoring）"
 echo "=========================================="
 
-# --- Step 1: Build 需要建置的 images ---
+# --- Step 1: Build rag-api、jupyter、monitoring ---
 echo ""
-echo "⏳ 建置 rag-api, embed-proxy 和 jupyter images（包含 pip install）..."
-docker compose build rag-api embed-proxy jupyter
+echo "⏳ 建置 rag-api、jupyter、monitoring images..."
+docker compose build rag-api jupyter monitoring
 echo "✅ Build 完成"
 
-# --- Step 2: 匯出所有 images ---
+# --- Step 2: 匯出 images ---
 echo ""
-echo "⏳ 匯出所有 images..."
+echo "⏳ 匯出 images..."
 
-# 需要拉取/確認的外部 images
-declare -A EXTERNAL_IMAGES=(
-    ["pgvector"]="pgvector/pgvector:pg17"
-    ["nginx"]="nginx:alpine"
-    ["openwebui"]="ghcr.io/open-webui/open-webui:0.7.2"
-)
-
-for name in "${!EXTERNAL_IMAGES[@]}"; do
-    img="${EXTERNAL_IMAGES[$name]}"
-    if ! docker image inspect "$img" &>/dev/null; then
-        echo "  📥 拉取 $img ..."
-        docker pull "$img"
-    fi
-    echo "  📦 匯出 $img → images/${name}.tar"
-    docker save -o "$IMAGES_DIR/${name}.tar" "$img"
-done
-
-# 匯出 build 的 images（名稱由 docker compose 決定）
 RAG_IMAGE="iso42001deploy-rag-api:latest"
 JUPYTER_IMAGE="iso42001deploy-jupyter:latest"
-EMBED_PROXY_IMAGE="iso42001deploy-embed-proxy:latest"
+MONITORING_IMAGE="iso42001deploy-monitoring:latest"
 
 echo "  📦 匯出 $RAG_IMAGE → images/rag-api.tar"
 docker save -o "$IMAGES_DIR/rag-api.tar" "$RAG_IMAGE"
 
-echo "  📦 匯出 $EMBED_PROXY_IMAGE → images/embed-proxy.tar"
-docker save -o "$IMAGES_DIR/embed-proxy.tar" "$EMBED_PROXY_IMAGE"
-
 echo "  📦 匯出 $JUPYTER_IMAGE → images/jupyter.tar"
 docker save -o "$IMAGES_DIR/jupyter.tar" "$JUPYTER_IMAGE"
+
+echo "  📦 匯出 $MONITORING_IMAGE → images/monitoring.tar"
+docker save -o "$IMAGES_DIR/monitoring.tar" "$MONITORING_IMAGE"
 
 # --- Step 3: 顯示結果 ---
 echo ""
@@ -72,7 +58,7 @@ echo ""
 TOTAL_SIZE=$(du -sh "$IMAGES_DIR" | cut -f1)
 echo "  📁 images/ 總大小: $TOTAL_SIZE"
 echo ""
-echo "  ✅ 所有 images 已打包（含 pip 套件）。"
+echo "  ✅ 所有 RAG + monitoring images 已打包。"
 echo "  📋 離線部署步驟："
 echo "     1. 將整個 ISO42001Deploy/ 複製到內網機器"
 echo "     2. 執行 ./deploy.sh"

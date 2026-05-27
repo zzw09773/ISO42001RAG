@@ -1,0 +1,2 @@
+{"event_type": "auth_success", "api_key_prefix": "intranet:172.16.120.35", "path": "/v1/chat/completions", "reason": null, "timestamp": "2026-04-30T02:41:40.614707+00:00"}
+{"event_type": "query", "session_id": "5fbefec6-e06c-4200-834d-cf21e7063797", "user_query": "軍法第8條", "scope_check": "in_scope", "model_name": "openai/gpt-oss-20b", "retrieved_docs": [], "tokens_used": null, "response_time_ms": 2389, "retrieval_doc_count": null, "citation_count": null, "retry_count": 0, "anomaly_flags": [], "timestamp": "2026-04-30T02:41:43.055837+00:00"}
