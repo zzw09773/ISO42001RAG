@@ -36,7 +36,7 @@
 - **速率限制（A.8）**：每 API Key 每分鐘 60 次請求（滑動視窗），超過回傳 HTTP 429。
 - **輸入消毒（A.8）**：七類攻擊偵測：Prompt Injection、系統資訊探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換攻擊；超過 2000 字元自動拒絕。
 - **輸出過濾（A.8）**：自動遮蔽連線字串、伺服器路徑、API Key、Base64 Token 等敏感資訊。
-- **異常偵測（A.6）**：滑動視窗監控延遲突增、拒絕率突升、安全事件叢集、連續重試。
+- **異常分析（A.6）**：滑動視窗分析延遲突增、拒絕率突升、安全事件叢集、連續重試。
 - **稽核日誌（A.6）**：每日 JSONL 滾動記錄所有查詢、安全事件、認證事件。
 - **偏誤評估（A.5）**：成對問題一致性檢查，確保不因用詞差異產生歧視性回答。
 - **V&V 評估（A.9）**：黃金資料集評估，量化 Hit Rate、Precision@K、MRR、關鍵字覆蓋率、條文引用匹配率。
@@ -94,7 +94,7 @@ LangGraph Agent → 組合回答
 
 ### 前置需求
 - Docker & Docker Compose
-- 外部 GPU 推論伺服器（Triton Inference Server）
+- 內網 GPU 推論伺服器（Triton Inference Server）
 
 ### 啟動
 
@@ -106,7 +106,7 @@ LangGraph Agent → 組合回答
 ### 離線部署（內網）
 
 ```bash
-# 在有網路的機器上打包
+# 在內網維運機上打包
 ./save_images.sh       # 輸出到 images/*.tar（共約 5.3GB）
 
 # 複製整個 ISO42001Deploy/ 到內網後執行
@@ -259,8 +259,7 @@ RAG/
 │   │   └── docstore/               # Parent Document 快取（JSON，由 reindex.py 產生）
 │   ├── audit_logs/                 # 稽核日誌（JSONL，每日滾動）
 │   │   └── audit_YYYY-MM-DD.jsonl
-│   ├── reports/                    # 監控報告 / V&V 評估報告（由 scripts 產生）
-│   │   ├── monitoring_YYYY-MM-DD.json / .md
+│   ├── reports/                    # V&V 評估與稽核摘要報告（由 scripts 產生）
 │   │   └── vv_report_YYYY-MM-DD.json / .md
 │   └── versions/                   # 版本快照與備份（由 version_tracker.py 產生）
 │       ├── snapshot_YYYY-MM-DD_HHMMSS.json
@@ -297,7 +296,6 @@ RAG/
 │
 ├── scripts/                        # ★ 操作工具（詳見下方說明）
 │   ├── reindex.py                  # 知識庫索引管理
-│   ├── generate_monitoring_report.py  # ISO 42001 監控報告產生
 │   ├── run_vv_evaluation.py        # V&V 驗證評估
 │   ├── version_tracker.py          # 版本追蹤（無需 Git）
 │   └── debug/                      # 除錯工具（開發用）
@@ -364,49 +362,6 @@ docker exec -w /home/jovyan/work ISO42001_jupyter \
    b. 執行 reindex.py --file <新檔案>
 3. 驗證：python scripts/debug/check_db_status.py
 ```
-
----
-
-### `scripts/generate_monitoring_report.py` — ISO 42001 A.6 監控報告
-
-讀取所有稽核日誌，產生統計報告，作為 **ISO 42001 A.6 監控稽核的書面證據**。
-
-#### 執行
-
-```bash
-docker exec -w /home/jovyan/work ISO42001_jupyter \
-  python scripts/generate_monitoring_report.py
-```
-
-#### 自訂路徑
-
-```bash
-docker exec -w /home/jovyan/work ISO42001_jupyter \
-  python scripts/generate_monitoring_report.py \
-  --log-dir data/audit_logs \
-  --output-dir data/reports
-```
-
-#### 輸出檔案
-
-| 檔案 | 說明 |
-|------|------|
-| `data/reports/monitoring_YYYY-MM-DD.json` | 機器可讀格式（完整原始數據） |
-| `data/reports/monitoring_YYYY-MM-DD.md` | 人可讀格式（稽核呈交用） |
-
-#### 報告內容
-
-- **彙總統計**：總事件數、查詢次數、拒絕次數、拒絕率、安全告警次數、異常事件數、平均延遲
-- **異常旗標彙總**：延遲突增 / 拒絕率突升 / 安全事件叢集 / 連續重試 各發生次數
-- **每日明細**：每個日誌檔的獨立統計（含 P95 延遲）
-
-#### 稽核頻率建議
-
-| 情境 | 建議頻率 |
-|------|----------|
-| 日常監控 | 每週一次 |
-| ISO 42001 稽核準備 | 每月一次，報告存檔 |
-| 安全事件後 | 立即執行 |
 
 ---
 
@@ -490,7 +445,7 @@ docker exec -w /home/jovyan/work ISO42001_jupyter \
 python3 scripts/version_tracker.py snapshot \
   -m "說明此次變更內容" \
   -o "操作者姓名" \
-  -v "v1.2.0"
+  -v "v1.1.0"
 ```
 
 加上 `--backup` 同時產生 `tar.gz` 備份（可用於回滾）：
@@ -504,7 +459,7 @@ python3 scripts/version_tracker.py snapshot \
 |------|------|
 | `-m` / `--message` | 變更說明（會記入 CHANGELOG） |
 | `-o` / `--operator` | 操作者姓名（稽核用） |
-| `-v` / `--version` | 版本號（如 v1.2.0） |
+| `-v` / `--version` | 版本號（如 v1.1.0） |
 | `--backup` | 同時產生 `.tar.gz` 備份存檔 |
 
 > 執行後若偵測到變更，自動追加至 `CHANGELOG.md`（含「審核簽名」欄位供人工填寫）。
@@ -746,7 +701,7 @@ docker exec -w /home/jovyan/work ISO42001_jupyter \
 |------|------|----------|-------------|
 | **A.5** | 倫理審查 | `bias_evaluator.py` + 測試 | `docs/governance/ETHICS_CHECKLIST.md` |
 | **A.5** | 偏誤評估 | `test_bias_fairness.py`（8 cases）| 測試報告（pytest -v） |
-| **A.6** | 系統監控 | `anomaly_detector.py` + `audit_logger.py` | `data/reports/monitoring_*.md` |
+| **A.6** | 生命週期紀錄 | `anomaly_detector.py` + `audit_logger.py` | `docs/AUDIT_LOG_SCHEMA.md`、`data/audit_logs/audit_*.jsonl` |
 | **A.6** | 稽核日誌 | JSONL 每日滾動 | `data/audit_logs/audit_*.jsonl` |
 | **A.6** | 變更管理 | `version_tracker.py` + `CHANGELOG.md` | `data/versions/snapshot_*.json` |
 | **A.8** | 存取控制 | `auth.py` + `rate_limiter.py` | `test_auth.py` 測試報告 |

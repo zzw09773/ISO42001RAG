@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>系統架構分析（System Architecture Analysis）</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="system-architecture-analysis">系統架構分析（System Architecture Analysis）</h1>
+<blockquote>
+<p>ISO/IEC 42001 條文 4.1（組織脈絡）、6.1（風險與機會）、A.4（AI 系統生命週期資源）、
+A.6.2（AI 系統生命週期）證據。本文件系統性描述 ISO 42001 RAG 法律文件查詢系統
+的部署架構、AI 處理管線、資料生命週期、安全縱深與稽核機制，每項架構主張附
+<strong>可開檔驗證的 file:line 級證據</strong>，並誠實揭露已驗證的已知限制。</p>
+<p><strong>編製方法</strong>：本版以檔案逐項核對四個架構面（基礎設施／安全／資料／AI 管線），
+僅收錄能以 file:line 證據支持的主張；覆核時被修正者採正確版本、無法驗證者剔除。
+覆核覆蓋 74 條架構主張。</p>
+<p><strong>狀態</strong>：外部稽核準備整理版（2026-07-07）　<strong>系統版本</strong>：v1.1.0 基線 + 內網完整 stack
+<strong>權責</strong>：龔修潁負責 RAG 相關後端與稽核日誌證據整理；張丘負責強密碼、憑證與
+OpenWebUI/Keycloak 入口整理。風險接受決定見 <code>governance/AI_RISK_ASSESSMENT.md</code>，
+由稽核負責人評定。</p>
+</blockquote>
+<hr>
+<h2 id="0">0. 摘要</h2>
+<p>本系統是一套中文法律 RAG（檢索增強生成）系統，供國軍法律承辦人查詢軍事法規條文。
+目前工作區定位為<strong>外部稽核準備乾淨基線</strong>：保留完整容器服務架構，清空歷史稽核日誌、
+部署包、Docker tar、版本 snapshot、舊憑證與本機機密設定。架構特徵：</p>
+<ul>
+<li><strong>模型外置</strong>：系統本身不含 LLM 與 Embedding 模型，透過環境變數契約連接內網
+  GPU 推論伺服器（Triton + vLLM）。系統可被完整稽核的是「編排、檢索、治理」層。</li>
+<li><strong>AI 管線</strong>：LangGraph 狀態圖,classify → retrieve → generate → verify 四節點,
+  含 verify→retrieve 自我修正迴圈;另有預設關閉的 ReAct 代理路徑（feature flag）。</li>
+<li><strong>縱深防禦</strong>：認證 → 速率限制 → 確定性輸入清洗 → 範疇分類 → 檢索過濾 →
+  輸出遮蔽 → 防竄改雜湊鏈稽核,共多層,安全檢查確定性先行、不委派 LLM。</li>
+<li><strong>完整內網 stack</strong>：除 <code>rag-api</code>、<code>embed-proxy</code>、<code>jupyter</code> 外，
+  另納入 Open WebUI 0.7.2、Keycloak 26.5.6、code-server 與 nginx。nginx 在宿主端
+  使用 8088/8443，避開內網既有 80/443 服務；正式內網可替換 DNS 憑證。</li>
+</ul>
+<p>本系統的證據強項在於<strong>完整的稽核軌跡</strong>（雜湊鏈日誌、prompt 版控、actions 軌跡）。
+本文件同時誠實列出已驗證的架構限制（§7），其中
+部署組態類（直連服務明文 HTTP、Jupyter 無認證、DB 預設帳密、code-server Docker socket）
+影響面最大,均附證據
+並對應到風險登錄。</p>
+<hr>
+<h2 id="1">1. 部署拓撲</h2>
+<h3 id="11">1.1 容器與職責</h3>
+<p><code>docker-compose.yaml</code> 的 ISO42001 主系統範圍包含 8 個主要 services，全部 <code>restart: unless-stopped</code>。其中
+<code>db/pgvector</code> 是 RAG 必要基礎依賴；其餘對應外部稽核準備主要服務：</p>
+<table>
+<thead>
+<tr>
+<th>服務</th>
+<th>角色</th>
+<th>對宿主埠</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>db</code> (pgvector)</td>
+<td>PostgreSQL 17 + pgvector 向量庫；亦存對話歷史</td>
+<td>15432→5432</td>
+<td>docker-compose.yaml:9-27</td>
+</tr>
+<tr>
+<td><code>embed-proxy</code></td>
+<td>OpenAI <code>/v1/embeddings</code> HTTP ↔ Triton gRPC 轉譯</td>
+<td>17100→7100</td>
+<td>docker-compose.yaml:28-45；embed_proxy/proxy.py</td>
+</tr>
+<tr>
+<td><code>rag-api</code></td>
+<td>FastAPI RAG 主服務（檢索＋生成＋稽核）</td>
+<td>8043→8000</td>
+<td>docker-compose.yaml:47-87</td>
+</tr>
+<tr>
+<td><code>openwebui</code></td>
+<td>Open WebUI 0.7.2 使用者聊天前端</td>
+<td>18088→8080</td>
+<td>docker-compose.yaml:89-118</td>
+</tr>
+<tr>
+<td><code>keycloak</code></td>
+<td>Keycloak 26.5.6；OpenWebUI OIDC 與強密碼註冊</td>
+<td>18080→8080</td>
+<td>docker-compose.yaml:120-139；keycloak/import/iso42001-realm.json</td>
+</tr>
+<tr>
+<td><code>nginx</code></td>
+<td>HTTPS 反向代理；外部稽核準備宿主端避開 80/443</td>
+<td>8088→80, 8443→443</td>
+<td>docker-compose.yaml:141-153；nginx/nginx.conf</td>
+</tr>
+<tr>
+<td><code>jupyter</code></td>
+<td>開發／法規索引環境</td>
+<td>25678→8888</td>
+<td>docker-compose.yaml:155-188</td>
+</tr>
+<tr>
+<td><code>code-server</code></td>
+<td>瀏覽器 IDE，掛載整個 ISO42001 專案，含 container/Docker extension</td>
+<td>18443→8080</td>
+<td>docker-compose.yaml:190-208；code-server/Dockerfile</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12">1.2 已驗證的架構事實</h3>
+<ul>
+<li><strong>模型外置契約</strong>：rag-api、jupyter 的 Embedding 皆經
+  <code>http://embed-proxy:7100/v1</code>；LLM 仍由 <code>.env</code> 的 <code>LLM_API_BASE</code> 指向推論後端
+  （docker-compose.yaml:64-71,177-183）。</li>
+<li><strong>健康依賴鏈</strong>：rag-api 依賴 db 與 embed-proxy 的 <code>service_healthy</code>;openwebui 依賴
+  rag-api healthy 與 keycloak started（docker-compose.yaml:56-60,96-100）。</li>
+<li><strong>完整 stack 部署</strong>：<code>deploy.sh</code> 載入 <code>images/*.tar</code>（如存在）後執行
+  <code>docker compose up -d --build</code>，啟動內網主系統 stack（deploy.sh:6-16,64-84）。</li>
+<li><strong>TLS 邊界</strong>：nginx 在容器內 listen 80/443，宿主端映射為 8088/8443；HTTP 轉向
+  <code>https://aimla.ai.example.com:8443/</code>，TLS 反代 OpenWebUI <code>/</code>
+  （docker-compose.yaml:146-153；nginx/nginx.conf:1-47）。</li>
+<li><strong>外部稽核準備清理狀態</strong>：目前工作區無 <code>.env</code>、舊憑證私鑰、部署包、Docker tar、
+  audit log、version snapshot；啟動後由 runtime 重新產生。</li>
+</ul>
+<blockquote>
+<p>⚠ <strong>此拓撲的重要後果</strong>：nginx 已提供 OpenWebUI 的 HTTPS 入口，但
+rag-api(8043)、jupyter(25678)、db(15432)、embed-proxy(17100)、keycloak(18080)、
+code-server(18443) 仍有直連宿主埠。未套用 hardening 或
+防火牆前，這些直連入口仍需視為部署層風險。詳見 §7 風險 R-INFRA-1/R-INFRA-2/R-INFRA-3。</p>
+</blockquote>
+<hr>
+<h2 id="2-ai">2. AI 處理管線</h2>
+<h3 id="21">2.1 經典工作流（生產預設）</h3>
+<p>LangGraph <code>StateGraph</code>,進入點 <code>classify</code>,四路條件路由(graph.py:45-142)：</p>
+<pre><code>classify ──┬─ legal ──────→ retrieve → generate → verify ─┬─ END
+           │                              ↑________________│ needs_retry
+           ├─ reject ────────────────────────────────────→ END
+           ├─ passthrough ──────────────────────────────→ END
+           └─ security_block ───────────────────────────→ END
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>節點</th>
+<th>職責</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>classify</code></td>
+<td>sanitize 確定性先行 → <code>### Task:</code> 前綴判定 → LLM JSON 路由 → regex 關鍵字 fallback</td>
+<td>nodes.py:107-153</td>
+</tr>
+<tr>
+<td><code>retrieve</code></td>
+<td>多階段混合檢索(見 §2.3);例外→空 context 誠實降級</td>
+<td>nodes.py:260-365</td>
+</tr>
+<tr>
+<td><code>generate</code></td>
+<td>注入 context 生成;retry 時注入 verify feedback;輸出過 filter_output</td>
+<td>nodes.py:374-490</td>
+</tr>
+<tr>
+<td><code>verify</code></td>
+<td><strong>現行為 regex 引用檢查</strong>(見下);失敗回邊 retrieve,MAX_RETRIES=2 後強制 PASS</td>
+<td>nodes.py:528-605；graph.py:97-104</td>
+</tr>
+</tbody>
+</table>
+<p><strong>稽核軌跡</strong>:<code>GraphState.actions</code> 以 <code>Annotated[list, operator.add]</code> reducer 累積各節點
+動作,最終形成有序軌跡(如 <code>classify=llm:legal → retrieve(docs=5) → generate(citations=3)
+→ verify=passed(regex)</code>),非串流路徑由 api.py 整批寫入稽核日誌(state.py:40-43；api.py:331-360)。
+此為 ISO 42001 A.6.2(生命週期軌跡)的核心證據。</p>
+<h3 id="22-verify">2.2 verify 節點的真實行為（重要澄清）</h3>
+<p>交叉覆核修正了一項常見誤解:<strong>生產環境的 verify 節點實際執行的是 regex 引用結構檢查,
+不是 LLM 語意自省</strong>。<code>graph.py:104</code> 明確以 <code>create_verify_node(llm=None)</code> 接線;程式碼
+保留了 LLM verify 能力但未啟用——這是 v1.2 實驗的數據驅動回退(LLM verify 使
+Precision 0.78→0.71 而 Hit Rate 無增益,故回退,決策見 graph.py:97-103 註解)。</p>
+<p>現行 regex verify 檢查回答是否含「第N條」引用與結構字串,<strong>不比對 retrieved_docs</strong>,
+因此無法偵測「引用了未檢索到的條文」(幻覺引用)。此外 verify 有無條件 PASS 條款:
+回答含五個誠實措辭片語之一(尚未收錄／無法提供／未發現／未檢索到／沒有相關)即跳過
+檢查直接通過(nodes.py:543-568)。此設計避免懲罰正確的拒答,但也意味長答案夾帶此類
+措辭可繞過引用審查。列為 §7 風險 R-PIPE-1。</p>
+<h3 id="23">2.3 檢索層（多階段混合管線）</h3>
+<p>檢索是六階段混合管線(retrieval.py),非單一向量檢索：</p>
+<table>
+<thead>
+<tr>
+<th>階段</th>
+<th>機制</th>
+<th>觸發條件</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stage 0</td>
+<td>條號快速通道:BM25 精準命中直接 pin</td>
+<td>查詢含「第N條」</td>
+<td>retrieval.py:167-237</td>
+</tr>
+<tr>
+<td>Stage 0.5</td>
+<td>HyDE:LLM 生成假設文件再檢索</td>
+<td>查詢<strong>無</strong>條號</td>
+<td>retrieval.py:285-294</td>
+</tr>
+<tr>
+<td>Stage 0.75</td>
+<td>Self-Query:LLM 抽法規名→metadata 過濾(加法合併,非限縮)</td>
+<td>cross_reference 且抽出 law_names</td>
+<td>retrieval.py:303-315,364-410</td>
+</tr>
+<tr>
+<td>Stage 1</td>
+<td>BM25 + 向量混合,來源多樣性 round-robin 合併</td>
+<td>恆</td>
+<td>retrieval.py:455-517</td>
+</tr>
+<tr>
+<td>Stage 2</td>
+<td>LLM listwise 重排取 top-N</td>
+<td>恆(pinned 免重排)</td>
+<td>retrieval.py:520-600</td>
+</tr>
+<tr>
+<td>Stage 3</td>
+<td>以 doc_id 取回「一條一父文件」全文</td>
+<td>恆</td>
+<td>retrieval.py:602-632</td>
+</tr>
+</tbody>
+</table>
+<p>所有 LLM 步驟失敗均 <strong>fail-open</strong> 回退基礎混合結果。條號快速通道使命中條文本身免經
+rerank,但同一查詢仍對其餘候選執行 rerank 以挑背景文件。</p>
+<blockquote>
+<p><strong>重試迴圈的架構盲點</strong>:verify 失敗回邊 retrieve 時,對同一 question 用相同(確定性)
+查詢,取回<strong>完全相同</strong>的文件,自我修正只靠 feedback 改寫 generate prompt。換言之,
+若失敗根因是「檢索沒撈到正確條文」,重試無法補救。詳見 §7 風險 R-PIPE-2。</p>
+</blockquote>
+<h3 id="24-react-feature-flag">2.4 ReAct 代理路徑（feature flag，預設關閉）</h3>
+<p><code>react_workflow.py</code> 以 <code>create_react_agent</code> 包裝單一檢索工具,LLM 自主決定檢索時機與
+次數(理論多跳)。由 <code>REACT_MODE</code> 環境變數開關,<strong>預設關閉</strong>,零碼回滾(graph.py:145-148)。</p>
+<p><strong>治理狀態(照實揭露)</strong>:此路徑定位為保留的原型(CHANGELOG.md:248),經交叉覆核確認
+尚未達生產治理標準:
+- 串流路徑缺 pre-classify／post-verify／filter_output(react_workflow.py:411-457);
+- 稽核軌跡降級:回傳無 actions 鍵 → 稽核記 <code>actions=[]</code>(react_workflow.py:393-408;api.py:358);
+- 無明確最大步數,超限拋未捕捉的 HTTP 500(react_workflow.py:341);
+- 零測試、未對 golden dataset 跑過正式 gating 評測。</p>
+<p><strong>結論</strong>:現行生產系統(REACT_MODE 關閉)的可稽核性完整;ReAct 路徑的正式啟用須先
+通過治理閘(影子評估 + actions schema + 測試),屬稽核後 roadmap。本系統交付狀態
+<strong>不依賴</strong>此路徑。</p>
+<hr>
+<h2 id="3">3. 資料架構與生命週期</h2>
+<h3 id="31">3.1 資料流</h3>
+<pre><code>法規 Markdown (converted_md/, 2 部法)
+  └─reindex.py→ IngestionService「第N條」感知切分
+       ├─ parent(每條全文)→ LocalFileStore docstore（外部稽核準備目前已清空，reindex 後重建）
+       └─ child chunk(800字/重疊100)→ pgvector「laws_vectors」collection
+查詢 → AuditLogger → audit_YYYY-MM-DD.jsonl(雜湊鏈,UTC+8 滾動,0o640；目前乾淨基線無歷史檔)
+對話 → conversations 表(同一 PostgreSQL,session_id 隔離)
+原始碼/設定/法規 → version_tracker SHA-256 快照（外部稽核準備目前只保留 versions/.gitkeep，正式快照重新產生）
+</code></pre>
+<h3 id="32">3.2 已驗證事實</h3>
+<ul>
+<li><strong>Article-Aware Chunking</strong>:以整行正規式「第N條」(支援阿拉伯與中文數字)為界,每條
+  一個 parent Document;條文內容不注入前綴(曾致 Hit Rate 0.871→0.806,故移除)
+  (ingestion.py:32-35,85-155)。</li>
+<li><strong>Metadata 溯源</strong>:子 chunk 帶 source/hash/article_id/law_name/doc_id;刪除與稽核皆
+  依 metadata 定位(ingestion.py:143-159)。（註:law_name 僅條文 parent 帶,preamble 與
+  fallback chunk 不含——交叉覆核修正。）</li>
+<li><strong>稽核日誌防竄改</strong>:每筆 <code>entry_hash = SHA256(prev_hash + canonical_json)</code>,genesis 為
+  64 個 0,跨實例共享 <code>_LAST_HASH</code> + <code>threading.Lock</code> 防鏈分叉(audit_logger.py:108-122)。</li>
+<li><strong>變更管理(無 Git)</strong>:version_tracker 可對追蹤檔(含法規 md)做 SHA-256 快照,排除
+  執行期資料並自動追加 CHANGELOG(version_tracker.py:118-160)。外部稽核準備已刪除舊
+  snapshot 與 tar 備份，避免把舊執行期證據混入乾淨內網基線。</li>
+</ul>
+<h3 id="33">3.3 資料生命週期的已知缺口</h3>
+<p>交叉覆核發現多項生命週期終端控制缺失,均列入 §7：
+- 稽核日誌 24 個月保留(NFR-M-06)<strong>僅文件宣告,無自動化清理/輪替機制</strong>(R-DATA-1);
+- 對話表無 TTL/去識別化,含個資的查詢原文無限期累積(R-DATA-2);
+- 文件刪除端點 <code>DELETE /v1/documents/{filename}</code> <strong>不寫稽核</strong>(R-DATA-3);
+- 雜湊鏈以「每日檔」為錨點,<strong>整日日誌檔遭刪除無法由 verify_integrity 偵測</strong>(R-DATA-4)。</p>
+<hr>
+<h2 id="4">4. 安全縱深架構</h2>
+<h3 id="41">4.1 防禦層次（已對程式碼逐層驗證）</h3>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>機制</th>
+<th>證據</th>
+<th>ISO 對應</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>網路</td>
+<td>nginx TLS（OpenWebUI <code>/</code>）；其他直連埠需靠 hardening/防火牆收斂</td>
+<td>nginx.conf</td>
+<td>27001 A.8.15</td>
+</tr>
+<tr>
+<td>認證</td>
+<td>API key／Intranet mode／503 fail-closed;X-Forwarded-For 僅信任 TRUSTED_PROXIES</td>
+<td>auth.py:52-97,116-131</td>
+<td>42001 A.9</td>
+</tr>
+<tr>
+<td>速率限制</td>
+<td>每金鑰 60 req/min,超限 429+Retry-After</td>
+<td>rate_limiter.py:27-45;api.py:145</td>
+<td>42001 A.9</td>
+</tr>
+<tr>
+<td>輸入清洗</td>
+<td>確定性 regex,8 種威脅,LLM 前攔截,上限 2000 字</td>
+<td>input_sanitizer.py:130-200</td>
+<td>42001 A.8</td>
+</tr>
+<tr>
+<td>範疇分類</td>
+<td>security 永遠先行,security_block 寫 security_alert</td>
+<td>nodes.py:111-120,175-205</td>
+<td>42001 A.8/A.9</td>
+</tr>
+<tr>
+<td>檢索過濾</td>
+<td>Self-Query metadata 過濾（加法式）</td>
+<td>retrieval.py:364-410</td>
+<td>42001 A.7</td>
+</tr>
+<tr>
+<td>輸出遮蔽</td>
+<td>filter_output 6 條敏感樣式規則</td>
+<td>output_filter.py:17-49</td>
+<td>42001 A.8</td>
+</tr>
+<tr>
+<td>稽核</td>
+<td>SHA-256 雜湊鏈日誌 + verify_integrity</td>
+<td>audit_logger.py:108-160</td>
+<td>27001 A.5.28/A.8.15</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42">4.2 核心安全保證（已驗證）</h3>
+<ul>
+<li><strong>安全先行不委派 LLM</strong>:sanitize 在任何 LLM 路由前執行,LLM 故障無法繞過
+  (nodes.py:103-104 docstring,111-120)。</li>
+<li><strong>Fail-closed 認證</strong>:API_KEYS 未設且未明確啟用 intranet mode 時,受保護端點回 503
+  而非靜默放行(auth.py:72-77)。</li>
+<li><strong>來源 IP 防偽</strong>:X-Forwarded-For 僅在直接 TCP peer 屬 TRUSTED_PROXIES 時採信,直連
+  客戶端無法偽造稽核來源 IP(auth.py:116-131)。</li>
+<li><strong>SAFETY_CONTROLS.md 守則對應</strong>:9 道守則中 7 道(認證、速率、輸入清洗、範疇分類、
+  Self-Query、輸出過濾、雜湊鏈)可逐一對應程式碼。文件-程式碼一致性已覆核:
+  守則⑦(verify)的文件描述「regex 為現行、LLM 為已回退實驗」<strong>與部署一致</strong>(graph.py:104
+  傳 llm=None);對話摘要功能確實存在(memory.py <code>ConversationSummarizer</code>)。</li>
+</ul>
+<h3 id="43">4.3 已驗證的安全缺口</h3>
+<p>交叉覆核確認以下缺口(均列 §7,部分為高風險):
+- 串流路徑繞過輸出過濾與(ReAct)pre-classify/post-verify(R-SEC-1,high);
+- session_id 取自未驗證 header 且未綁 API key,可載入他人對話歷史(R-SEC-2,high);
+- CORS 預設 <code>allow_origins='*'</code> 且 <code>allow_credentials=True</code>(R-SEC-3);
+- 速率限制僅掛 chat 端點,upload/documents/reindex 無速率限制(R-SEC-4);
+- passthrough 路由繞過輸出過濾(R-SEC-5)。</p>
+<hr>
+<h2 id="5">5. 稽核與驗證機制</h2>
+<p>ISO42001 主系統以稽核日誌、版本紀錄與測試結果作為可查核證據。</p>
+<table>
+<thead>
+<tr>
+<th>機制</th>
+<th>目的</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAG API 系統版號</td>
+<td>對外顯示主系統基線版號，供 OpenAPI、<code>/health</code>、<code>/v1/models</code> 查核</td>
+<td><code>rag_system/core/version.py</code>、<code>api.py</code></td>
+</tr>
+<tr>
+<td>雜湊鏈稽核日誌</td>
+<td>追溯每筆查詢、安全事件、認證事件與工作流 actions</td>
+<td><code>audit_logger.py</code>、<code>AUDIT_LOG_SCHEMA.md</code></td>
+</tr>
+<tr>
+<td>Prompt 基線 hash</td>
+<td>將回覆行為對應到當時 <code>SYSTEM_PROMPT_BASELINE</code></td>
+<td><code>prompts.py</code>、<code>PROMPT_VERSIONS.md</code></td>
+</tr>
+<tr>
+<td>版本快照</td>
+<td>對原始碼、設定與法規語料產生 SHA-256 版控快照</td>
+<td><code>scripts/version_tracker.py</code>、<code>RAG/data/versions/</code></td>
+</tr>
+<tr>
+<td>V&amp;V 測試</td>
+<td>驗證檢索與回答品質是否達成業務目標</td>
+<td><code>RAG/tests/evaluation/</code>、<code>scripts/run_vv_evaluation.py</code></td>
+</tr>
+<tr>
+<td>安全測試</td>
+<td>驗證 prompt injection、惡意輸入與敏感輸出控制</td>
+<td><code>RAG/tests/evaluation/test_prompt_security.py</code></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6-iso-42001">6. ISO 42001 控制對應總表</h2>
+<table>
+<thead>
+<tr>
+<th>ISO 42001</th>
+<th>架構證據（本文件章節）</th>
+<th>補充文件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4.1 組織脈絡</td>
+<td>§0 摘要、§1 拓撲</td>
+<td>requirements_review_report.md</td>
+</tr>
+<tr>
+<td>6.1 風險與機會</td>
+<td>§7 已知限制</td>
+<td>governance/AI_RISK_ASSESSMENT.md</td>
+</tr>
+<tr>
+<td>A.4 生命週期資源</td>
+<td>§1 模型外置、§3 資料、governance/MODEL_CARD.md</td>
+<td>MODEL_CARD.md</td>
+</tr>
+<tr>
+<td>A.6.2 生命週期</td>
+<td>§2 AI 管線、actions 軌跡</td>
+<td>CHANGELOG.md</td>
+</tr>
+<tr>
+<td>A.6.2.4 生命週期監督</td>
+<td>§5 稽核與驗證機制</td>
+<td>AUDIT_LOG_SCHEMA.md</td>
+</tr>
+<tr>
+<td>A.6.2.5 變更管理</td>
+<td>§3.2 version_tracker、§5 版本快照</td>
+<td>PROMPT_VERSIONS.md</td>
+</tr>
+<tr>
+<td>A.7 資料治理</td>
+<td>§3 資料架構、metadata 溯源</td>
+<td>AUDIT_LOG_SCHEMA.md</td>
+</tr>
+<tr>
+<td>A.8 安全</td>
+<td>§4 縱深防禦</td>
+<td>SAFETY_CONTROLS.md</td>
+</tr>
+<tr>
+<td>A.9 負責任使用</td>
+<td>§4.2 認證、governance/HUMAN_OVERSIGHT.md</td>
+<td>HUMAN_OVERSIGHT.md</td>
+</tr>
+<tr>
+<td>27001 A.5.28/A.8.15</td>
+<td>§3.2/§4 雜湊鏈、來源 IP</td>
+<td>AUDIT_LOG_SCHEMA.md</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="7">7. 已知限制與風險登錄</h2>
+<blockquote>
+<p><strong>誠實揭露原則</strong>:以下為交叉覆核確認屬實的架構限制。列出它們不是弱點,而是
+ISO 42001 條文 6.1 要求的風險識別證據。風險等級與接受決定見
+<code>governance/AI_RISK_ASSESSMENT.md</code>,由稽核負責人評定;本表僅陳述技術事實。
+多數高影響項屬<strong>部署組態</strong>,可在不解凍 RAG/ 程式碼的前提下,於部署層處置。</p>
+</blockquote>
+<h3 id="71">7.1 部署組態類（影響面最大，多數可在部署層處置）</h3>
+<blockquote>
+<p><strong>修正狀態（2026-07-07）</strong>：外部稽核準備已改為完整 stack，nginx 已納入預設部署，
+host 端口避開 80/443，Keycloak 與 code-server 已建入 compose。仍需由系統管理者
+依部署邊界決定是否套用 <code>docker-compose.hardening.yml</code>、防火牆或反代策略。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>限制</th>
+<th>證據</th>
+<th>嚴重度</th>
+<th>修正</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R-INFRA-1</td>
+<td>nginx 已提供 OpenWebUI HTTPS 入口，但 rag-api、jupyter、db、embed-proxy、keycloak、code-server 仍有宿主直連埠；未套用 hardening/防火牆前仍有明文或管理入口暴露面</td>
+<td>docker-compose.yaml:14-15,34-35,54-55,94-95,130-131,146-148,162-163,196-197;nginx/nginx.conf:31-47</td>
+<td>high</td>
+<td>🔧 依部署邊界套用埠綁 127.0.0.1、防火牆或增加 nginx 反代路由</td>
+</tr>
+<tr>
+<td>R-INFRA-2</td>
+<td>Jupyter 無認證(空 token/密碼)、容器內可 sudo、rw 掛載 RAG 原始碼、埠 25678 開放——等同未認證程式碼執行入口</td>
+<td>RAG/Dockerfile:22;docker-compose.yaml:155-188</td>
+<td>high</td>
+<td>🔧 強化：套用 <code>docker-compose.hardening.yml</code>、設定 Jupyter token，或只在需要索引時啟動</td>
+</tr>
+<tr>
+<td>R-INFRA-3</td>
+<td>DB 發布於宿主 15432，若 <code>.env</code> 沿用預設帳密，conversations 與向量庫可繞過全部應用層防護直接存取</td>
+<td>docker-compose.yaml:14-21;.env.example:29-33</td>
+<td>high</td>
+<td>🔧 埠綁本機 + <code>.env</code> 強密碼</td>
+</tr>
+<tr>
+<td>R-INFRA-4</td>
+<td>主系統 services 無自訂 networks,全落同一 default bridge；code-server/Jupyter 若遭濫用可直連 db、embed-proxy</td>
+<td>docker-compose.yaml(全文無 networks)</td>
+<td>medium</td>
+<td>📋 拓撲變更建議</td>
+</tr>
+<tr>
+<td>R-INFRA-5</td>
+<td><code>.env.example</code> 曾缺失導致部署 bootstrap 斷鏈</td>
+<td>.env.example</td>
+<td>medium</td>
+<td>✅ <strong>已修正</strong>（已建 .env.example + gitignore 例外）</td>
+</tr>
+<tr>
+<td>R-INFRA-6</td>
+<td>code-server 掛載整個專案並掛 Docker socket；若密碼弱或對外暴露，等同可控制本機 Docker 與專案檔案</td>
+<td>docker-compose.yaml:190-208;code-server/Dockerfile</td>
+<td>high</td>
+<td>🔧 強密碼、限制來源 IP、必要時移除 Docker socket 或改本機-only</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72">7.2 安全機制類</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>限制</th>
+<th>證據</th>
+<th>嚴重度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R-SEC-1</td>
+<td>串流路徑繞過 filter_output;ReAct 串流另繞過 pre-classify/post-verify</td>
+<td>graph.py:261-266;react_workflow.py:447-454</td>
+<td>high</td>
+</tr>
+<tr>
+<td>R-SEC-2</td>
+<td>session_id 取自未驗證 header 且未綁 API key,可指定他人 session 載入其對話歷史</td>
+<td>api.py:155-159,184-199</td>
+<td>high</td>
+</tr>
+<tr>
+<td>R-SEC-3</td>
+<td>CORS 預設 <code>allow_origins='*'</code> + <code>allow_credentials=True</code></td>
+<td>api.py:29-36</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-SEC-4</td>
+<td>速率限制僅掛 chat 端點;upload/documents/reindex 無速率限制</td>
+<td>api.py:145 vs 383,488,539,652</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-SEC-5</td>
+<td>passthrough 路由繞過輸出過濾;LLM classify 可將任意查詢判為 passthrough</td>
+<td>nodes.py:212-240</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+<h3 id="73-ai">7.3 AI 管線與資料類</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>限制</th>
+<th>證據</th>
+<th>嚴重度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R-PIPE-1</td>
+<td>verify 為 regex 引用檢查,不比對 retrieved_docs,無法偵測幻覺引用;含誠實措辭即無條件 PASS</td>
+<td>graph.py:104;nodes.py:543-568</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-PIPE-1b</td>
+<td>回答含「思考過程」段使 <code>extract_cited_articles</code> 掃全文時可能納入推理段列舉的候選條文（非最終引用），扭曲評估端 cited 集。<strong>註：思考過程段本身為刻意的透明度設計（A.9，營運單位要求），非缺陷;修正僅在評估端做 section-aware 抽取,不動 prompt</strong></td>
+<td>prompts.py:69-70（刻意設計）；評估端引用抽取工具</td>
+<td>low（僅評估端）</td>
+</tr>
+<tr>
+<td>R-PIPE-2</td>
+<td>verify 失敗重試不改變檢索(同查詢同結果),檢索層失敗無法由重試補救</td>
+<td>nodes.py:295-306;graph.py:259</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-PIPE-3</td>
+<td><code>prompt_version_hash</code> 只雜湊版本號登錄表不雜湊 prompt 內文,改字串未 bump 版本則 hash 不變,A.4 溯源依賴人工紀律</td>
+<td>prompts.py:45-46</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-DATA-1</td>
+<td>24 個月保留僅文件宣告,無自動清理/輪替機制</td>
+<td>grep retention 無命中</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-DATA-2</td>
+<td>對話表無 TTL/去識別化,含個資查詢原文無限期累積</td>
+<td>conversation_store.py:102-114</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-DATA-3</td>
+<td>文件刪除端點不寫稽核日誌</td>
+<td>api.py DELETE /v1/documents</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>R-DATA-4</td>
+<td>雜湊鏈以每日檔為錨點,整日日誌檔遭刪無法由 verify_integrity 偵測</td>
+<td>audit_logger.py:63-66</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="8">8. 結論</h2>
+<p>本系統的核心 AI 治理架構——<strong>多階段檢索 + 自我修正管線 + 完整 actions 稽核軌跡 +
+防竄改雜湊鏈日誌 + Prompt 版控 + V&amp;V 測試</strong>——結構完整且每一環節皆有 file:line
+級證據支撐,可逐項向稽核委員展示。生產交付狀態(ReAct 關閉)的可稽核性不依賴任何
+未治理的實驗路徑。</p>
+<p>§7 列出的限制中,影響面最大者集中於<strong>部署組態</strong>(直連埠、Jupyter 無認證、DB 預設帳密、
+code-server Docker socket),這些<strong>不需解凍 RAG/ 程式碼</strong>即可在部署層收斂——應由系統管理者
+依風險評定優先序處置,並更新 <code>governance/AI_RISK_ASSESSMENT.md</code> 的接受決定。AI 管線層
+的限制(verify 不接地、重試不改檢索)屬稽核後的精進 roadmap,已記錄於
+<code>[[project-agentic-rag-review]]</code> 對應的三波路線圖,不影響當前 Hit Rate 0.9355 達標。</p>
+<hr>
+<p><em>本文件已於 2026-07-07 依內網完整 stack 與清理後基線更新部署拓撲、資料生命週期與部署風險。
+龔修潁負責 RAG 相關後端內容，張丘負責強密碼、憑證與 OpenWebUI 入口內容；風險接受決定
+由稽核負責人另行評定。</em></p>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

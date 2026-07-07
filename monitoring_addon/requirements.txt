@@ -3,6 +3,5 @@ fastapi>=0.100
 uvicorn[standard]>=0.24
 python-dotenv>=1.0
 
-# Optional — embedding drift uses numpy if present, otherwise degrades to n-gram
-numpy>=1.24
+# HTTP probing — availability composite probe + RAGAS/V&V clients
 requests>=2.31

@@ -1,11 +1,15 @@
 import time
 import uuid
 import json
+import re
+import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 import uvicorn
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -13,17 +17,32 @@ from dotenv import load_dotenv
 
 from rag_system.core.config import RAGConfig
 from rag_system.core.audit_logger import AuditLogger, QueryTimer
-from rag_system.core.auth import get_api_key, key_prefix
+from rag_system.core.auth import get_api_key, key_prefix, get_client_ip
 from rag_system.core.rate_limiter import check_rate_limit
+from rag_system.core.prompts import PROMPT_VERSIONS, prompt_version_hash
+from rag_system.core.version import (
+    OPENWEBUI_MODEL_ID,
+    SYSTEM_BASELINE_DATE,
+    SYSTEM_BASELINE_NAME,
+    SYSTEM_VERSION,
+    SYSTEM_VERSION_LABEL,
+)
 from rag_system.agent.graph import run_query, astream_query
+from rag_system.core.output_filter import filter_output
 from rag_system.services.converter import FileConverter, ConversionPipeline, ConversionError
 from rag_system.services.conversation_store import ConversationStore
 
 # Initialize FastAPI app
-app = FastAPI(title="RAG Agent API", description="OpenAI-compatible API for Agentic RAG")
+app = FastAPI(
+    title="ISO42001 RAG API",
+    description="OpenAI-compatible API for ISO42001 legal RAG",
+    version=SYSTEM_VERSION,
+)
 
 # CORS — restrict origins via ALLOWED_ORIGINS env (comma-separated)
 import os as _os
+
+logger = logging.getLogger(__name__)
 _allowed_origins = [o.strip() for o in _os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +77,117 @@ if _intranet_mode and not _api_keys_set:
         "Set API_KEYS to enable credential-based authentication."
     )
 
+
+_SOURCE_HEADER_KEYS = [
+    "x-request-id",
+    "x-correlation-id",
+    "x-session-id",
+    "x-openwebui-session-id",
+    "x-openwebui-chat-id",
+    "x-openwebui-user-id",
+    "x-openwebui-user-name",
+    "x-openwebui-user-email",
+    "x-openwebui-user-role",
+    "x-openwebui-message-id",
+    "x-chat-id",
+    "x-conversation-id",
+    "x-message-id",
+    "origin",
+    "referer",
+    "user-agent",
+    "x-forwarded-for",
+    "x-real-ip",
+]
+
+
+def _safe_id(value: str, *, default: str = "") -> str:
+    """Short, log-safe identifier fragment."""
+    v = re.sub(r"[^A-Za-z0-9_.:-]", "-", value or "").strip("-")
+    return (v or default)[:96]
+
+
+def _first_header(request: Optional[Request], names: List[str]) -> str:
+    if not request:
+        return ""
+    for name in names:
+        value = request.headers.get(name)
+        if value:
+            return value.strip()
+    return ""
+
+
+def _request_source_context(request: Optional[Request]) -> Dict[str, Any]:
+    """Extract non-secret frontend correlation metadata from the HTTP request.
+
+    OpenWebUI does not consistently forward a stable chat/session header to an
+    OpenAI-compatible backend, so this captures any available frontend headers
+    and gives every request a backend `request_id`. The audit UI can also
+    correlate with OpenWebUI's SQLite chat DB by text/time when headers are
+    absent.
+    """
+    request_id = _first_header(request, ["x-request-id", "x-correlation-id"])
+    if not request_id:
+        request_id = str(uuid.uuid4())
+    request_id = _safe_id(request_id, default=str(uuid.uuid4()))
+
+    frontend_session_id = _first_header(request, ["x-session-id", "x-openwebui-session-id"])
+    frontend_chat_id = _first_header(request, ["x-openwebui-chat-id", "x-chat-id", "x-conversation-id"])
+    frontend_user_id = _first_header(request, ["x-openwebui-user-id"])
+    frontend_message_id = _first_header(request, ["x-openwebui-message-id", "x-message-id"])
+
+    headers: Dict[str, str] = {}
+    if request:
+        for key in _SOURCE_HEADER_KEYS:
+            value = request.headers.get(key)
+            if value:
+                headers[key] = value[:300]
+
+    source_probe = " ".join(headers.get(k, "") for k in ("origin", "referer", "user-agent"))
+    if any(k.startswith("x-openwebui") for k in headers) or "openwebui" in source_probe.lower():
+        source_app = "openwebui"
+    elif headers:
+        source_app = "http_api"
+    else:
+        source_app = "unknown"
+
+    return {
+        "request_id": request_id,
+        "source_app": source_app,
+        "frontend_session_id": frontend_session_id,
+        "frontend_user_id": frontend_user_id,
+        "frontend_chat_id": frontend_chat_id,
+        "frontend_message_id": frontend_message_id,
+        "frontend_metadata": {"headers": headers} if headers else {},
+    }
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _audit_auth_failures(request: Request, exc: StarletteHTTPException):
+    """Record failed access attempts (ISO 27001 A.8.15).
+
+    401 (missing/invalid key) and 503 (auth misconfiguration) are raised by
+    the auth dependency before any endpoint runs, so they leave no normal
+    query trail. We log them here — reusing the single module-level `audit`
+    instance so the tamper-evident hash chain stays consistent — then defer
+    to FastAPI's default handler for the actual HTTP response.
+    """
+    if exc.status_code in (401, 403, 503) and audit:
+        authz = request.headers.get("Authorization", "")
+        token = authz[7:] if authz.lower().startswith("bearer ") else ""
+        source_ctx = _request_source_context(request)
+        try:
+            audit.log_auth_event(
+                "failure",
+                key_prefix(token) if token else "none",
+                request.url.path,
+                reason=str(exc.detail),
+                client_ip=get_client_ip(request),
+                **source_ctx,
+            )
+        except Exception:
+            pass
+    return await http_exception_handler(request, exc)
+
 # --- Pydantic Models for OpenAI API Compatibility ---
 
 class Message(BaseModel):
@@ -65,7 +195,7 @@ class Message(BaseModel):
     content: str
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "rag-agent"
+    model: str = OPENWEBUI_MODEL_ID
     messages: List[Message]
     temperature: Optional[float] = 0.0
     stream: Optional[bool] = False
@@ -87,7 +217,16 @@ class ChatCompletionResponse(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "model_loaded": config is not None}
+    return {
+        "status": "healthy",
+        "model_loaded": config is not None,
+        "system_version": SYSTEM_VERSION_LABEL,
+        "baseline_name": SYSTEM_BASELINE_NAME,
+        "baseline_date": SYSTEM_BASELINE_DATE,
+        "model_id": OPENWEBUI_MODEL_ID,
+        "prompt_baseline": PROMPT_VERSIONS["SYSTEM_PROMPT_BASELINE"],
+        "prompt_version_hash": prompt_version_hash(),
+    }
 
 @app.get("/v1/models")
 async def list_models():
@@ -96,10 +235,15 @@ async def list_models():
         "object": "list",
         "data": [
             {
-                "id": "rag-agent",
+                "id": OPENWEBUI_MODEL_ID,
                 "object": "model",
                 "created": 1677610602,
-                "owned_by": "user",
+                "owned_by": "iso42001-rag",
+                "version": SYSTEM_VERSION_LABEL,
+                "baseline_name": SYSTEM_BASELINE_NAME,
+                "baseline_date": SYSTEM_BASELINE_DATE,
+                "prompt_baseline": PROMPT_VERSIONS["SYSTEM_PROMPT_BASELINE"],
+                "prompt_version_hash": prompt_version_hash(),
             }
         ]
     }
@@ -116,14 +260,28 @@ async def chat_completions(
     # Rate limit check
     check_rate_limit(api_key)
 
-    # Audit: auth success
+    # ISO 27001 A.8.15 — capture real client IP (spoof-guarded via TRUSTED_PROXIES)
+    client_ip = get_client_ip(raw_request) if raw_request else "unknown"
+    source_ctx = _request_source_context(raw_request)
+
+    # Audit: auth success (carries source IP for A.8.15 access-attempt trail)
     if audit:
-        audit.log_auth_event("success", key_prefix(api_key), "/v1/chat/completions")
+        audit.log_auth_event(
+            "success",
+            key_prefix(api_key),
+            "/v1/chat/completions",
+            client_ip=client_ip,
+            **source_ctx,
+        )
 
     # Generate session_id from request header or create a new one
     session_id = ""
     if raw_request:
-        session_id = raw_request.headers.get("x-session-id", "")
+        session_id = (
+            source_ctx.get("frontend_session_id")
+            or source_ctx.get("frontend_chat_id")
+            or raw_request.headers.get("x-session-id", "")
+        )
     if not session_id:
         session_id = str(uuid.uuid4())
 
@@ -168,7 +326,8 @@ async def chat_completions(
                     langchain_messages = history_msgs + langchain_messages
 
         # Construct IDs early
-        chat_id = f"chatcmpl-{uuid.uuid4()}"
+        chat_id = f"chatcmpl-{_safe_id(source_ctx['request_id'])}"
+        audit_ctx = {**source_ctx, "openai_response_id": chat_id}
         created_time = int(time.time())
 
         # =====================================================================
@@ -194,12 +353,17 @@ async def chat_completions(
 
                 # Stream tokens from the LangGraph workflow
                 full_response = []
+                stream_trace = {"actions": [], "retrieved_sources": []}
                 stream_timer = QueryTimer()
                 with stream_timer:
                     async for token in astream_query(
                         question=last_user_content,
                         config=config,
                         messages=langchain_messages,
+                        session_id=session_id,
+                        client_ip=client_ip,
+                        audit_context=audit_ctx,
+                        trace=stream_trace,
                     ):
                         if token:
                             full_response.append(token)
@@ -235,22 +399,49 @@ async def chat_completions(
                 yield f"data: {json.dumps(final_chunk)}\n\n"
                 yield "data: [DONE]\n\n"
 
-                # Post-stream: persist and audit
+                # Post-stream: persist and audit.
+                # Streaming emits RAW LLM tokens (the generate node's output filter
+                # runs AFTER generation), so a sensitive span could have been
+                # streamed unfiltered. We can't un-send it, but we (a) DETECT it
+                # and flag an anomaly, and (b) persist the FILTERED text (not the
+                # raw leaked span) to the conversation store + audit so the STORED
+                # record never retains it. The per-node action trail + retrieved
+                # sources are reconstructed from stream events via `stream_trace`.
                 streamed_content = "".join(full_response)
+                _post = filter_output(streamed_content)
+                _persist = _post.text if _post.redacted else streamed_content
+                _anomaly = ["stream_output_redacted"] if _post.redacted else None
+                if _post.redacted:
+                    logger.warning("STREAM output filter redacted before persist: %s", _post.findings)
                 if conv_store:
                     conv_store.save_message(session_id, "user", last_user_content)
-                    conv_store.save_message(session_id, "assistant", streamed_content)
+                    conv_store.save_message(session_id, "assistant", _persist)
                 if audit:
                     is_rejection = "無法回答與法律無關的問題" in streamed_content
+                    actions = stream_trace.get("actions") or []
+                    is_security_block = any("security_block" in str(a) for a in actions)
                     if is_rejection:
-                        audit.log_rejection(session_id, last_user_content)
-                    else:
+                        audit.log_rejection(
+                            session_id,
+                            last_user_content,
+                            client_ip=client_ip,
+                            **audit_ctx,
+                        )
+                    elif not is_security_block:
                         audit.log_query(
                             session_id=session_id,
                             user_query=last_user_content,
                             scope_check="in_scope",
                             model_name=config.chat_model,
+                            retrieved_docs=stream_trace.get("retrieved_sources") or [],
+                            retrieval_doc_count=len(stream_trace.get("retrieved_sources") or []),
+                            citation_count=len(re.findall(r"第\s*\d+\s*條", _persist)),
                             response_time_ms=stream_timer.elapsed_ms,
+                            client_ip=client_ip,
+                            actions=actions or ["streamed"],
+                            anomaly_flags=_anomaly,
+                            model_response=_persist,
+                            **audit_ctx,
                         )
 
             return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -265,6 +456,9 @@ async def chat_completions(
                 question=last_user_content,
                 config=config,
                 messages=langchain_messages,
+                session_id=session_id,
+                client_ip=client_ip,
+                audit_context=audit_ctx,
             )
 
         # Extract the response
@@ -286,18 +480,44 @@ async def chat_completions(
             conv_store.save_message(session_id, "assistant", response_content)
 
         # Audit log (ISO 42001)
+        # Pull A.7 (data provenance) + A.6 (monitoring) + A.4 (resource) fields
+        # straight from the graph state — they were populated by retrieve_node
+        # and generate_node respectively.
         if audit:
             is_rejection = "無法回答與法律無關的問題" in response_content
+            actions = result_state.get("actions") or []
+            is_security_block = result_state.get("scope") == "security_block" or any(
+                "security_block" in str(a) for a in actions
+            )
             if is_rejection:
-                audit.log_rejection(session_id, last_user_content)
-            else:
+                audit.log_rejection(
+                    session_id,
+                    last_user_content,
+                    client_ip=client_ip,
+                    **audit_ctx,
+                )
+            elif not is_security_block:
+                retrieved_sources = result_state.get("retrieved_sources") or []
+                citation_count = int(result_state.get("citation_count") or 0)
+                # Prefer real token count from LLM usage; fall back to length/4 estimate
+                tokens_used = int(result_state.get("tokens_used") or 0)
+                if not tokens_used:
+                    tokens_used = len(response_content) // 4
                 audit.log_query(
                     session_id=session_id,
                     user_query=last_user_content,
                     scope_check="out_of_scope" if is_rejection else "in_scope",
                     model_name=config.chat_model,
-                    tokens_used=len(response_content) // 4,
+                    retrieved_docs=retrieved_sources,        # A.7 — 真實檢索來源
+                    tokens_used=tokens_used,                  # A.4 — 真實 token 用量
                     response_time_ms=timer.elapsed_ms,
+                    retrieval_doc_count=len(retrieved_sources),
+                    citation_count=citation_count,            # A.6 — 引用條文數
+                    retry_count=int(result_state.get("retry_count") or 0),
+                    client_ip=client_ip,                      # A.8.15 — 來源 IP
+                    actions=actions,                           # A.6 — 工作流動作軌跡
+                    model_response=response_content,          # A.9 — 區分 user vs model
+                    **audit_ctx,
                 )
 
         return ChatCompletionResponse(

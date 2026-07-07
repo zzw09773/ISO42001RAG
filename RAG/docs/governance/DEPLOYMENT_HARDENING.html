@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>部署強化指引（Deployment Hardening Guide）</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/governance/DEPLOYMENT_HARDENING.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="deployment-hardening-guide">部署強化指引（Deployment Hardening Guide）</h1>
+<blockquote>
+<p>ISO 42001 A.8（安全）/ 條文 8（運作控制）證據。
+對應 <code>SYSTEM_ARCHITECTURE_ANALYSIS.md</code> §7.1 的部署組態風險（R-INFRA-1~5）。
+狀態：外部稽核準備整理版（2026-07-07）。修正方案已提供，<strong>套用為系統管理者於維護窗口的決定</strong>。</p>
+</blockquote>
+<h2 id="1">1. 風險與修正對照</h2>
+<table>
+<thead>
+<tr>
+<th>風險</th>
+<th>現況</th>
+<th>修正方案</th>
+<th>修正載體</th>
+<th>套用狀態</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R-INFRA-5</td>
+<td><code>.env.example</code> 缺失，部署 bootstrap 斷鏈</td>
+<td>補完整範本（含安全強化註解）</td>
+<td><code>.env.example</code>（已建，純新增）</td>
+<td>✅ <strong>已修正</strong></td>
+</tr>
+<tr>
+<td>R-INFRA-3</td>
+<td>DB 預設帳密 + 宿主直連埠</td>
+<td>埠綁 127.0.0.1 + <code>.env</code> 強制強密碼</td>
+<td><code>docker-compose.hardening.yml</code> + <code>.env.example</code></td>
+<td>🔧 已提供，待套用</td>
+</tr>
+<tr>
+<td>R-INFRA-1</td>
+<td>多個服務仍有 host direct port；nginx 只保護 OpenWebUI 路徑</td>
+<td>direct port 綁 127.0.0.1，對外經 nginx TLS 或跳板</td>
+<td><code>docker-compose.hardening.yml</code></td>
+<td>🔧 已提供，待套用</td>
+</tr>
+<tr>
+<td>R-INFRA-2</td>
+<td>Jupyter 無認證 + sudo + rw 掛載（索引維運需求）</td>
+<td>埠綁 127.0.0.1 + 移除 sudo（+ 建議設 token）</td>
+<td><code>docker-compose.hardening.yml</code></td>
+<td>🔧 已提供，待套用</td>
+</tr>
+<tr>
+<td>R-INFRA-4</td>
+<td>無網段隔離</td>
+<td>見 §3 進階建議（需正式變更）</td>
+<td>本指引 §3</td>
+<td>📋 建議</td>
+</tr>
+<tr>
+<td>R-INFRA-6</td>
+<td>code-server 掛載整個專案與 Docker socket</td>
+<td>direct port 綁 127.0.0.1 + 強密碼；必要時移除 Docker socket</td>
+<td><code>docker-compose.hardening.yml</code> + <code>.env.example</code></td>
+<td>🔧 已提供，待套用</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-recreate">2. 套用步驟（需維護窗口，會 recreate 容器）</h2>
+<pre><code class="language-bash"># 0. 前置：確認 .env 已填入強密碼（R-INFRA-3）
+#    POSTGRES_PASSWORD 與 PGVECTOR_URL 內的密碼須一致且非預設值
+grep -E 'POSTGRES_PASSWORD|WEBUI_SECRET_KEY|KEYCLOAK_ADMIN_PASSWORD|CODESERVER_PASSWORD' .env
+# 確認非 postgres / your-secret-key-here / change-this-*，且 code-server/keycloak 為強密碼
+
+# 1. 套用強化 override
+docker compose -f docker-compose.yaml -f docker-compose.hardening.yml up -d
+
+# 2. 驗證 direct port 綁定（除 nginx 8088/8443 外，應只見 127.0.0.1）
+ss -tlnp | grep -E '15432|17100|8043|18088|18080|25678|18443|8088|8443'
+
+# 3. 驗證功能未受影響
+curl -fsS http://localhost:8043/health
+</code></pre>
+<p><strong>回退</strong>：移除 <code>-f docker-compose.hardening.yml</code> 重新 <code>up -d</code> 即還原。</p>
+<h2 id="3-roadmap">3. 進階建議（需正式變更，列為 roadmap）</h2>
+<ul>
+<li><strong>R-INFRA-4 網段隔離</strong>：在主 compose 為服務定義多個 <code>networks</code>（如 <code>frontend</code>/
+  <code>backend</code>/<code>data</code>），使 jupyter/code-server 即使遭濫用也不能任意直連 db、
+  embed-proxy。屬拓撲級變更，建議下一個維護版本納入。</li>
+<li><strong>R-INFRA-2 jupyter 強化</strong>：jupyter 在 prod 運行（索引維運需求）。套用
+  <code>docker-compose.hardening.yml</code> 將其埠綁 127.0.0.1（僅本機可達）並移除 sudo；
+  建議另設 Jupyter token（改 <code>RAG/Dockerfile</code> 的 <code>--NotebookApp.token</code>）。
+  若索引維運可改用 <code>docker exec rag-api python3 scripts/reindex.py</code>，則可進一步停用 jupyter。</li>
+<li><strong>R-INFRA-6 code-server 強化</strong>：code-server 目前為內網維運便利性掛載整個專案與
+  <code>/var/run/docker.sock</code>。正式部署建議移除 Docker socket 掛載，或只在跳板/VPN 中開放。</li>
+<li><strong>R-INFRA-1 nginx 反代 rag-api / keycloak / code-server</strong>：若需要瀏覽器內網入口，
+  在 <code>nginx.conf</code> 增加明確路徑或子網域反代，並保留 direct ports 只綁本機。對管理入口
+  （Keycloak admin、code-server）應優先使用跳板或來源 IP allowlist。</li>
+</ul>
+<h2 id="4">4. 與稽核的關係</h2>
+<p>本指引將「已識別但未套用」的風險轉為「已提供修正方案、待維護窗口套用」的受控狀態——
+這本身即 ISO 42001 條文 6.1（風險處置規劃）與條文 8（運作控制）的證據：風險不僅被
+識別，且有具體、可回復、已驗證語法的處置方案。套用決定與時程由系統管理者依
+<code>AI_RISK_ASSESSMENT.md</code> 的風險評定排序。</p>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/DEPLOYMENT_HARDENING.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

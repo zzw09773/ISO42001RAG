@@ -26,7 +26,14 @@ from langchain_community.retrievers import BM25Retriever
 
 from ..core.config import RAGConfig
 from ..core.factory import ComponentFactory
-from ..core.prompts import RERANK_SYSTEM_MSG, RERANK_PROMPT_TEMPLATE
+from ..core.prompts import (
+    RERANK_SYSTEM_MSG,
+    RERANK_PROMPT_TEMPLATE,
+    HYDE_SYSTEM_MSG,
+    HYDE_PROMPT_TEMPLATE,
+    SELFQUERY_SYSTEM_MSG,
+    SELFQUERY_PROMPT_TEMPLATE,
+)
 
 # Same regex as IngestionService._split_law_by_article(): match a line that
 # IS an article header (e.g., "第 4 條", "第46條").
@@ -239,6 +246,13 @@ class RetrievalService:
             final result WITHOUT going through the LLM reranker, guaranteeing
             that the targeted article is always present in the answer context.
 
+        Stage 0.5 (HyDE — for abstract queries only):
+            If the query has NO article number, ask the LLM to draft a
+            plausible statute fragment and run a SECOND hybrid search using
+            that draft. Results merged with the original query's hybrid
+            search before reranking. Skipped for article-number queries
+            because Stage 0 already handles them precisely.
+
         Stage 1: Hybrid search — merge BM25 + Vector results (deduplicated).
         Stage 2: Use LLM to select the top-N most relevant summaries.
         Stage 3: Retrieve the full content (Parent Documents) for the winners.
@@ -265,8 +279,41 @@ class RetrievalService:
                         f"for article(s) {sorted(article_numbers)} — skipping LLM rerank"
                     )
 
-            # ── Stage 1: Hybrid search — BM25 + Vector ───────────────────────
+            # ── Stage 1: Hybrid search (with optional HyDE expansion) ────────
             summaries = self._hybrid_search(question)
+
+            # Stage 0.5 — HyDE only for queries WITHOUT explicit article numbers
+            if not article_numbers:
+                hyde_text = self._generate_hyde_document(question)
+                if hyde_text:
+                    hyde_summaries = self._hybrid_search(hyde_text)
+                    summaries = self._merge_summary_lists(summaries, hyde_summaries)
+                    logger.info(
+                        f"HyDE expansion: query→{len(summaries)} merged candidates "
+                        f"(was {len(summaries) - len(hyde_summaries)} before)"
+                    )
+
+            # ── Stage 0.75 — Self-Query: for cross-reference queries, force
+            #                  each law to contribute its own candidates ─────
+            # Triggered when the LLM identifies the query as cross-statute.
+            # Falls back silently if self-query fails — original results
+            # remain unchanged. The goal is to break ties like eval_cr04
+            # ("權保委員 vs 權責長官") where standard hybrid round-robin may
+            # let one law dominate.
+            if not article_numbers:
+                filters = self._extract_self_query_filters(question)
+                if filters["cross_reference"] and filters["law_names"]:
+                    extra: List[Document] = []
+                    for law in filters["law_names"]:
+                        extra.extend(self._filtered_vector_search(question, law))
+                    if extra:
+                        before = len(summaries)
+                        summaries = self._merge_summary_lists(summaries, extra)
+                        logger.info(
+                            f"Self-query cross-ref: laws={filters['law_names']}, "
+                            f"added {len(summaries) - before} new candidates"
+                        )
+
             if not summaries and not pinned_docs:
                 logger.warning("No results from hybrid search")
                 return []
@@ -313,6 +360,97 @@ class RetrievalService:
         except Exception as e:
             logger.error(f"Unexpected error in query: {e}")
             raise RAGRetrievalError(f"Query failed: {e}") from e
+
+    def _extract_self_query_filters(self, question: str) -> dict:
+        """Ask the LLM to extract structured filters (law names, article IDs,
+        cross-reference flag) from the natural-language query.
+
+        Returns a dict like:
+          {
+            "law_names": ["陸海空軍懲罰法", "軍人權益事件處理法"],
+            "article_ids": ["第4條", "第8條"],
+            "cross_reference": true,
+          }
+        Empty / failed extraction returns empty lists & cross_reference=False.
+        """
+        import json as _json
+        import re as _re
+        try:
+            response = self.llm.invoke([
+                SystemMessage(content=SELFQUERY_SYSTEM_MSG),
+                HumanMessage(content=SELFQUERY_PROMPT_TEMPLATE.format(question=question)),
+            ])
+            text = (response.content or "").strip()
+            text = _re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=_re.MULTILINE).strip()
+            m = _re.search(r"\{.*\}", text, _re.DOTALL)
+            if not m:
+                return {"law_names": [], "article_ids": [], "cross_reference": False}
+            data = _json.loads(m.group(0))
+            return {
+                "law_names": data.get("law_names", []) or [],
+                "article_ids": data.get("article_ids", []) or [],
+                "cross_reference": bool(data.get("cross_reference")),
+            }
+        except Exception as e:
+            logger.warning(f"Self-query extraction failed: {e}")
+            return {"law_names": [], "article_ids": [], "cross_reference": False}
+
+    def _filtered_vector_search(self, query: str, law_name: str) -> List[Document]:
+        """Run vector search restricted to a single law (via metadata filter)."""
+        try:
+            results = self.vectorstore.similarity_search(
+                query,
+                k=self.config.summary_top_k,
+                filter={"source": f"{law_name}.md"},
+            )
+            logger.info(f"Filtered vector search [{law_name}]: {len(results)} results")
+            return results
+        except Exception as e:
+            logger.warning(f"Filtered vector search failed for {law_name}: {e}")
+            return []
+
+    def _generate_hyde_document(self, question: str) -> Optional[str]:
+        """Ask the LLM to draft a hypothetical statute fragment.
+
+        The draft is used as a secondary embedding target so we retrieve
+        passages whose semantic space lies near "what the answer looks like",
+        not just near "what the question looks like".
+
+        Returns the draft text, or None if generation fails or is empty.
+        """
+        try:
+            response = self.llm.invoke([
+                SystemMessage(content=HYDE_SYSTEM_MSG),
+                HumanMessage(content=HYDE_PROMPT_TEMPLATE.format(question=question)),
+            ])
+            draft = (response.content or "").strip()
+            if not draft or len(draft) < 10:
+                logger.info("HyDE: empty or too short, skipping")
+                return None
+            # Strip common LLM scaffolding patterns
+            for prefix in ("回傳：", "答：", "Answer:", "Output:"):
+                if draft.startswith(prefix):
+                    draft = draft[len(prefix):].strip()
+            logger.info(f"HyDE draft ({len(draft)} chars): {draft[:80]}...")
+            return draft
+        except Exception as e:
+            logger.warning(f"HyDE generation failed, falling back to query-only: {e}")
+            return None
+
+    @staticmethod
+    def _merge_summary_lists(
+        primary: List[Document], secondary: List[Document]
+    ) -> List[Document]:
+        """Merge two summary lists, primary first, deduplicated by content."""
+        seen = set()
+        out: List[Document] = []
+        for doc in primary + secondary:
+            key = doc.page_content[:100].strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(doc)
+        return out
 
     def _hybrid_search(self, question: str) -> List[Document]:
         """

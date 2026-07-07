@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中文法律 RAG 系統 (Chinese Law RAG System)</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/README.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="rag-chinese-law-rag-system">中文法律 RAG 系統 (Chinese Law RAG System)</h1>
+<p>一套專為中文法律文件設計的<strong>檢索增強生成（RAG）系統</strong>，基於 <strong>LangGraph</strong>、<strong>PostgreSQL + pgvector</strong> 與 <strong>OpenAI 相容 API</strong> 構建，並符合 <strong>ISO 42001 AI 管理系統標準</strong>。</p>
+<hr>
+<h2 id="_1">目錄</h2>
+<ol>
+<li><a href="#-核心功能">核心功能</a></li>
+<li><a href="#-技術堆疊">技術堆疊</a></li>
+<li><a href="#-查詢流程">查詢流程</a></li>
+<li><a href="#-快速開始容器化部署">快速開始</a></li>
+<li><a href="#️-環境變數">環境變數</a></li>
+<li><a href="#-api-使用">API 使用</a></li>
+<li><a href="#-專案結構">專案結構</a></li>
+<li><a href="#-scripts-操作手冊">Scripts 操作手冊</a></li>
+<li><a href="#-測試">測試</a></li>
+<li><a href="#-iso-42001-合規證據清單">ISO 42001 合規證據清單</a></li>
+<li><a href="#-相關文件">相關文件</a></li>
+</ol>
+<hr>
+<h2 id="_2">🌟 核心功能</h2>
+<h3 id="rag">RAG 檢索與生成</h3>
+<ul>
+<li><strong>條文精確查詢（Article Fast-Path）</strong>：偵測查詢中的條文號碼（如「第46條」），直接以 BM25 精確比對取回，繞過 LLM Reranker，確保指定條文必定出現。支援阿拉伯數字與中文數字。</li>
+<li><strong>混合檢索（Hybrid Retrieval）</strong>：BM25 關鍵字搜尋 ＋ 向量語意搜尋，結果 Round-Robin 合併。</li>
+<li><strong>LLM Reranking</strong>：以 LLM 對候選 chunks 重新排名，優先選出語意最相關內容。</li>
+<li><strong>階層式文件索引（Parent-Child）</strong>：小 chunk 做向量搜尋，命中後取回完整父文件。</li>
+<li><strong>代理工作流（Agentic Workflow）</strong>：使用 ReAct 代理拆解問題、多次搜尋、綜合回答。</li>
+<li><strong>智慧記憶（Intelligent Memory）</strong>：混合摘要壓縮長對話，Token-Aware 上下文管理（約 3000 tokens）。</li>
+<li><strong>OpenAI 相容 API</strong>：標準 <code>/v1/chat/completions</code> 端點，可直接對接 Open WebUI 或任何 OpenAI 客戶端。</li>
+</ul>
+<h3 id="iso-42001">ISO 42001 合規功能</h3>
+<ul>
+<li><strong>API 認證（A.8）</strong>：三段式存取控制：① Bearer Token 模式（<code>API_KEYS</code> 設定時）、② 內網信任模式（<code>ALLOW_INTRANET_MODE=true</code>，以 Client IP 稽核）、③ <strong>Fail-Closed</strong>（兩者皆未設定時回傳 503，絕不靜默暴露未受保護端點）。</li>
+<li><strong>速率限制（A.8）</strong>：每 API Key 每分鐘 60 次請求（滑動視窗），超過回傳 HTTP 429。</li>
+<li><strong>輸入消毒（A.8）</strong>：七類攻擊偵測：Prompt Injection、系統資訊探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換攻擊；超過 2000 字元自動拒絕。</li>
+<li><strong>輸出過濾（A.8）</strong>：自動遮蔽連線字串、伺服器路徑、API Key、Base64 Token 等敏感資訊。</li>
+<li><strong>異常分析（A.6）</strong>：滑動視窗分析延遲突增、拒絕率突升、安全事件叢集、連續重試。</li>
+<li><strong>稽核日誌（A.6）</strong>：每日 JSONL 滾動記錄所有查詢、安全事件、認證事件。</li>
+<li><strong>偏誤評估（A.5）</strong>：成對問題一致性檢查，確保不因用詞差異產生歧視性回答。</li>
+<li><strong>V&amp;V 評估（A.9）</strong>：黃金資料集評估，量化 Hit Rate、Precision@K、MRR、關鍵字覆蓋率、條文引用匹配率。</li>
+</ul>
+<hr>
+<h2 id="_3">🛠 技術堆疊</h2>
+<table>
+<thead>
+<tr>
+<th>元件</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>LangGraph</strong></td>
+<td>Agent 狀態管理與工作流</td>
+</tr>
+<tr>
+<td><strong>LangChain</strong></td>
+<td>LLM / Embeddings 介面</td>
+</tr>
+<tr>
+<td><strong>PostgreSQL + pgvector</strong></td>
+<td>向量資料庫</td>
+</tr>
+<tr>
+<td><strong>Embed Proxy</strong></td>
+<td>OpenAI Embeddings API ↔ Triton gRPC 轉換層</td>
+</tr>
+<tr>
+<td><strong>FastAPI</strong></td>
+<td>OpenAI 相容 HTTP API</td>
+</tr>
+<tr>
+<td><strong>PyMuPDF / python-docx</strong></td>
+<td>PDF / Word 文件解析</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="_4">🔍 查詢流程</h2>
+<pre><code>用戶問題
+   │
+   ▼
+[API 認證 + 速率限制]  →  失敗 → HTTP 401 / 429
+   │ 通過
+   ▼
+[輸入消毒]  →  偵測到攻擊 → security_block 節點（記錄安全事件 + 回傳拒絕訊息）
+   │ 通過
+   ▼
+Stage 0: 條文號碼偵測？（第X條 / 第X十X條）
+   ├─ 是 → BM25 精確掃描 → 直接置頂（跳過 Stage 2 Reranker）
+   └─ 否 ↓
+Stage 1: Hybrid Search（BM25 + Vector，Top-10）
+   │
+   ▼
+Stage 2: LLM Reranker（選出 Top-3）
+   │
+   ▼
+Stage 3: 取回 Parent Document（完整條文段落）
+   │
+   ▼
+LangGraph Agent → 組合回答
+   │
+   ▼
+[輸出過濾]  →  遮蔽連線字串 / 路徑 / Token → 回傳用戶
+</code></pre>
+<hr>
+<h2 id="_5">🚀 快速開始（容器化部署）</h2>
+<p>系統已完整容器化，使用 <code>docker-compose.yaml</code> 統一管理，<strong>不需要手動安裝 Python 環境</strong>。</p>
+<h3 id="_6">前置需求</h3>
+<ul>
+<li>Docker &amp; Docker Compose</li>
+<li>內網 GPU 推論伺服器（Triton Inference Server）</li>
+</ul>
+<h3 id="_7">啟動</h3>
+<pre><code class="language-bash"># 在 ISO42001Deploy/ 目錄下
+./deploy.sh
+</code></pre>
+<h3 id="_8">離線部署（內網）</h3>
+<pre><code class="language-bash"># 在內網維運機上打包
+./save_images.sh       # 輸出到 images/*.tar（共約 5.3GB）
+
+# 複製整個 ISO42001Deploy/ 到內網後執行
+./deploy.sh
+</code></pre>
+<hr>
+<h2 id="_9">⚙️ 環境變數</h2>
+<h3 id="_10">容器化部署</h3>
+<p>所有設定集中在上層 <code>ISO42001Deploy/.env</code>，<strong>無需修改本目錄下任何檔案</strong>。</p>
+<pre><code class="language-ini"># ── 模型連線 ──────────────────────────────────────────
+LLM_HOST=&lt;GPU 伺服器 IP&gt;       # 搬遷時唯一需要修改的設定
+LLM_PORT=7000                  # LLM HTTP port
+EMBED_PORT=9000                # Triton gRPC port（供 embed-proxy 使用）
+CHAT_MODEL_NAME=openai/gpt-oss-20b
+EMBED_MODEL_NAME=nvidia/nv-embed-v2
+LLM_API_KEY=&lt;JWT Token&gt;
+EMBED_API_KEY=&lt;JWT Token&gt;
+
+# ── ISO 42001 安全設定 ──────────────────────────────────
+API_KEYS=key1,key2             # Bearer Token（逗號分隔）；設定此項則啟用 Token 認證
+ALLOW_INTRANET_MODE=false      # true = 無 Token 時以 Client IP 稽核（內網專用）
+                               # ⚠️ API_KEYS 與 ALLOW_INTRANET_MODE 兩者皆未設定 → HTTP 503（Fail-Closed）
+TRUSTED_PROXIES=127.0.0.1     # 信任的 Proxy IP（逗號分隔），用於 X-Forwarded-For 驗證
+                               # 僅限此清單內的 Peer 可傳遞真實 Client IP，防止 IP 偽造
+ALLOWED_ORIGINS=https://your-ui.internal  # CORS 白名單（逗號分隔，* 代表全開）
+VERIFY_SSL=true                # 上游 SSL 驗證（預設 true，測試環境可設 false）
+RATE_LIMIT_PER_MINUTE=60       # 每 Key 每分鐘最大請求數（預設 60）
+</code></pre>
+<p><strong>Embedding 連線架構</strong>：</p>
+<pre><code>RAG API → embed-proxy:8100 (HTTP/OpenAI格式)
+              └→ Triton:9001 (gRPC)
+</code></pre>
+<blockquote>
+<p>Triton 使用 gRPC 協定，<code>embed-proxy</code> 負責格式轉換，RAG API 只看到標準 OpenAI 介面。</p>
+</blockquote>
+<h3 id="ragenv">本機開發環境（<code>RAG/.env</code>）</h3>
+<pre><code class="language-ini">PGVECTOR_URL=postgresql://postgres:postgres@localhost:15432/Judge
+EMBED_API_BASE=http://localhost:8100/v1
+EMBED_API_KEY=&lt;Token&gt;
+EMBED_MODEL_NAME=nvidia/nv-embed-v2
+LLM_API_BASE=http://&lt;GPU IP&gt;:7000/v1
+CHAT_MODEL_NAME=openai/gpt-oss-20b
+TOP_K=5
+CHUNK_SIZE=1000
+API_KEYS=dev-key-1234          # 開發用 Token；或留空並設 ALLOW_INTRANET_MODE=true
+ALLOW_INTRANET_MODE=true       # 本機開發時可開啟，省去 Token（切勿用於生產）
+TRUSTED_PROXIES=127.0.0.1     # 本機 nginx proxy IP
+VERIFY_SSL=false               # 本機測試時可關閉
+</code></pre>
+<hr>
+<h2 id="api">📚 API 使用</h2>
+<h3 id="api_1">API 端點總覽</h3>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路徑</th>
+<th>說明</th>
+<th>需要認證</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/health</code></td>
+<td>健康檢查</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/v1/models</code></td>
+<td>列出可用模型</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/v1/chat/completions</code></td>
+<td>主要問答端點</td>
+<td><strong>是</strong></td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/v1/upload</code></td>
+<td>上傳文件並索引</td>
+<td><strong>是</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="python">Python 範例</h3>
+<pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(
+    base_url=&quot;http://localhost:8000/v1&quot;,
+    api_key=&quot;your-api-key&quot;,   # 對應 API_KEYS 環境變數
+)
+
+response = client.chat.completions.create(
+    model=&quot;rag-agent&quot;,
+    messages=[
+        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;陸海空軍懲罰法第46條的規定是什麼？&quot;}
+    ]
+)
+print(response.choices[0].message.content)
+</code></pre>
+<h3 id="curl">curl 範例</h3>
+<pre><code class="language-bash"># 一般查詢
+curl -s http://localhost:8000/v1/chat/completions \
+  -H &quot;Authorization: Bearer your-api-key&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{
+    &quot;model&quot;: &quot;rag-agent&quot;,
+    &quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;陸海空軍懲罰法第46條&quot;}]
+  }'
+
+# 健康檢查（無需認證）
+curl http://localhost:8000/health
+</code></pre>
+<h3 id="session">Session 持續對話</h3>
+<p>加入 <code>x-session-id</code> header 可保留同一對話的上下文記憶：</p>
+<pre><code class="language-bash">curl -s http://localhost:8000/v1/chat/completions \
+  -H &quot;Authorization: Bearer your-api-key&quot; \
+  -H &quot;x-session-id: user-abc-session-01&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;model&quot;:&quot;rag-agent&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;繼續說明第47條&quot;}]}'
+</code></pre>
+<h3 id="cli">CLI 指令（容器內）</h3>
+<pre><code class="language-bash"># 單次查詢
+python -m rag_system.cli query &quot;陸海空軍懲罰法第46條&quot;
+
+# 僅執行檢索（除錯用，不呼叫 LLM）
+python -m rag_system.cli retrieve &quot;第46條&quot;
+
+# 啟動 HTTP Server
+python -m rag_system.cli serve --port 8080
+</code></pre>
+<hr>
+<h2 id="_11">📁 專案結構</h2>
+<pre><code>RAG/
+├── api.py                          # FastAPI 進入點（認證、速率限制、CORS、路由）
+├── CHANGELOG.md                    # 版本變更紀錄（ISO 42001 A.6/A.9 稽核證據）
+├── Dockerfile                      # Jupyter 開發環境映像
+├── Dockerfile.api                  # RAG API 生產環境映像
+├── requirements.txt                # Python 套件清單
+│
+├── data/
+│   ├── converted_md/               # ★ 來源法規 Markdown（在此新增文件後執行 reindex）
+│   ├── processed/
+│   │   └── docstore/               # Parent Document 快取（JSON，由 reindex.py 產生）
+│   ├── audit_logs/                 # 稽核日誌（JSONL，每日滾動）
+│   │   └── audit_YYYY-MM-DD.jsonl
+│   ├── reports/                    # V&amp;V 評估與稽核摘要報告（由 scripts 產生）
+│   │   └── vv_report_YYYY-MM-DD.json / .md
+│   └── versions/                   # 版本快照與備份（由 version_tracker.py 產生）
+│       ├── snapshot_YYYY-MM-DD_HHMMSS.json
+│       └── backup_YYYY-MM-DD_HHMMSS.tar.gz
+│
+├── docs/
+│   └── governance/
+│       └── ETHICS_CHECKLIST.md     # ISO 42001 A.5 倫理審查清單（人工填寫）
+│
+├── rag_system/
+│   ├── core/
+│   │   ├── config.py               # 全域設定（TOP_K, CHUNK_SIZE, SSL 等）
+│   │   ├── factory.py              # 元件工廠（LLM / DB / Embeddings）
+│   │   ├── prompts.py              # Prompt 集中管理（Rerank / Agent）
+│   │   ├── auth.py                 # Bearer Token 認證 / 內網 IP 模式
+│   │   ├── rate_limiter.py         # 速率限制（每 Key / 分鐘，滑動視窗）
+│   │   ├── input_sanitizer.py      # 六類攻擊防禦（Prompt Injection / 系統探測 / SQL Injection / SSRF / CSRF / 角色切換）
+│   │   ├── output_filter.py        # 敏感資訊遮蔽（連線字串、路徑、Token）
+│   │   ├── anomaly_detector.py     # 即時異常偵測（延遲、拒絕率、安全叢集）
+│   │   ├── audit_logger.py         # 日誌記錄（查詢 / 安全告警 / 認證事件）
+│   │   ├── bias_evaluator.py       # 偏誤一致性評估（成對問題比較）
+│   │   ├── retrieval_evaluator.py  # 檢索準確度指標（Hit Rate, Precision@K, MRR）
+│   │   └── answer_evaluator.py     # 回答正確性評估（關鍵字覆蓋、條文引用、結構）
+│   ├── services/
+│   │   ├── ingestion.py            # 文件索引（切割、向量化、寫入 pgvector）
+│   │   ├── retrieval.py            # 混合檢索（BM25 + Vector + 條文快速路徑）
+│   │   └── converter.py            # PDF / DOCX / RTF → Markdown 轉換
+│   └── agent/
+│       ├── graph.py                # LangGraph 工作流（classify / retrieve / generate / verify / reject / security_block / passthrough）
+│       ├── nodes.py                # 各 Agent 節點邏輯（classify / retrieve / generate）
+│       ├── memory.py               # 對話記憶管理（摘要壓縮 + Token-Aware）
+│       └── tools/
+│           └── retrieve.py         # Agent 搜尋工具
+│
+├── scripts/                        # ★ 操作工具（詳見下方說明）
+│   ├── reindex.py                  # 知識庫索引管理
+│   ├── run_vv_evaluation.py        # V&amp;V 驗證評估
+│   ├── version_tracker.py          # 版本追蹤（無需 Git）
+│   └── debug/                      # 除錯工具（開發用）
+│       ├── check_db_status.py      # 查看 pgvector 資料庫狀態
+│       ├── clear_data.py           # 清空資料庫（保留結構）
+│       └── verify_query.py         # 手動驗證查詢結果
+│
+└── tests/
+    ├── unit/
+    │   ├── test_anomaly_detector.py    # 異常偵測（15 cases）
+    │   └── test_auth.py                # 認證 / 速率限制（12 cases）
+    └── evaluation/
+        ├── test_prompt_security.py     # Prompt injection 安全（79 cases）
+        ├── test_bias_fairness.py       # 偏誤公平性（8 cases）
+        ├── test_vv_pipeline.py         # V&amp;V 管線指標（28 cases）
+        ├── golden_dataset.json         # V&amp;V 黃金資料集（30 筆）
+        └── bias_test_dataset.json      # 偏誤測試資料集
+</code></pre>
+<hr>
+<h2 id="scripts">📜 Scripts 操作手冊</h2>
+<blockquote>
+<p>所有 scripts 需在 <strong><code>ISO42001_jupyter</code> 容器內</strong>執行，或在已安裝所有相依套件的環境中執行。
+容器內工作目錄為 <code>/home/jovyan/work</code>，對應本機的 <code>RAG/</code> 目錄。</p>
+</blockquote>
+<hr>
+<h3 id="scriptsreindexpy"><code>scripts/reindex.py</code> — 知識庫索引管理</h3>
+<p>管理 pgvector 向量資料庫中的文件索引。新增法規文件後必須執行。</p>
+<h4 id="_12">全量重建（清空後重建所有文件）</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/reindex.py
+</code></pre>
+<blockquote>
+<p>⚠️ 會清空現有全部索引，掃描 <code>data/converted_md/</code> 下所有 <code>.md</code> 檔重建。耗時較長。</p>
+</blockquote>
+<h4 id="_13">新增 / 更新單一文件（推薦）</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/reindex.py --file data/converted_md/陸海空軍懲罰法.md
+</code></pre>
+<blockquote>
+<p>等同 upsert：先刪除該文件舊索引，再重新建立。<strong>不影響其他文件</strong>。</p>
+</blockquote>
+<h4 id="_14">刪除指定文件的索引</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/reindex.py --delete 陸海空軍懲罰法.md
+</code></pre>
+<h4 id="_15">新增法規的完整流程</h4>
+<pre><code>1. 將法規 RTF / DOCX / PDF 放入 data/input/
+2. 使用系統的 /v1/upload API 上傳（自動轉換 + 索引），或：
+   a. 手動轉換為 Markdown → 存至 data/converted_md/
+   b. 執行 reindex.py --file &lt;新檔案&gt;
+3. 驗證：python scripts/debug/check_db_status.py
+</code></pre>
+<hr>
+<h3 id="scriptsrun_vv_evaluationpy-iso-42001-a9-vv"><code>scripts/run_vv_evaluation.py</code> — ISO 42001 A.9 V&amp;V 評估</h3>
+<p>對黃金資料集執行離線驗證與確認（Verification &amp; Validation），作為 <strong>ISO 42001 A.9 書面證據</strong>。</p>
+<blockquote>
+<p><strong>注意</strong>：本腳本為「離線評估」，不呼叫 LLM。使用 <code>golden_dataset.json</code> 中的 <code>expected_answer</code> 自評答案品質；檢索指標需填入 <code>expected_docs</code> 後才會計算。</p>
+</blockquote>
+<h4 id="_16">執行</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/run_vv_evaluation.py
+</code></pre>
+<h4 id="_17">自訂資料集</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/run_vv_evaluation.py \
+  --dataset tests/evaluation/golden_dataset.json \
+  --output-dir data/reports
+</code></pre>
+<h4 id="_18">輸出檔案</h4>
+<table>
+<thead>
+<tr>
+<th>檔案</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data/reports/vv_report_YYYY-MM-DD.json</code></td>
+<td>機器可讀格式</td>
+</tr>
+<tr>
+<td><code>data/reports/vv_report_YYYY-MM-DD.md</code></td>
+<td>人可讀格式（稽核呈交用）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_19">評估指標與通過門檻</h4>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>說明</th>
+<th>通過門檻</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Hit Rate</strong></td>
+<td>正確文件出現在檢索結果中的比率</td>
+<td>≥ 0.60</td>
+</tr>
+<tr>
+<td><strong>Precision@K</strong></td>
+<td>Top-K 中正確文件的比率</td>
+<td>≥ 0.50</td>
+</tr>
+<tr>
+<td><strong>MRR</strong></td>
+<td>第一個正確文件的排名倒數平均</td>
+<td>≥ 0.40</td>
+</tr>
+<tr>
+<td><strong>關鍵字覆蓋率</strong></td>
+<td>回答中出現預期關鍵字的比率</td>
+<td>參考用</td>
+</tr>
+<tr>
+<td><strong>條文引用匹配</strong></td>
+<td>回答引用正確條文的比率</td>
+<td>參考用</td>
+</tr>
+<tr>
+<td><strong>結構完整率</strong></td>
+<td>回答包含必要結構的比率</td>
+<td>參考用</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>若 <code>expected_docs</code> 全部為空（尚未填入檢索 ground truth），檢索指標自動視為通過。</p>
+</blockquote>
+<h4 id="_20">擴充黃金資料集</h4>
+<p>編輯 <code>tests/evaluation/golden_dataset.json</code>，每筆格式如下：</p>
+<pre><code class="language-json">{
+  &quot;query&quot;: &quot;陸海空軍懲罰法第46條規定為何？&quot;,
+  &quot;expected_answer&quot;: &quot;第46條規定……&quot;,
+  &quot;expected_keywords&quot;: [&quot;停役&quot;, &quot;降階&quot;],
+  &quot;expected_articles&quot;: [&quot;第46條&quot;],
+  &quot;expected_docs&quot;: [&quot;陸海空軍懲罰法.md#第46條&quot;],
+  &quot;category&quot;: &quot;single_article&quot;,
+  &quot;difficulty&quot;: &quot;easy&quot;
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>欄位</th>
+<th>必填</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>✅</td>
+<td>測試問題</td>
+</tr>
+<tr>
+<td><code>expected_answer</code></td>
+<td>✅</td>
+<td>預期回答（用於自評）</td>
+</tr>
+<tr>
+<td><code>expected_keywords</code></td>
+<td>✅</td>
+<td>預期出現的關鍵字列表</td>
+</tr>
+<tr>
+<td><code>expected_articles</code></td>
+<td>✅</td>
+<td>預期引用的條文列表</td>
+</tr>
+<tr>
+<td><code>expected_docs</code></td>
+<td>❌</td>
+<td>預期檢索到的文件 ID（填入後才計算 Hit Rate / MRR）</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>✅</td>
+<td><code>single_article</code> / <code>cross_reference</code> / <code>out_of_scope</code> / <code>ambiguous</code></td>
+</tr>
+<tr>
+<td><code>difficulty</code></td>
+<td>✅</td>
+<td><code>easy</code> / <code>medium</code> / <code>hard</code></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="scriptsversion_trackerpy-git"><code>scripts/version_tracker.py</code> — 版本追蹤（無 Git 環境）</h3>
+<p>在沒有 Git / GitLab 的內網環境中，提供 SHA-256 快照式版本管理，作為 <strong>ISO 42001 A.6/A.9 變更管理的書面證據</strong>。</p>
+<h4 id="snapshot"><code>snapshot</code> — 建立版本快照</h4>
+<pre><code class="language-bash">python3 scripts/version_tracker.py snapshot \
+  -m &quot;說明此次變更內容&quot; \
+  -o &quot;操作者姓名&quot; \
+  -v &quot;v1.1.0&quot;
+</code></pre>
+<p>加上 <code>--backup</code> 同時產生 <code>tar.gz</code> 備份（可用於回滾）：</p>
+<pre><code class="language-bash">python3 scripts/version_tracker.py snapshot \
+  -m &quot;ISO 42001 合規實作完成&quot; -o &quot;開發團隊&quot; -v &quot;v1.1.0&quot; --backup
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-m</code> / <code>--message</code></td>
+<td>變更說明（會記入 CHANGELOG）</td>
+</tr>
+<tr>
+<td><code>-o</code> / <code>--operator</code></td>
+<td>操作者姓名（稽核用）</td>
+</tr>
+<tr>
+<td><code>-v</code> / <code>--version</code></td>
+<td>版本號（如 v1.1.0）</td>
+</tr>
+<tr>
+<td><code>--backup</code></td>
+<td>同時產生 <code>.tar.gz</code> 備份存檔</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>執行後若偵測到變更，自動追加至 <code>CHANGELOG.md</code>（含「審核簽名」欄位供人工填寫）。</p>
+</blockquote>
+<h4 id="diff"><code>diff</code> — 查看未提交的變更</h4>
+<pre><code class="language-bash"># 與最新快照比較
+python3 scripts/version_tracker.py diff
+
+# 與指定快照比較
+python3 scripts/version_tracker.py diff \
+  --base data/versions/snapshot_2026-04-09_063600.json
+</code></pre>
+<p>輸出範例：</p>
+<pre><code>✏️  修改（2 檔）：
+  ~ rag_system/core/auth.py
+  ~ README.md
+
+合計：+0 ~2 -0
+</code></pre>
+<h4 id="verify"><code>verify</code> — 完整性驗證</h4>
+<p>比對目前所有檔案的 SHA-256 與快照是否一致，用於<strong>稽核時確認程式碼未被竄改</strong>：</p>
+<pre><code class="language-bash"># 驗證與最新快照是否一致
+python3 scripts/version_tracker.py verify
+
+# 驗證與指定快照是否一致
+python3 scripts/version_tracker.py verify \
+  --base data/versions/snapshot_2026-04-09_063600.json
+</code></pre>
+<p>輸出範例：</p>
+<pre><code>✅ 完整性驗證通過：所有檔案與快照一致。
+# 或
+❌ 完整性驗證失敗（2 個問題）：
+  ⚠️  雜湊不符：rag_system/core/auth.py
+  ❌ 檔案遺失：scripts/old_script.py
+</code></pre>
+<h4 id="list"><code>list</code> — 列出所有快照</h4>
+<pre><code class="language-bash">python3 scripts/version_tracker.py list
+</code></pre>
+<p>輸出範例：</p>
+<pre><code>共 3 個快照：
+
+  snapshot_2026-04-09_063600.json  [v1.1.0] 2026-04-09 06:36:00  (60 檔)  ISO 42001 合規實作完成
+  snapshot_2026-04-09_063654.json  [v1.1.1] 2026-04-09 06:36:54  (61 檔)  新增版本追蹤工具
+  snapshot_2026-04-09_071451.json  [v1.1.2] 2026-04-09 07:14:51  (61 檔)  auth.py 升級內網模式
+</code></pre>
+<h4 id="_21">建議的版本管理流程</h4>
+<pre><code>程式碼修改完成
+       ↓
+執行全部測試（pytest）
+       ↓
+python3 scripts/version_tracker.py diff      # 確認變更範圍
+       ↓
+python3 scripts/version_tracker.py snapshot -m &quot;說明&quot; -o &quot;操作者&quot; -v &quot;版本號&quot; --backup
+       ↓
+在 CHANGELOG.md 中填寫「審核簽名」欄位
+</code></pre>
+<h4 id="_22">回滾程序（版本還原）</h4>
+<p>當部署出現問題需要還原至前一個穩定版本時，依照下列步驟操作。</p>
+<p><strong>前提：</strong> 目標版本必須曾以 <code>--backup</code> 建立過 <code>.tar.gz</code> 備份，才能完整還原檔案。</p>
+<hr>
+<p><strong>步驟 1：確認可用的快照與備份</strong></p>
+<pre><code class="language-bash"># 列出所有快照
+docker exec ISO42001_jupyter python3 scripts/version_tracker.py list
+
+# 輸出範例：
+#   snapshot_2026-04-09_063600.json  [v1.1.0]  ISO 42001 合規實作完成
+#   snapshot_2026-04-09_071451.json  [v1.1.2]  auth.py 升級
+#
+# 確認對應的備份存在：
+ls data/versions/backup_*.tar.gz
+</code></pre>
+<p><strong>步驟 2：停止 API 服務</strong></p>
+<pre><code class="language-bash">cd ISO42001Deploy
+docker compose stop rag-api
+</code></pre>
+<p><strong>步驟 3：還原檔案</strong></p>
+<pre><code class="language-bash"># 解壓備份（以 v1.1.0 為例，覆蓋當前檔案）
+tar xzf RAG/data/versions/backup_2026-04-09_063600.tar.gz -C RAG/
+
+# 確認還原結果與快照一致
+docker exec ISO42001_jupyter python3 scripts/version_tracker.py verify \
+  --base data/versions/snapshot_2026-04-09_063600.json
+# 應輸出：✅ 完整性驗證通過
+</code></pre>
+<p><strong>步驟 4：重建並重啟服務</strong></p>
+<pre><code class="language-bash"># 重新 build（套件版本可能也回到舊版）
+docker compose up -d --build rag-api
+
+# 確認服務正常
+curl http://localhost:8043/health
+</code></pre>
+<p><strong>步驟 5：記錄回滾事件（ISO 42001 稽核要求）</strong></p>
+<pre><code class="language-bash">docker exec ISO42001_jupyter python3 scripts/version_tracker.py snapshot \
+  -m &quot;回滾至 v1.1.0：[說明問題原因]&quot; \
+  -o &quot;操作者姓名&quot; \
+  -v &quot;v1.1.0-rollback&quot;
+</code></pre>
+<blockquote>
+<p>回滾後在 <code>CHANGELOG.md</code> 的「審核簽名」欄位填寫負責人，作為 ISO 42001 A.9 變更管理的書面記錄。</p>
+</blockquote>
+<hr>
+<p><strong>無備份時的替代方案（僅程式碼）</strong></p>
+<p>若未使用 <code>--backup</code> 建立備份，只能透過快照的 <code>diff</code> 找出哪些檔案被修改，再手動還原：</p>
+<pre><code class="language-bash"># 查看目前與目標版本的差異
+docker exec ISO42001_jupyter python3 scripts/version_tracker.py diff \
+  --base data/versions/snapshot_2026-04-09_063600.json
+
+# 手動將有問題的檔案還原後，重建服務
+docker compose up -d --build rag-api
+</code></pre>
+<hr>
+<h3 id="scriptsdebug"><code>scripts/debug/</code> — 除錯工具（開發用）</h3>
+<blockquote>
+<p>以下工具僅供開發除錯，不作為正式操作流程。</p>
+</blockquote>
+<h4 id="check_db_statuspy"><code>check_db_status.py</code> — 查看資料庫狀態</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/debug/check_db_status.py
+</code></pre>
+<p>顯示 pgvector 中各資料表的筆數、儲存大小、索引狀態。</p>
+<h4 id="clear_datapy"><code>clear_data.py</code> — 清空資料庫（保留結構）</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/debug/clear_data.py
+</code></pre>
+<blockquote>
+<p>⚠️ <strong>危險操作</strong>：清空所有向量資料與 docstore，執行前請確認。清空後需重新執行 <code>reindex.py</code> 重建索引。</p>
+</blockquote>
+<h4 id="verify_querypy"><code>verify_query.py</code> — 手動驗證查詢結果</h4>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  python scripts/debug/verify_query.py
+</code></pre>
+<p>直接執行 RAG 查詢並顯示完整的檢索過程與中間結果，用於除錯。</p>
+<hr>
+<h2 id="_23">🧪 測試</h2>
+<p>所有測試需在 <strong><code>ISO42001_jupyter</code> 容器內</strong>執行（host 環境缺少 <code>langchain_classic</code> 等相依套件）。</p>
+<h3 id="_24">執行全部測試</h3>
+<pre><code class="language-bash">docker exec -w /home/jovyan/work ISO42001_jupyter \
+  /opt/conda/bin/python -m pytest tests/ -v
+</code></pre>
+<h3 id="_25">執行特定測試模組</h3>
+<pre><code class="language-bash"># 安全性測試（Prompt injection）
+docker exec -w /home/jovyan/work ISO42001_jupyter \
+  /opt/conda/bin/python -m pytest tests/evaluation/test_prompt_security.py -v
+
+# 認證與速率限制
+docker exec -w /home/jovyan/work ISO42001_jupyter \
+  /opt/conda/bin/python -m pytest tests/unit/test_auth.py -v
+
+# 異常偵測
+docker exec -w /home/jovyan/work ISO42001_jupyter \
+  /opt/conda/bin/python -m pytest tests/unit/test_anomaly_detector.py -v
+
+# 偏誤公平性
+docker exec -w /home/jovyan/work ISO42001_jupyter \
+  /opt/conda/bin/python -m pytest tests/evaluation/test_bias_fairness.py -v
+
+# V&amp;V 管線
+docker exec -w /home/jovyan/work ISO42001_jupyter \
+  /opt/conda/bin/python -m pytest tests/evaluation/test_vv_pipeline.py -v
+</code></pre>
+<h3 id="_26">測試涵蓋範圍</h3>
+<table>
+<thead>
+<tr>
+<th>測試檔案</th>
+<th>Cases</th>
+<th>測試對象</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_anomaly_detector.py</code></td>
+<td>15</td>
+<td>延遲突增、拒絕率突升、安全叢集、連續重試偵測、日誌分析</td>
+</tr>
+<tr>
+<td><code>test_auth.py</code></td>
+<td>12</td>
+<td>Bearer Token 驗證、Fail-Closed（503）、內網 IP 模式、TRUSTED_PROXIES 防偽造、速率限制</td>
+</tr>
+<tr>
+<td><code>test_prompt_security.py</code></td>
+<td>79</td>
+<td>Prompt injection（中英文）、系統探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換、長度限制、輸出過濾</td>
+</tr>
+<tr>
+<td><code>test_bias_fairness.py</code></td>
+<td>8</td>
+<td>成對問題一致性、中性回答評分、語意相似度</td>
+</tr>
+<tr>
+<td><code>test_vv_pipeline.py</code></td>
+<td>28</td>
+<td>Hit Rate / Precision@K / MRR 計算、答案評分、資料集載入</td>
+</tr>
+<tr>
+<td><strong>合計</strong></td>
+<td><strong>142</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="iso-42001_1">📋 ISO 42001 合規證據清單</h2>
+<table>
+<thead>
+<tr>
+<th>條款</th>
+<th>要求</th>
+<th>對應實作</th>
+<th>書面證據位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A.5</strong></td>
+<td>倫理審查</td>
+<td><code>bias_evaluator.py</code> + 測試</td>
+<td><code>docs/governance/ETHICS_CHECKLIST.md</code></td>
+</tr>
+<tr>
+<td><strong>A.5</strong></td>
+<td>偏誤評估</td>
+<td><code>test_bias_fairness.py</code>（8 cases）</td>
+<td>測試報告（pytest -v）</td>
+</tr>
+<tr>
+<td><strong>A.6</strong></td>
+<td>生命週期紀錄</td>
+<td><code>anomaly_detector.py</code> + <code>audit_logger.py</code></td>
+<td><code>docs/AUDIT_LOG_SCHEMA.md</code>、<code>data/audit_logs/audit_*.jsonl</code></td>
+</tr>
+<tr>
+<td><strong>A.6</strong></td>
+<td>稽核日誌</td>
+<td>JSONL 每日滾動</td>
+<td><code>data/audit_logs/audit_*.jsonl</code></td>
+</tr>
+<tr>
+<td><strong>A.6</strong></td>
+<td>變更管理</td>
+<td><code>version_tracker.py</code> + <code>CHANGELOG.md</code></td>
+<td><code>data/versions/snapshot_*.json</code></td>
+</tr>
+<tr>
+<td><strong>A.8</strong></td>
+<td>存取控制</td>
+<td><code>auth.py</code> + <code>rate_limiter.py</code></td>
+<td><code>test_auth.py</code> 測試報告</td>
+</tr>
+<tr>
+<td><strong>A.8</strong></td>
+<td>輸入安全</td>
+<td><code>input_sanitizer.py</code></td>
+<td><code>test_prompt_security.py</code> 測試報告</td>
+</tr>
+<tr>
+<td><strong>A.8</strong></td>
+<td>輸出安全</td>
+<td><code>output_filter.py</code></td>
+<td><code>test_prompt_security.py</code> 測試報告</td>
+</tr>
+<tr>
+<td><strong>A.9</strong></td>
+<td>驗證與確認</td>
+<td><code>run_vv_evaluation.py</code> + 黃金資料集</td>
+<td><code>data/reports/vv_report_*.md</code></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="_27">📖 相關文件</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AGENT.md</code></td>
+<td>核心工程哲學與 Agent 設計說明</td>
+</tr>
+<tr>
+<td><code>CHANGELOG.md</code></td>
+<td>版本變更紀錄（ISO 42001 A.6/A.9 稽核證據）</td>
+</tr>
+<tr>
+<td><code>docs/governance/ETHICS_CHECKLIST.md</code></td>
+<td>ISO 42001 A.5 倫理審查清單（人工填寫）</td>
+</tr>
+<tr>
+<td><code>plan.md</code></td>
+<td>ISO 42001 合規實作計畫（完整紀錄）</td>
+</tr>
+</tbody>
+</table>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/README.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

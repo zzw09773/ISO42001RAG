@@ -20,7 +20,7 @@
 | 範圍 | 涵蓋 |
 |---|---|
 | 功能需求 | RAG 檢索流程、API 介面、文件攝取、代理工作流、部署維運 |
-| 非功能需求 | 安全性、監控稽核、偏誤公平性、V&V、效能、可靠性 |
+| 非功能需求 | 安全性、稽核維運、偏誤公平性、V&V、效能、可靠性 |
 | 合規對照 | ISO 42001 Annex A 控制項追溯矩陣 |
 | 不在範圍 | 上游 LLM / Embedding 模型本身的訓練、底層 Triton 推論伺服器運維 |
 
@@ -43,7 +43,7 @@
 
 法律承辦人員在處理懲罰、申訴、覆審等案件時，需要在**短時間內精確檢索**特定條文，並能交叉比對相關規範。傳統做法（紙本法典、PDF Ctrl+F、政府公開查詢站）有以下痛點：
 
-1. **無法在無外網的內網環境使用**雲端 LLM 法律助手。
+1. **無法在封閉內網環境使用**雲端 LLM 法律助手。
 2. PDF 全文搜尋僅匹配字串，**無法處理同義詞或語意推理**（例：「停役」與「不得繼續服役」）。
 3. 法規修訂頻繁，**版本控管與來源可追溯性**多依賴人工。
 4. 對話式問答（追問、補充）在純文件檢索工具中**無法保留上下文**。
@@ -81,8 +81,8 @@
 │  Audit Logger / Anomaly Detector / Bias Evaluator              │
 └──────────────────────────────────────────────────────────────┘
         ↑                                          ↓
-   ┌─外部相依（out-of-scope）────────────────────────┐
-   │  Triton Inference Server（GPU 主機，外部團隊）  │
+   ┌─推論後端相依（out-of-scope）────────────────────────┐
+   │  Triton Inference Server（內網 GPU 主機，推論後端維運團隊）  │
    │  LLM Backbone（openai/gpt-oss-20b）             │
    │  Embedding Model（nvidia/nv-embed-v2）          │
    └─────────────────────────────────────────────────┘
@@ -146,13 +146,13 @@
 | 工作流層 | `rag_system/agent/` | LangGraph 節點、Agent 狀態、對話記憶 |
 | 服務層 | `rag_system/services/` | 文件攝取、混合檢索、格式轉換、對話儲存 |
 | 核心層 | `rag_system/core/` | 設定、工廠、Prompt、安全控制、稽核、評估 |
-| 維運層 | `scripts/` | Reindex、監控報告、V&V 評估、版本追蹤 |
+| 維運層 | `scripts/` | Reindex、稽核摘要、V&V 評估、版本追蹤 |
 
 ### 3.3 部署拓樸
 
 - 容器化：Docker Compose 統一管理。
 - 離線：`save_images.sh` 打包所有映像為 `.tar`，可搬運至內網。
-- 外部依賴：僅 Triton GPU 主機，透過內網 IP 連線。
+- 推論後端依賴：僅 Triton GPU 主機，透過內網 IP 連線。
 - 持久化：pgvector volume、`data/audit_logs/`、`data/versions/`、`data/converted_md/`。
 
 ---
@@ -182,7 +182,7 @@
 | FR-A-01 | 系統**應**提供 OpenAI 相容 `POST /v1/chat/completions` 端點，支援 streaming 與 non-streaming 兩種模式。 | ✅ | 對齊 OpenAI SDK 整合測試。 |
 | FR-A-02 | 系統**應**提供 `GET /v1/models` 以供前端探測可用模型清單。 | ✅ | API 契約測試。 |
 | FR-A-03 | 系統**應**提供 `POST /v1/upload`、`POST /v1/upload/batch`、`DELETE /v1/documents/{filename}`、`GET /v1/documents`、`POST /v1/reindex`。 | ✅ | API 契約測試。 |
-| FR-A-04 | 系統**應**提供無認證 `GET /health` 端點供監控使用。 | ✅ | API 契約測試。 |
+| FR-A-04 | 系統**應**提供無認證 `GET /health` 端點供健康檢查使用。 | ✅ | API 契約測試。 |
 | FR-A-05 | 系統**應**支援 CORS，且允許來源透過 `ALLOWED_ORIGINS` 環境變數控制（逗號分隔白名單；預設不應為 `*` 於生產環境）。 | ✅ | CORS pre-flight 整合測試。 |
 | FR-A-06 | Streaming 回應**應**遵循 SSE（`text/event-stream`）格式，每個 token 一個 `data:` chunk，並以 `data: [DONE]` 結束。 | ✅ | SSE 串流整合測試。 |
 
@@ -207,7 +207,7 @@
 
 | ID | 需求描述 | 可驗證性 | 驗證方法 |
 |---|---|---|---|
-| FR-O-01 | 系統**應**完全容器化；外部使用者僅需 `docker compose up -d` 即可啟動全部服務。 | ✅ | CI smoke test：乾淨環境啟動 + `/health` 200。 |
+| FR-O-01 | 系統**應**完全容器化；內網使用者僅需 `docker compose up -d` 即可啟動全部服務。 | ✅ | CI smoke test：乾淨環境啟動 + `/health` 200。 |
 | FR-O-02 | 系統**應**提供 `save_images.sh` 將所有映像匯出為 tar 檔，總大小 ≤ 6 GB，便於離線搬運。 | ✅ | 打包後檔案大小檢查。 |
 | FR-O-03 | 所有設定**應**集中於 `ISO42001Deploy/.env`，搬遷時僅需修改 `LLM_HOST` 一項。 | ◐ | 文件審查 + 部署演練。 |
 | FR-O-04 | 系統**應**提供版本追蹤腳本 `scripts/version_tracker.py`，支援 `snapshot / diff / verify / list` 四個子命令，並可選 `--backup` 同步輸出 tar.gz。 | ✅ | CLI 行為測試。 |
@@ -231,16 +231,16 @@
 | NFR-S-09 | 系統**應**預設啟用 SSL 驗證（`VERIFY_SSL=true`）；該設定**必須可由環境變數覆寫且實際生效**。 | ✅ | Config 載入測試。 |
 | NFR-S-10 | 系統**應**將 `ALLOWED_ORIGINS` 限制為白名單；生產環境**不得**設為 `*`。 | ◐ | 部署檢核表（pre-prod gate）。 |
 
-### 5.2 監控與稽核需求（NFR-M，對應 ISO 42001 A.6）
+### 5.2 稽核與維運需求（NFR-M，對應 ISO 42001 A.6）
 
 | ID | 需求描述 | 可驗證性 | 驗證方法 |
 |---|---|---|---|
 | NFR-M-01 | 系統**應**對每次查詢、拒絕、上傳、reindex、認證事件、安全告警寫入結構化稽核日誌（JSONL，每日滾動）。 | ✅ | 整合測試：呼叫 API 後檢查 `audit_*.jsonl`。 |
 | NFR-M-02 | 稽核日誌**應**包含：時間、session_id、event_type、scope_check、model_name、response_time_ms、retrieval_doc_count、citation_count、retry_count、anomaly_flags。 | ✅ | JSON schema 比對。 |
 | NFR-M-03 | 系統**應**以滑動視窗實施即時異常偵測：延遲突增（> 2× p95）、拒絕率突升（> 50% 近10筆）、安全事件叢集（≥3）、連續重試（retry_count ≥ 2）。 | ✅ | `tests/unit/test_anomaly_detector.py`（15 cases）。 |
-| NFR-M-04 | 系統**應**提供 `scripts/generate_monitoring_report.py`，輸出 JSON + Markdown 雙格式之每日／月度監控報告。 | ✅ | 腳本輸出格式檢查。 |
+| NFR-M-04 | 系統**應**可由稽核日誌輸出 JSON + Markdown 雙格式之每日／月度稽核摘要報告。 | ✅ | 報告輸出格式檢查。 |
 | NFR-M-05 | 系統**應**提供版本追蹤：SHA-256 快照、差異比對、完整性驗證；變更**應**同步寫入 `CHANGELOG.md`，並保留人工「審核簽名」欄位。 | ✅ | 腳本行為測試 + CHANGELOG 格式檢查。 |
-| NFR-M-06 | 監控報告**應**保留至少 24 個月，作為稽核證據。 | ◌ | 維運程序文件。 |
+| NFR-M-06 | 稽核摘要報告**應**保留至少 24 個月，作為稽核證據。 | ◌ | 維運程序文件。 |
 
 ### 5.3 偏誤與公平性需求（NFR-F，對應 ISO 42001 A.5）
 
@@ -263,7 +263,7 @@
 
 | ID | 需求描述 | 可驗證性 | 驗證方法 |
 |---|---|---|---|
-| NFR-P-01 | 在標準硬體（外部 GPU；本機 4 vCPU / 8 GB）下，非串流查詢的 P95 延遲**應** ≤ 8 秒。 | ✅ | 負載測試（locust / k6）。 |
+| NFR-P-01 | 在標準硬體（內網 GPU；本機 4 vCPU / 8 GB）下，非串流查詢的 P95 延遲**應** ≤ 8 秒。 | ✅ | 負載測試（locust / k6）。 |
 | NFR-P-02 | 串流查詢的首 token 延遲（TTFT）**應** ≤ 2 秒。 | ✅ | SSE 計時測試。 |
 | NFR-P-03 | 在 60 rpm 速率限制下，系統**應**穩定運行不出現記憶體洩漏（24 hr soak test）。 | ◐ | 24 小時壓測。 |
 
@@ -283,7 +283,7 @@
 |---|---|---|---|---|
 | **A.5.2** AI 影響評估 | 評估對個人 / 群體的潛在影響 | NFR-F-03 | `docs/governance/ETHICS_CHECKLIST.md` | 倫理審查清單（人工填寫） |
 | **A.5.3** 偏誤評估 | 評估訓練／檢索資料偏誤 | NFR-F-01, F-02 | `core/bias_evaluator.py` | `test_bias_fairness.py` 測試報告 |
-| **A.6.2.4** 生命週期監控 | 持續監控部署後行為 | NFR-M-01..04 | `core/anomaly_detector.py`、`core/audit_logger.py` | `data/reports/monitoring_*.md` |
+| **A.6.2.4** 生命週期監督 | 持續監督部署後行為 | NFR-M-01..04 | `core/anomaly_detector.py`、`core/audit_logger.py` | `AUDIT_LOG_SCHEMA.md`、`data/audit_logs/audit_*.jsonl` |
 | **A.6.2.5** 變更管理 | 受控之變更與版本管理 | NFR-M-05 | `scripts/version_tracker.py`、`CHANGELOG.md` | 快照 + 雜湊驗證紀錄 |
 | **A.6.2.8** V&V | 驗證與確認 | NFR-V-01..04 | `core/retrieval_evaluator.py`、`core/answer_evaluator.py` | `data/reports/vv_report_*.md` |
 | **A.8.2** 存取控制 | 認證與授權 | NFR-S-01..05 | `core/auth.py`、`core/rate_limiter.py` | `test_auth.py` 測試報告（12 cases） |
@@ -305,17 +305,17 @@
 | LangChain | 0.3.x | 🟡 同上 | 同上 |
 | FastAPI | 0.100+ | 🟢 穩定 | 低 |
 | PostgreSQL + pgvector | PG 16 + pgvector 0.7 | 🟢 穩定 | 低 |
-| Triton Inference Server | 24.xx | 🟢 NVIDIA 官方支援 | 由外部團隊維運 |
+| Triton Inference Server | 24.xx | 🟢 NVIDIA 官方支援 | 由推論後端維運團隊維運 |
 | nv-embed-v2 | NVIDIA 1.5B | 🟢 公開可下載 | 模型本身為固定資產 |
 | openai/gpt-oss-20b | 20B | 🟡 開源權重模型 | 推理品質需 V&V 持續驗證 |
 
-### 7.2 外部相依評估
+### 7.2 推論後端相依評估
 
 | 依賴 | 影響 | 緩解 |
 |---|---|---|
 | GPU 主機 / Triton | 🔴 致命 | 提供 `/health` 健康檢查 + 5xx 明確錯誤；運維協議（SLA）約定 |
 | pgvector | 🔴 致命 | 容器內建；資料 volume 持久化；版本鎖定 |
-| 外網下載 | 🟢 無 | 全離線打包（`save_images.sh`） |
+| 離線部署 | 🟢 無 | 全離線打包（`save_images.sh`） |
 
 ### 7.3 開發工作量估算
 
@@ -323,7 +323,7 @@
 |---|---|---|---|
 | Phase 3：Prompt 安全 | 3 新增 + 1 修改 | ~ 5 人日 | 無 |
 | Phase 2：存取控制 | 2 新增 + 2 修改 | ~ 4 人日 | Phase 3 完成（共用 audit） |
-| Phase 1：監控異常 | 2 新增 + 1 修改 | ~ 3 人日 | Phase 2 |
+| Phase 1：異常分析 | 2 新增 + 1 修改 | ~ 3 人日 | Phase 2 |
 | Phase 5：V&V | 3 新增 + 1 資料集建立 | ~ 5 人日 | Phase 1 |
 | Phase 4：偏誤倫理 | 3 新增 + 1 文件 | ~ 3 人日 | Phase 5 |
 | **合計** | — | **~ 20 人日** | — |
@@ -378,7 +378,7 @@
 | 風險 | 機率 | 影響 | 緩解措施 |
 |---|---|---|---|
 | LangGraph API 變動破壞工作流 | 中 | 高 | 鎖版本 + Smoke test |
-| Embed proxy 與 Triton 介面漂移 | 低 | 高 | 雙向契約測試 |
+| Embed proxy 與 Triton 介面變更 | 低 | 高 | 雙向契約測試 |
 | pgvector 索引效能退化 | 低 | 中 | `check_db_status.py` 巡檢；定期 ANALYZE |
 | LLM 幻覺引用不存在條文 | 中 | 高 | `verify_node` + 重試上限 |
 
@@ -396,7 +396,7 @@
 | 風險 | 機率 | 影響 | 緩解措施 |
 |---|---|---|---|
 | 內網無 Git / GitLab | 高 | 中 | 自包含的 `version_tracker.py` |
-| GPU 主機更換造成 `LLM_HOST` 漂移 | 中 | 中 | 集中於 `.env`，僅一處需改 |
+| GPU 主機更換造成 `LLM_HOST` 變更 | 中 | 中 | 集中於 `.env`，僅一處需改 |
 | 法規修訂未及時 reindex | 高 | 高 | 維運 SOP：法規公報發布 24 hr 內 reindex |
 
 ---
@@ -410,7 +410,7 @@ Pre-0: 清理失效測試（tests/unit/test_sources.py）
    │
    ├─ Phase 3 (Prompt 安全) ─ 最高優先：直接阻擋資料洩漏路徑
    ├─ Phase 2 (存取控制)     ─ 次高：補上所有未受保護端點
-   ├─ Phase 1 (監控異常)     ─ 為 Phase 4/5 提供基礎設施
+   ├─ Phase 1 (異常分析)     ─ 為 Phase 4/5 提供基礎設施
    ├─ Phase 5 (V&V)          ─ 稽核證據價值高
    └─ Phase 4 (偏誤倫理)     ─ 最低：依賴前述設施
 ```
@@ -420,10 +420,10 @@ Pre-0: 清理失效測試（tests/unit/test_sources.py）
 | 里程碑 | 預期產出 | 退出條件（Exit Criteria） |
 |---|---|---|
 | M1：安全基線 | Phase 3 + Phase 2 完成 | 142 cases 中安全相關（91 cases）全綠 |
-| M2：可觀測基線 | Phase 1 完成 | 監控報告腳本可正常輸出 JSON+MD |
+| M2：可觀測基線 | Phase 1 完成 | 稽核摘要可正常輸出 JSON+MD |
 | M3：V&V 證據 | Phase 5 完成 | golden dataset ≥ 30 筆，V&V 報告達門檻 |
 | M4：合規完整 | Phase 4 完成 | 倫理審查清單簽署、偏誤測試全綠 |
-| M5：v1.0.0 發佈 | 全套件測試 + 監控 + V&V 報告 | 完成版本快照與 tar.gz 備份 |
+| M5：v1.0.0 發佈 | 全套件測試 + 稽核摘要 + V&V 報告 | 完成版本快照與 tar.gz 備份 |
 
 ---
 
@@ -470,7 +470,7 @@ Pre-0: 清理失效測試（tests/unit/test_sources.py）
 | S-1 | 在黃金資料集中加入 `expected_docs` 後，將 Hit Rate 與 MRR 計算自動納入 CI 流程。 | 防止後續模型／檢索改動使品質回退而無人發現。 |
 | S-2 | 對 `anomaly_detector` 之滑動視窗大小（`window=50`）與門檻（`2× p95`、`> 50%`）保留 config 參數化空間，便於後續依正式流量調整。 | 上線初期流量分佈未知，固定門檻可能誤報或漏報。 |
 | S-3 | `verify_node` 重試上限 `MAX_RETRIES=2` 建議移至 `RAGConfig`，避免日後微調須改 code。 | 提升維運效率。 |
-| S-4 | 監控報告除日／月度外，建議再產出「每安全事件**單獨**事件報告」，便於資安單位處理單案。 | 提升 A.6 應變時效。 |
+| S-4 | 稽核摘要除日／月度外，建議再產出「每安全事件**單獨**事件報告」，便於資安單位處理單案。 | 提升 A.6 應變時效。 |
 | S-5 | 將 `data/audit_logs/` 改為「append-only 檔案權限 + 定期離線備份」雙重保護。 | 強化 A.9 不可否認性。 |
 
 ### 11.4 審查委員會簽署欄

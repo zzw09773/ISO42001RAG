@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>專案結構導覽（Project Structure）</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · PROJECT_STRUCTURE.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="project-structure">專案結構導覽（Project Structure）</h1>
+<blockquote>
+<p>ISO 42001 RAG 法律文件查詢系統 — 目錄地圖。供稽核員、維運人員、新進開發者
+快速定位。最後更新：2026-07-07。</p>
+<p>稽核證據總入口見 <code>AUDIT_EVIDENCE_INDEX.md</code>；架構說明見
+<code>RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</code>。
+本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。</p>
+</blockquote>
+<h2 id="_1">頂層</h2>
+<table>
+<thead>
+<tr>
+<th>目錄／檔案</th>
+<th>角色</th>
+<th>性質</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RAG/</code></td>
+<td>RAG 主系統（FastAPI + LangGraph 檢索生成 + 稽核）</td>
+<td>原始碼＋證據</td>
+</tr>
+<tr>
+<td><code>embed_proxy/</code></td>
+<td>OpenAI ↔ Triton gRPC embedding 轉譯層</td>
+<td>原始碼</td>
+</tr>
+<tr>
+<td><code>code-server/</code></td>
+<td>瀏覽器 IDE image，預裝 Docker/container extension，掛載整個專案</td>
+<td>設定</td>
+</tr>
+<tr>
+<td><code>keycloak/</code></td>
+<td>Keycloak realm/client 匯入設定，供 OpenWebUI OIDC 與強密碼註冊</td>
+<td>設定</td>
+</tr>
+<tr>
+<td><code>nginx/</code></td>
+<td>HTTPS 反向代理設定與自簽憑證腳本</td>
+<td>設定</td>
+</tr>
+<tr>
+<td><code>docker-compose.yaml</code></td>
+<td>外部稽核準備服務編排：rag-api / embed-proxy / jupyter / openwebui / keycloak / code-server / nginx，加上 db 依賴</td>
+<td>設定</td>
+</tr>
+<tr>
+<td><code>docker-compose.hardening.yml</code></td>
+<td>部署強化 override（R-INFRA 修正，可一鍵套用）</td>
+<td>設定</td>
+</tr>
+<tr>
+<td><code>.env.example</code></td>
+<td>環境變數範本（佔位值＋安全強化註解）</td>
+<td>設定範本</td>
+</tr>
+<tr>
+<td><code>deploy.sh</code> / <code>save_images.sh</code></td>
+<td>離線部署管線</td>
+<td>腳本</td>
+</tr>
+<tr>
+<td><code>deploy_packages/</code></td>
+<td>部署包（images tar＋code zip，<strong>git 忽略</strong>，可重建）</td>
+<td>建置產物</td>
+</tr>
+<tr>
+<td><code>images/</code></td>
+<td>Docker tar 映像（<strong>git 忽略</strong>）</td>
+<td>建置產物</td>
+</tr>
+<tr>
+<td><code>_dev_archive/</code></td>
+<td>舊開發快照已清除；未來若重建仍不作為稽核證據</td>
+<td>開發歸檔</td>
+</tr>
+<tr>
+<td><code>AUDIT_EVIDENCE_INDEX.md</code></td>
+<td>稽核證據總導覽</td>
+<td>證據</td>
+</tr>
+<tr>
+<td><code>PROJECT_STRUCTURE.md</code></td>
+<td>本檔</td>
+<td>文件</td>
+</tr>
+</tbody>
+</table>
+<h2 id="rag">RAG/ 主系統</h2>
+<table>
+<thead>
+<tr>
+<th>路徑</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rag_system/agent/</code></td>
+<td>LangGraph 工作流：<code>graph.py</code>（圖拓撲）、<code>nodes.py</code>（classify/retrieve/generate/verify）、<code>state.py</code>、<code>react_workflow.py</code>（ReAct 原型，預設關閉）</td>
+</tr>
+<tr>
+<td><code>rag_system/core/</code></td>
+<td><code>audit_logger.py</code>（雜湊鏈日誌）、<code>auth.py</code>、<code>prompts.py</code>（單一 Prompt 基線版控）、<code>factory.py</code>、<code>input_sanitizer.py</code>、<code>output_filter.py</code>、<code>config.py</code></td>
+</tr>
+<tr>
+<td><code>rag_system/services/</code></td>
+<td><code>retrieval.py</code>（六階段混合檢索）、<code>ingestion.py</code>（Article-Aware Chunking）、<code>conversation_store.py</code></td>
+</tr>
+<tr>
+<td><code>scripts/</code></td>
+<td><code>reindex.py</code>（索引維運）、<code>version_tracker.py</code>（SHA-256 快照版控）、<code>run_vv_evaluation.py</code></td>
+</tr>
+<tr>
+<td><code>data/converted_md/</code></td>
+<td>知識庫原始法規 markdown（2 部法）</td>
+</tr>
+<tr>
+<td><code>data/audit_logs/</code></td>
+<td>稽核日誌 JSONL（雜湊鏈，<strong>git 忽略</strong> — 含查詢內容）</td>
+</tr>
+<tr>
+<td><code>data/versions/</code></td>
+<td>外部稽核準備已清空，只保留 <code>.gitkeep</code>；正式版控快照可重新產生</td>
+</tr>
+<tr>
+<td><code>data/processed/</code></td>
+<td>向量庫 docstore（執行期，忽略）</td>
+</tr>
+<tr>
+<td><code>tests/</code></td>
+<td>評估與單元測試（V&amp;V、prompt 安全、偏誤公平、認證、異常偵測）</td>
+</tr>
+<tr>
+<td><code>docs/</code></td>
+<td>合規文件（見下）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ragdocs">RAG/docs/ 合規文件</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>對應</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SYSTEM_ARCHITECTURE_ANALYSIS.md</code></td>
+<td>系統性架構分析（74 主張＋12 限制）</td>
+</tr>
+<tr>
+<td><code>AUDIT_LOG_SCHEMA.md</code></td>
+<td>稽核日誌格式（A.5.28/A.8.15）</td>
+</tr>
+<tr>
+<td><code>SAFETY_CONTROLS.md</code></td>
+<td>安全縱深 9 守則（A.8）</td>
+</tr>
+<tr>
+<td><code>PROMPT_VERSIONS.md</code></td>
+<td>Prompt 基線版控史（A.4）</td>
+</tr>
+<tr>
+<td><code>INTRANET_DEPLOYMENT_RUNBOOK.html</code></td>
+<td>部署 runbook</td>
+</tr>
+<tr>
+<td><code>requirements_review_report.{md,html}</code></td>
+<td>需求審查報告（v1.0.0）</td>
+</tr>
+<tr>
+<td><code>governance/</code></td>
+<td>治理文件包（見下）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ragdocsgovernance">RAG/docs/governance/ 治理文件包</h3>
+<p><code>MODEL_CARD</code> · <code>RACI_MATRIX</code> · <code>AI_RISK_ASSESSMENT</code> · <code>AI_IMPACT_ASSESSMENT</code> ·
+<code>INCIDENT_RESPONSE</code> · <code>HUMAN_OVERSIGHT</code> · <code>ETHICS_CHECKLIST</code> · <code>DEPLOYMENT_HARDENING</code></p>
+<h2 id="git">git 衛生原則</h2>
+<ul>
+<li><strong>忽略</strong>：建置產物（deploy_packages、images、<em>.tar、</em>.zip）、執行期資料
+  （audit_logs、reports、processed）、機密（.env、ssl 私鑰）、本機 IDE/工具狀態。</li>
+<li><strong>追蹤</strong>：原始碼、設定範本、文件、golden_dataset、必要 <code>.gitkeep</code>。</li>
+<li>外部稽核準備以 Git 管理原始碼與文件；正式內網若不使用 Git，可重新啟用
+  <code>version_tracker.py</code> 產生 SHA-256 快照（<code>RAG/data/versions/</code>）＋ CHANGELOG。</li>
+</ul>
+<h2 id="_2">維運建議（未執行，待決定）</h2>
+<ul>
+<li>外部稽核準備目前已刪除舊部署包、Docker tar、audit log、版本 snapshot、快取、舊 <code>.env</code> 與本機工具狀態。</li>
+</ul>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>PROJECT_STRUCTURE.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

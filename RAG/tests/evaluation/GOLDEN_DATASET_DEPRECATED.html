@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>golden_dataset.json 說明</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/tests/evaluation/GOLDEN_DATASET_DEPRECATED.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="golden_datasetjson">golden_dataset.json 說明</h1>
+<p><strong>整理日期</strong>：2026-07-07</p>
+<p><code>RAG/tests/evaluation/golden_dataset.json</code> 保留作為 RAG 主系統 V&amp;V 範例資料與單元測試輸入。
+外部稽核準備前，由龔修潁確認實際採用的核定資料集版本、評估時間與報告位置。</p>
+<h2 id="_1">使用原則</h2>
+<ol>
+<li>V&amp;V 報告需記錄資料集版本、筆數、操作者與執行日期。</li>
+<li>若調整題目、期望關鍵字或期望條文，需同步更新 <code>RAG/CHANGELOG.md</code> 與版本快照。</li>
+<li>稽核時以 <code>AUDIT_EVIDENCE_INDEX.md</code> 所列主系統證據為準。</li>
+</ol>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/tests/evaluation/GOLDEN_DATASET_DEPRECATED.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

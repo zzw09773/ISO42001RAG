@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt 基線版本管理</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/PROMPT_VERSIONS.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="prompt">Prompt 基線版本管理</h1>
+<blockquote>
+<p>ISO/IEC 42001 A.4 — AI artifact versioning<br>
+對應實作：<code>rag_system/core/prompts.py:PROMPT_VERSIONS</code><br>
+對應稽核欄位：<code>query</code> 事件的 <code>prompt_version_hash</code><br>
+最後更新：2026-07-07</p>
+</blockquote>
+<hr>
+<h2 id="1">1. 管理原則</h2>
+<p>外部稽核準備版採 <strong>單一 Prompt 基線版本</strong> 管理，不再對 system prompt、template、
+固定回覆訊息分別列版本。這樣稽核時只需要確認一個基線版號、一個 hash、一份變更紀錄。</p>
+<p>目前核定基線：</p>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prompt 基線</td>
+<td><code>SYSTEM_PROMPT_BASELINE</code></td>
+</tr>
+<tr>
+<td>目前版本</td>
+<td><code>1.1.0</code></td>
+</tr>
+<tr>
+<td>稽核欄位</td>
+<td><code>prompt_version_hash</code></td>
+</tr>
+<tr>
+<td>RAG API 系統版號</td>
+<td><code>rag_system/core/version.py:SYSTEM_VERSION = "1.1.0"</code></td>
+</tr>
+<tr>
+<td>權責</td>
+<td>龔修潁（RAG 相關後端）</td>
+</tr>
+</tbody>
+</table>
+<p><code>prompt_version_hash</code> 是對 <code>PROMPT_VERSIONS</code> 的 canonical JSON 做 SHA-256。雖然程式內仍有多個
+prompt/template 字串，稽核與變更管理只看 <code>SYSTEM_PROMPT_BASELINE</code>。
+RAG API 的 OpenAPI metadata、<code>/health</code> 與 <code>/v1/models</code> 也由 <code>rag_system/core/version.py</code>
+顯示同一個系統版號；Open WebUI 對外模型 id 保持 <code>rag-agent</code>，避免既有前端設定漂移。</p>
+<hr>
+<h2 id="2">2. 升版規則</h2>
+<table>
+<thead>
+<tr>
+<th>等級</th>
+<th>何時升</th>
+<th>範例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MAJOR (<code>x.0.0</code>)</td>
+<td>回答角色、輸出格式、拒答政策或安全邊界有重大改變</td>
+<td>改變回答 schema、改變適用法規範圍</td>
+</tr>
+<tr>
+<td>MINOR (<code>0.x.0</code>)</td>
+<td>新增能力或新增明確處理分支，但仍維持既有行為相容</td>
+<td>新增 capability 固定回覆、強化特定主題拒答</td>
+</tr>
+<tr>
+<td>PATCH (<code>0.0.x</code>)</td>
+<td>用字、格式、錯字或不改變行為意圖的微調</td>
+<td>修正標點、補充範例文字</td>
+</tr>
+</tbody>
+</table>
+<p>升版時必須：</p>
+<ol>
+<li>更新 <code>rag_system/core/prompts.py</code> 的 <code>SYSTEM_PROMPT_BASELINE</code>。</li>
+<li>在本文件 §3 新增一列。</li>
+<li>執行 V&amp;V 或內網核定驗證清單，確認無不可接受退化。</li>
+<li>產生版本快照並更新 <code>RAG/CHANGELOG.md</code>。</li>
+<li>記錄新 <code>prompt_version_hash</code>。</li>
+</ol>
+<hr>
+<h2 id="3">3. 基線版本歷程</h2>
+<table>
+<thead>
+<tr>
+<th>基線版本</th>
+<th>日期</th>
+<th>操作者</th>
+<th>變更摘要</th>
+<th>驗證</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>1.0.0</code></td>
+<td>2026-04-13</td>
+<td>龔修潁（RAG 相關後端）</td>
+<td>初版法律文件助理 prompt 基線，包含檢索回答、拒答、安全攔截、分類與摘要模板</td>
+<td>初始功能測試</td>
+</tr>
+<tr>
+<td><code>1.1.0</code></td>
+<td>2026-07-07</td>
+<td>龔修潁（RAG 相關後端）</td>
+<td>統一為單一 Prompt 基線版本；保留強化後的中華民國軍事法規回答、安全拒答、能力說明與中共/大陸相關硬擋規則</td>
+<td>外部稽核準備基線，啟動後重新產生 V&amp;V</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="4-hash">4. Hash 對照</h2>
+<table>
+<thead>
+<tr>
+<th>基線版本</th>
+<th>prompt_version_hash</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>1.1.0</code></td>
+<td><code>e61133c0a264b08604706292ba2dbf59b3092e1d9208b1e5c1f971b88c79dc3c</code></td>
+<td>對 <code>{"SYSTEM_PROMPT_BASELINE":"1.1.0"}</code> 的 canonical JSON 產生</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5">5. 稽核回答口徑</h2>
+<p>外部稽核若詢問「為何之前看到多個 prompt 版本」，回答如下：</p>
+<blockquote>
+<p>舊文件把每個 prompt/template 都分別列版，造成稽核理解成本過高。現行外部稽核準備版已改為單一
+<code>SYSTEM_PROMPT_BASELINE</code>，所有 prompt 字串視為同一套受控 AI artifact。任何 prompt 字串調整，
+都必須升版這個單一基線、重跑驗證並留下 <code>prompt_version_hash</code>。</p>
+</blockquote>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/PROMPT_VERSIONS.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

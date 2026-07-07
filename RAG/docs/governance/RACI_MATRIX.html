@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>角色與職責矩陣（RACI）— ISO 42001 RAG 法律文件查詢系統</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/governance/RACI_MATRIX.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="raci-iso-42001-rag">角色與職責矩陣（RACI）— ISO 42001 RAG 法律文件查詢系統</h1>
+<blockquote>
+<p>ISO 42001 條文 5.3（組織角色、職責與權限）/ A.3.2 證據。
+狀態：v1.1.0（2026-06-10 編製）。
+<strong>人名與職位由單位主管核定後填入</strong>——AI 不代填組織決策。</p>
+</blockquote>
+<p>R = 負責執行（Responsible）/ A = 最終當責（Accountable）/
+C = 事前諮詢（Consulted）/ I = 事後告知（Informed）</p>
+<table>
+<thead>
+<tr>
+<th>活動</th>
+<th>系統管理者</th>
+<th>稽核負責人</th>
+<th>需求單位代表</th>
+<th>單位主管</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系統部署與變更（依 RUNBOOK）</td>
+<td>R</td>
+<td>C</td>
+<td>I</td>
+<td>A</td>
+</tr>
+<tr>
+<td>版本快照與 CHANGELOG 維護</td>
+<td>R</td>
+<td>C</td>
+<td>—</td>
+<td>A</td>
+</tr>
+<tr>
+<td>V&amp;V 評估執行與結果核定</td>
+<td>R</td>
+<td>A</td>
+<td>C</td>
+<td>I</td>
+</tr>
+<tr>
+<td>倫理審查（ETHICS_CHECKLIST，每季）</td>
+<td>C</td>
+<td>R</td>
+<td>C</td>
+<td>A</td>
+</tr>
+<tr>
+<td>安全事件回應（INCIDENT_RESPONSE）</td>
+<td>R</td>
+<td>A</td>
+<td>I</td>
+<td>I</td>
+</tr>
+<tr>
+<td>業務目標（Hit Rate ≥ 0.90）變更</td>
+<td>I</td>
+<td>C</td>
+<td>R</td>
+<td>A</td>
+</tr>
+<tr>
+<td>稽核日誌完整性驗證</td>
+<td>R</td>
+<td>A</td>
+<td>—</td>
+<td>I</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_1">人員指派與權責依據</h2>
+<p><strong>權責依據文件</strong>：本表角色的實際人員指派與責任歸屬，依單位既有權責文件為準
+（文件名稱／文號：＿＿＿＿＿＿＿＿）。若該文件已涵蓋以下角色，本表僅作
+角色—活動對應之導覽，無須重複簽署。</p>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th>對應權責文件中的職位（填寫）</th>
+<th>備註</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系統管理者</td>
+<td></td>
+<td>CHANGELOG v1.1.0 記載部署操作者為 龔修潁（RAG 相關後端）（操作紀錄，非責任歸屬）</td>
+</tr>
+<tr>
+<td>稽核負責人</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>需求單位代表</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>單位主管（當責）</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/RACI_MATRIX.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

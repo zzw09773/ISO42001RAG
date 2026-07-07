@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Online V&V — actually call the RAG API and compute true Hit Rate.
+線上 V&V — actually call the RAG API and compute true Hit Rate.
 
 Unlike scripts/run_extended_vv.py which is offline (no API call), this script
 sends each golden-dataset query to the running RAG API, parses the cited
@@ -27,6 +27,7 @@ Usage:
 """
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -231,7 +232,7 @@ def render_markdown(report: dict) -> str:
     rej_acc = report["aggregate"]["rejection_accuracy"]
 
     lines = [
-        "# ISO 42001 A.6 Online V&V 報告（實打 RAG API 計算 Hit Rate）",
+        "# ISO 42001 A.6 線上 V&V 報告（實打 RAG API 計算 Hit Rate）",
         "",
         f"**產生時間**：{report['generated_at']}",
         f"**RAG API**：{report['rag_url']}",
@@ -273,8 +274,9 @@ def render_markdown(report: dict) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Online V&V: real Hit Rate via RAG API")
-    ap.add_argument("--rag-url", default="http://localhost:8043", help="RAG API base URL")
+    ap = argparse.ArgumentParser(description="線上 V&V: real Hit Rate via RAG API")
+    ap.add_argument("--rag-url", default=os.environ.get("RAG_API_URL", "http://localhost:8043"),
+                    help="RAG API base URL（容器內由 RAG_API_URL=http://rag-api:8000 提供；host 預設 localhost:8043）")
     ap.add_argument("--api-key", default=None, help="Bearer token (omit for intranet mode)")
     ap.add_argument("--golden", default=None, help="Golden dataset path")
     ap.add_argument("--timeout", type=float, default=60.0, help="Per-query timeout (sec)")

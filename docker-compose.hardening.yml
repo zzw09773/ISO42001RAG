@@ -1,0 +1,63 @@
+# ──────────────────────────────────────────────────────────────────────
+# 部署強化 Override（Deployment Hardening Override）
+# ──────────────────────────────────────────────────────────────────────
+# 對應 SYSTEM_ARCHITECTURE_ANALYSIS.md §7.1 的部署組態風險。
+# 套用方式（需維護窗口，會 recreate 容器）：
+#   docker compose -f docker-compose.yaml -f docker-compose.hardening.yml up -d
+#
+# 本檔不修改主 docker-compose.yaml，套用前後皆可一鍵切換，符合可回復原則。
+# 套用前請先確認 .env 已填入強密碼（見 .env.example 的 [R-INFRA-3] 標註）。
+# ──────────────────────────────────────────────────────────────────────
+services:
+
+  # [R-INFRA-3] DB：埠僅綁 127.0.0.1，不對內網其他主機開放；帳密由 .env 強制
+  db:
+    ports: !override
+      - "127.0.0.1:15432:5432"   # 僅本機可連，杜絕跨主機直連繞過應用層
+
+  # [R-INFRA-1] embed-proxy：只供容器內 RAG/Jupyter/Monitoring 使用，host 端不需對外。
+  embed-proxy:
+    ports: !override
+      - "127.0.0.1:17100:7100"
+
+  # [R-INFRA-1] rag-api：埠僅綁 127.0.0.1；對外入口應經 nginx 或受控網段。
+  rag-api:
+    ports: !override
+      - "127.0.0.1:8043:8000"
+
+  # [R-INFRA-1] openwebui：主要內網入口走 nginx HTTPS；direct port 僅本機。
+  openwebui:
+    ports: !override
+      - "127.0.0.1:${OPENWEBUI_PORT:-18088}:8080"
+
+  # [R-INFRA-1] keycloak：管理入口僅本機或跳板。
+  keycloak:
+    ports: !override
+      - "127.0.0.1:${KEYCLOAK_PORT:-18080}:8080"
+
+  # [R-INFRA-1] monitoring：direct port 僅本機，儀表板經 nginx /monitoring/ 存取。
+  monitoring:
+    ports: !override
+      - "127.0.0.1:8200:8200"
+
+  # [R-INFRA-2] Jupyter：生產環境最小化——僅綁本機 + 移除 sudo + 唯讀掛載原始碼
+  #   完全停用更佳（reindex 可用 docker exec rag-api 執行）；若須保留開發能力，至少：
+  jupyter:
+    ports: !override
+      - "127.0.0.1:25678:8888"
+    environment:
+      GRANT_SUDO: "no"           # 移除容器內 root 提權
+    # 注意：唯讀掛載會使 jupyter 無法寫 RAG/（含 reindex 落地），僅供唯讀查閱；
+    #   若不需 jupyter 寫入能力，取消下行註解改唯讀：
+    # volumes: !override
+    #   - ./RAG:/home/jovyan/work:ro
+
+  # [R-INFRA-6] code-server 掛載整個專案與 Docker socket，必須限制 host direct port。
+  code-server:
+    ports: !override
+      - "127.0.0.1:${CODESERVER_PORT:-18443}:8080"
+
+# ── 套用後驗證 ──────────────────────────────────────────────────────────
+# 1. docker compose ps 確認完整 stack healthy
+# 2. ss -tlnp | grep -E '15432|17100|8043|18088|18080|8200|25678|18443' 應只見 127.0.0.1 綁定
+# 3. 跑 monitoring_addon/scripts/run_online_vv.py 確認功能未受影響

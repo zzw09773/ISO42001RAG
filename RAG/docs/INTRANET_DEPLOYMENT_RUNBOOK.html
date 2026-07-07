@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>ISO42001 內網部署 Runbook — v1.1.0</title>
+<style>
+:root{
+  --bg:#0f1115; --bg2:#161922; --bg3:#1f2330;
+  --fg:#e6e8eb; --fg-dim:#9aa0a8;
+  --accent:#7aa2f7; --good:#9ece6a; --warn:#e0af68; --bad:#f7768e;
+  --line:#2d3140;
+  --code-bg:#0b0d12; --code-fg:#cdd6f4;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:"Inter","Noto Sans TC","PingFang TC",system-ui,sans-serif;font-size:15px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:42px 32px 96px}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.5px}
+h2{font-size:22px;margin:48px 0 14px;padding-top:16px;border-top:1px solid var(--line);letter-spacing:-.3px}
+h3{font-size:17px;margin:24px 0 10px;color:var(--accent);font-weight:600}
+.lead{color:var(--fg-dim);margin:0 0 30px}
+.meta{display:flex;gap:18px;color:var(--fg-dim);font-size:13px;margin-bottom:24px}
+.meta span{padding:4px 10px;background:var(--bg3);border-radius:5px}
+
+.step{counter-increment:step;display:flex;gap:16px;align-items:flex-start;margin:18px 0}
+.step::before{
+  content:counter(step);background:var(--accent);color:#0b0d12;font-weight:700;
+  width:30px;height:30px;border-radius:50%;flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:13px;
+}
+.step-body{flex:1;min-width:0}
+.steps{counter-reset:step;margin-top:8px}
+
+pre,code{font-family:"JetBrains Mono","SF Mono",ui-monospace,monospace}
+code{background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:.9em;color:var(--code-fg)}
+pre{background:var(--code-bg);color:var(--code-fg);padding:14px 16px;border-radius:8px;
+    border:1px solid var(--line);overflow-x:auto;font-size:13px;margin:8px 0}
+pre code{background:transparent;padding:0}
+.cmd{position:relative}
+.cmd::before{
+  content:"$";position:absolute;left:14px;top:14px;color:var(--accent);user-select:none;
+}
+.cmd pre{padding-left:34px}
+.host{position:absolute;right:14px;top:10px;font-size:11px;color:var(--fg-dim);
+      background:var(--bg2);padding:2px 8px;border-radius:4px;user-select:none}
+
+.box{border:1px solid var(--line);border-left-width:3px;border-radius:8px;
+     padding:14px 16px;margin:12px 0;background:var(--bg2)}
+.box.expect{border-left-color:var(--good)}
+.box.warn{border-left-color:var(--warn);background:#221f15}
+.box.bad{border-left-color:var(--bad);background:#2a1820}
+.box.info{border-left-color:var(--accent)}
+.box-title{font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:6px}
+.box.expect .box-title{color:var(--good)}
+.box.warn .box-title{color:var(--warn)}
+.box.bad .box-title{color:var(--bad)}
+.box.info .box-title{color:var(--accent)}
+
+.kv{display:grid;grid-template-columns:200px 1fr;gap:8px 18px;margin:12px 0;
+    background:var(--bg2);padding:14px 18px;border-radius:8px;border:1px solid var(--line)}
+.kv dt{color:var(--fg-dim);font-size:13px}
+.kv dd{margin:0;font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--code-fg);word-break:break-all}
+
+table{width:100%;border-collapse:collapse;margin:12px 0;background:var(--bg2);border-radius:8px;overflow:hidden}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:top}
+th{background:var(--bg3);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-dim)}
+tr:last-child td{border-bottom:none}
+td.tight{font-family:"JetBrains Mono",monospace;font-size:12.5px;color:var(--code-fg)}
+
+.tag{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11.5px;
+     font-weight:600;letter-spacing:.04em;margin-left:6px}
+.tag.dev{background:#3a2456;color:#c4a7ff}
+.tag.inn{background:#1d3a47;color:#7dd3fc}
+.tag.opt{background:#2a2a2a;color:#9aa0a8}
+
+.check{margin:14px 0;padding-left:24px;list-style:none}
+.check li{position:relative;margin:6px 0;font-size:14px}
+.check li::before{
+  content:"□";position:absolute;left:-22px;top:-1px;color:var(--accent);font-size:16px
+}
+
+hr{border:none;border-top:1px solid var(--line);margin:36px 0}
+
+.toc{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+     padding:18px 22px;margin:24px 0 36px}
+.toc h3{margin:0 0 10px;color:var(--fg);font-size:14px;text-transform:uppercase;letter-spacing:.06em}
+.toc ol{margin:0;padding-left:22px}
+.toc li{margin:3px 0}
+.toc a{color:var(--accent);text-decoration:none}
+.toc a:hover{text-decoration:underline}
+
+.tabs{display:flex;gap:0;margin-top:24px;border-bottom:1px solid var(--line)}
+.tab-label{padding:8px 16px;color:var(--fg-dim);font-size:13px;border:1px solid transparent;border-bottom:none}
+
+footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);
+       color:var(--fg-dim);font-size:12px;text-align:center}
+
+@media (max-width:700px){
+  .wrap{padding:24px 18px}
+  .kv{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>ISO42001 內網部署 Runbook</h1>
+<p class="lead">從 dev 環境（172.16.120.35 gateway）搬到內網 10.53.100.12 直連 vLLM + Triton 的逐步流程。每一步附驗證指令與預期輸出。</p>
+
+<div class="meta">
+  <span>版本 v1.1.0 · 2026-06-08</span>
+  <span>目標環境 10.53.100.12</span>
+  <span>預期工時 30 分鐘</span>
+  <span>外部稽核準備乾淨基線</span>
+</div>
+
+<div class="toc">
+  <h3>本文目錄</h3>
+  <ol>
+    <li><a href="#A">A · 部署前資訊速查</a></li>
+    <li><a href="#B">B · Pre-flight：在內網機器上先確認上游服務</a></li>
+    <li><a href="#C">C · 9000 vs 9001 — Triton 埠口釐清</a></li>
+    <li><a href="#D">D · dev 端：打包 code + image</a></li>
+    <li><a href="#E">E · 傳輸到內網</a></li>
+    <li><a href="#F">F · 內網：解開 + .env 設定</a></li>
+    <li><a href="#G">G · 啟動 + 強制 recreate</a></li>
+    <li><a href="#H">H · 部署後驗證</a></li>
+    <li><a href="#Hclean">H-5 · 試做前清空資料（交付測試前）</a></li>
+    <li><a href="#I">I · 緊急回退</a></li>
+  </ol>
+</div>
+
+<!-- ===================== A ===================== -->
+<h2 id="A">A · 部署前資訊速查</h2>
+
+<dl class="kv">
+  <dt>內網 LLM</dt><dd>http://10.53.100.12:7000/v1（vLLM, 直連，無 HTTPS）</dd>
+  <dt>內網 Embed (Triton)</dt><dd>10.53.100.12:9000 (HTTP) / 9001 (gRPC) — 見 §C</dd>
+  <dt>LLM 模型名稱</dt><dd>gpt-oss-20b（reasoning model, 必須 reasoning_effort=medium）</dd>
+  <dt>Embed 模型名稱</dt><dd>nv-embed-v2（小寫，Triton 內部）</dd>
+  <dt>內網部署目錄</dt><dd>~/ISO42001Deploy（或內網既定路徑）</dd>
+  <dt>dev 打包目錄</dt><dd>/home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy</dd>
+  <dt>本版範圍</dt><dd>完整 stack：rag-api / embed-proxy / jupyter / openwebui / keycloak / code-server / nginx，加上 db 依賴</dd>
+</dl>
+
+<div class="box warn">
+  <div class="box-title">必須保留不能覆蓋</div>
+  <ul style="margin:6px 0 0;padding-left:20px;font-size:13.5px">
+    <li><code>RAG/data/audit_logs/</code> — 實際稽核紀錄與雜湊鏈，覆蓋會毀證據</li>
+    <li><code>RAG/data/versions/</code> — 內網自己的快照歷史</li>
+    <li><code>RAG/data/processed/</code> — parent docs / docstore 索引</li>
+    <li><code>RAG/data/conversation_store.db</code> — 對話歷史</li>
+    <li><code>.env</code> — 內網特有 secrets / UID / IP，自己編輯</li>
+    <li>pgvector / openwebui / keycloak / code-server volumes — 若需保留帳號與設定，更新前先備份</li>
+  </ul>
+</div>
+
+<!-- ===================== B ===================== -->
+<h2 id="B">B · Pre-flight：先確認上游服務可用</h2>
+<p>在 <span class="tag inn">內網部署機器</span> 上跑，不需要先傳檔案。任何一步失敗都先別繼續。</p>
+
+<div class="steps">
+
+  <div class="step"><div class="step-body">
+    <h3>B-1 · LLM 端點可達 + 列出可用模型</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>curl -s http://10.53.100.12:7000/v1/models | python3 -m json.tool</code></pre></div>
+    <div class="box expect"><div class="box-title">預期輸出（找到 gpt-oss-20b 才算過）</div>
+<pre><code>{
+    "data": [
+        {
+            "id": "gpt-oss-20b",
+            ...
+        }
+    ]
+}</code></pre>
+    </div>
+    <div class="box bad"><div class="box-title">若失敗</div>
+      <ul style="margin:0;padding-left:20px;font-size:13.5px">
+        <li>connection refused → vLLM 沒起，去 LLM 主機 <code>systemctl status vllm</code></li>
+        <li>404 / 模型清單沒有 gpt-oss-20b → 名稱對不上，記下實際 id（如 <code>openai/gpt-oss-20b</code>），稍後 .env 用實際名</li>
+      </ul>
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>B-2 · gpt-oss-20b 真的會回覆（含 reasoning_effort 驗證）</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>curl -s http://10.53.100.12:7000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model":"gpt-oss-20b",
+    "messages":[{"role":"user","content":"回覆 OK"}],
+    "max_tokens":50,
+    "reasoning_effort":"medium"
+  }' | python3 -m json.tool</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>
+<pre><code>"choices": [{
+  "message": {
+    "role": "assistant",
+    "content": "OK",        ← 非空字串才算過
+    "reasoning": "User says: ..."
+  },
+  "finish_reason": "stop"
+}]</code></pre>
+    </div>
+    <div class="box warn"><div class="box-title">若 content 是空字串或單一字元</div>
+      代表 reasoning_effort 沒生效，重跑加大到 <code>"reasoning_effort":"high"</code> 看是否能回。內網 vLLM 版本若不支援這個參數，必須升級 vLLM 否則 rerank 一定壞（單字元被當「全拒絕」）。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>B-3 · Triton 服務存活 + 列出已載入的 embedding 模型</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>curl -s -X POST http://10.53.100.12:9000/v2/repository/index -d '{}' | python3 -m json.tool</code></pre></div>
+    <div class="box expect"><div class="box-title">預期（看到 nv-embed-v2 + READY）</div>
+<pre><code>[
+  {"name": "nv-embed-v2", "version": "1", "state": "READY"},
+  ...
+]</code></pre>
+    </div>
+    <div class="box bad"><div class="box-title">若不是 READY</div>
+      Triton 模型沒載入完，去 Triton 主機看 <code>docker logs triton</code>。READY 之前不能繼續。
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ===================== C ===================== -->
+<h2 id="C">C · 9000 vs 9001 — Triton 埠口釐清</h2>
+<p>你問該連哪個。答案是：<strong>embed-proxy 連 9001 (gRPC)</strong>，不是 9000 (HTTP)。Triton 一個服務開兩個埠：</p>
+
+<table>
+  <tr><th>Port</th><th>協定</th><th>用途</th><th>誰連</th></tr>
+  <tr><td class="tight">9000</td><td>HTTP/REST</td><td>查模型清單、debug、健康檢查</td><td>你用 curl 驗證（§B-3）</td></tr>
+  <tr><td class="tight">9001</td><td>gRPC</td><td>實際 inference（embedding 計算）</td><td><strong>embed-proxy 走這個</strong></td></tr>
+  <tr><td class="tight">9002</td><td>HTTP</td><td>Prometheus metrics</td><td>metrics 用，本部署可忽略</td></tr>
+</table>
+
+<p>驗證 9001 確實在跑（gRPC 不吃 curl，所以只能用 TCP probe 確認 port open）：</p>
+<div class="cmd"><span class="host">內網</span><pre><code>nc -zv 10.53.100.12 9001 2>&1 | tee /tmp/triton-grpc.log</code></pre></div>
+<div class="box expect"><div class="box-title">預期</div>
+<pre><code>Connection to 10.53.100.12 9001 port [tcp/*] succeeded!</code></pre>
+</div>
+<div class="box info"><div class="box-title">為什麼不是 9000</div>
+embed-proxy 用的是 <code>tritonclient.grpc.InferenceServerClient</code>，<strong>只說 gRPC</strong>。連到 9000 (HTTP) 會丟 protobuf decode error → embed-proxy 起不來 → rag-api healthcheck fail → 整串卡住。
+</div>
+
+<!-- ===================== D ===================== -->
+<h2 id="D">D · dev 端：打包 code + image</h2>
+<p>在 <span class="tag dev">內網部署準備機</span> 跑。兩件事：(1) zip code、(2) 匯出完整 stack images。</p>
+
+<div class="steps">
+
+  <div class="step"><div class="step-body">
+    <h3>D-1 · 切到 deploy 根目錄</h3>
+    <div class="cmd"><span class="host">dev</span><pre><code>cd /home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy</code></pre></div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>D-2 · 打包完整 stack 更新包（排除 data/ + 快取 + 機密）</h3>
+    <div class="cmd"><span class="host">dev</span><pre><code>./make_update_package.sh</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>
+產生 <code>deploy_packages/full-stack-update-&lt;date&gt;/full-stack-code.zip</code>、
+<code>images/*.tar</code> 與 <code>MANIFEST.txt</code>。檢查內容：
+<pre><code>unzip -l deploy_packages/full-stack-update-*/full-stack-code.zip | tail -5</code></pre>
+應該看到 <code>docker-compose.yaml</code>、<code>code-server/</code>、<code>keycloak/import/</code>、<code>RAG/api.py</code> 等。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>D-3 · 或只匯出 images（完整 stack）</h3>
+    <div class="cmd"><span class="host">dev</span><pre><code>./save_images.sh
+ls -la images/*.tar</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>
+看到 rag-api、embed-proxy、jupyter、code-server、pgvector、openwebui、keycloak、nginx 的 tar。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>D-4 · 確認未打入歷史資料</h3>
+    <p>更新包不得包含 <code>.env</code>、<code>audit_logs/</code>、<code>processed/</code>、<code>reports/</code>、<code>images/</code>、<code>*.tar</code>、<code>*.zip</code> 或舊憑證私鑰。</p>
+  </div></div>
+
+</div>
+
+<!-- ===================== E ===================== -->
+<h2 id="E">E · 傳輸到內網</h2>
+<div class="steps">
+  <div class="step"><div class="step-body">
+    <div class="cmd"><span class="host">dev</span><pre><code>scp deploy_packages/full-stack-update-*/full-stack-code.zip \
+    deploy_packages/full-stack-update-*/images/*.tar \
+    deploy_packages/full-stack-update-*/MANIFEST.txt \
+    使用者@10.53.100.12:~/iso42001-patch/</code></pre></div>
+    <p style="font-size:13.5px;color:var(--fg-dim)">內網 SSH 跳板若有特殊 port 自行加 <code>-P</code>。也可以 USB 拷貝。</p>
+  </div></div>
+</div>
+
+<!-- ===================== F ===================== -->
+<h2 id="F">F · 內網：備份 + 解開 + .env 設定</h2>
+<div class="steps">
+
+  <div class="step"><div class="step-body">
+    <h3>F-1 · 先備份現有部署（一定要做）</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>cd ~/ISO42001Deploy
+TS=$(date +%Y%m%d_%H%M%S)
+tar --exclude='RAG/data' \
+    -czf ~/iso42001-backup-${TS}.tar.gz RAG docker-compose.yaml .env
+echo "備份完成: ~/iso42001-backup-${TS}.tar.gz"</code></pre></div>
+    <div class="box warn"><div class="box-title">注意</div>
+備份排除 <code>data/</code>，因為那是要保留的，不需要備份。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>F-2 · 解開新 code（覆蓋 .py / docs / docker-compose）</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>cd ~/ISO42001Deploy
+unzip -o ~/iso42001-patch/full-stack-code.zip</code></pre></div>
+    <p><code>-o</code> 是 overwrite without prompt。因為 zip 內已排除 <code>data/</code>，內網實際 audit_logs / versions 不會被動。</p>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>F-3 · diff 對照 docker-compose.yaml</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>diff <(tar xzf ~/iso42001-backup-${TS}.tar.gz docker-compose.yaml -O) docker-compose.yaml</code></pre></div>
+    <div class="box info"><div class="box-title">本 session 沒動 docker-compose.yaml</div>
+這個 diff 預期應該是空的。如果有差異而你不是故意改的，<code>cp ~/iso42001-backup-${TS}.tar.gz</code> 解回去舊版。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>F-4 · 編輯 .env — 這是內網最關鍵的設定</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>nano .env</code></pre></div>
+    <p>確認以下欄位（沒有就加）：</p>
+<pre><code># === 上游服務（內網直連，無 https）===
+LLM_HOST=10.53.100.12
+
+LLM_API_BASE=http://10.53.100.12:7000/v1
+LLM_API_KEY=             # vLLM 通常不檢查；留空或設任意字串
+CHAT_MODEL_NAME=gpt-oss-20b
+
+# === Embed：走本地 embed-proxy，不直連 Triton ===
+EMBED_API_BASE=http://embed-proxy:7100/v1
+EMBED_API_KEY=           # embed-proxy 不檢查 key
+EMBED_MODEL_NAME=nv-embed-v2
+
+# === embed-proxy 連 Triton 的 gRPC 埠（重要！9001 不是 9000）===
+EMBED_GRPC_PORT=9001
+TRITON_MODEL_NAME=nv-embed-v2
+
+# === Reasoning（gpt-oss-20b 必須的）===
+REASONING_EFFORT=medium
+
+# === SSL（內網 http，所以開）===
+VERIFY_SSL=true
+
+# === 內網模式 + 信任的 proxy ===
+ALLOW_INTRANET_MODE=true
+TRUSTED_PROXIES=127.0.0.1,nginx
+
+# === 主機 UID/GID（deploy.sh 會自動覆蓋）===
+HOST_UID=1000
+HOST_GID=1000</code></pre>
+    <div class="box bad"><div class="box-title">三個常踩的雷</div>
+      <ul style="margin:0;padding-left:20px;font-size:13.5px">
+        <li><code>CHAT_MODEL_NAME</code> 要跟 §B-1 看到的 id 完全一致（有些 vLLM 會帶 <code>openai/</code> 前綴）</li>
+        <li><code>EMBED_GRPC_PORT=9001</code>，預設值 9000 是錯的</li>
+        <li><code>EMBED_API_BASE</code> 不要設成 <code>http://10.53.100.12:9000/v1</code>，要走 <code>embed-proxy:7100</code>。直連 Triton HTTP 我們的 OpenAI client 不會講話。</li>
+      </ul>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ===================== G ===================== -->
+<h2 id="G">G · 啟動完整內網 stack</h2>
+<div class="steps">
+
+  <div class="step"><div class="step-body">
+    <h3>G-1 · 啟動完整 stack</h3>
+    <div class="cmd"><span class="host">部署機</span><pre><code>docker compose up -d --build</code></pre></div>
+    <p>完整 stack 包含 db / embed-proxy / rag-api / jupyter / openwebui / keycloak / code-server / nginx。</p>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>G-2 · 或使用一鍵部署腳本</h3>
+    <div class="cmd"><span class="host">部署機</span><pre><code>./deploy.sh</code></pre></div>
+    <p style="font-size:13.5px;color:var(--fg-dim)">腳本會自動偵測 UID/GID、產生 aimla.ai.example.com 自簽憑證、載入 images/*.tar 並啟動完整服務組。</p>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>G-3 · 檢查服務狀態</h3>
+    <div class="cmd"><span class="host">部署機</span><pre><code>docker compose ps</code></pre></div>
+    <div class="box info"><div class="box-title">入口</div>
+nginx HTTPS/OpenWebUI：<code>https://aimla.ai.example.com:8443/</code>；Code Server：
+<code>http://&lt;主機IP&gt;:18443/</code>。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>G-4 · 等健康檢查通過</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>watch -n 2 "docker compose ps --format 'table {{.Name}}\t{{.Status}}'"</code></pre></div>
+    <div class="box expect"><div class="box-title">預期（逐步變 healthy / running）</div>
+<pre><code>ISO42001_rag_api       Up 30s (healthy)
+ISO42001_embed_proxy   Up X mins (healthy)
+ISO42001_pgvector      Up X mins (healthy)
+ISO42001_openwebui     Up X mins
+ISO42001_keycloak      Up X mins
+ISO42001_code_server   Up X mins
+ISO42001_nginx         Up X mins</code></pre>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ===================== H ===================== -->
+<h2 id="H">H · 部署後驗證（4 件事）</h2>
+<div class="steps">
+
+  <div class="step"><div class="step-body">
+    <h3>H-1 · rag-api 看得到模型 + 認證模式正常</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>curl -s http://localhost:8043/v1/models | python3 -m json.tool</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>應該回 <code>rag-agent</code> 一筆。</div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>H-2 · 端對端 query — 看 retrieve 不再 empty</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>curl -s http://localhost:8043/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H 'x-session-id: deploy-check' \
+  -d '{
+    "model":"rag-agent",
+    "stream":false,
+    "messages":[{"role":"user","content":"陸海空軍懲罰法第5條規定什麼？"}]
+  }' | python3 -m json.tool | head -20</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>
+content 非空字串、有提到「第5條」相關內容。延遲 5–15 秒（medium reasoning）。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>H-3 · audit log 寫進去 + 雜湊鏈完整</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>docker exec ISO42001_rag_api python3 -c "
+from rag_system.core.audit_logger import AuditLogger
+from pathlib import Path
+from datetime import datetime
+f = Path(f'/app/data/audit_logs/audit_{datetime.now().strftime(\"%Y-%m-%d\")}.jsonl')
+print(AuditLogger.verify_integrity(f))
+"</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>
+<pre><code>{'valid': True, 'total': N, 'broken_at': None, 'reason': 'chain intact'}</code></pre>
+    </div>
+    <div class="box warn"><div class="box-title">若 valid=False</div>
+看 broken_at 哪一行。若是第 1 行就是內網原本就有舊紀錄（雜湊鏈上線前），無解只能接受。若是中間斷掉就是新部署有問題，停下來查 log。
+    </div>
+  </div></div>
+
+  <div class="step"><div class="step-body">
+    <h3>H-4 · 確認 query log 含新欄位（actions + model_response + prompt_version_hash）</h3>
+    <div class="cmd"><span class="host">內網</span><pre><code>docker exec ISO42001_rag_api sh -c \
+  'grep -h "deploy-check" /app/data/audit_logs/audit_*.jsonl | tail -1' \
+  | python3 -c "
+import json,sys
+d=json.loads(sys.stdin.read())
+for k in ['actions','model_response','prompt_version_hash','client_ip','prev_hash','entry_hash']:
+    v=d.get(k,'(missing)')
+    print(f'  {k}: {str(v)[:80]}')"</code></pre></div>
+    <div class="box expect"><div class="box-title">預期</div>
+六個欄位都有值。<code>actions</code> 應該長這樣：
+<pre><code>['classify=llm:legal', 'retrieve(docs=X,sources=Y)',
+ 'generate(citations=Z,tokens=N)', 'verify=passed(...)']</code></pre>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ===================== H-clean ===================== -->
+<h2 id="Hclean">H-5 · 試做前清空資料（交付單位人員測試前）</h2>
+<p>此為<strong>試做</strong>：H 驗證跑過的測試查詢也會寫進 audit log。交付單位人員主動測試前，
+先清空既有使用/測試資料，讓他們從<strong>乾淨狀態</strong>開始（使用資料與稽核日誌都是空的）。</p>
+<div class="cmd"><span class="host">內網</span><pre><code>cd ~/ISO42001Deploy
+./reset_data.sh        # 互動確認後執行</code></pre></div>
+<div class="box info"><div class="box-title">會清空 vs 會保留</div>
+<pre><code>清空：稽核日誌 audit_logs、對話歷史 conversations
+保留：向量索引（知識庫）、法規語料、golden_dataset、版本快照（變更管理）</code></pre>
+</div>
+<div class="box bad"><div class="box-title">⚠ 只能在真實測試開始前執行一次</div>
+本腳本會重置稽核日誌的 SHA-256 雜湊鏈。單位人員真實測試一旦開始，稽核日誌即為
+ISO 42001 A.6/A.9 證據，<strong>不可再執行本腳本</strong>。
+</div>
+
+<!-- ===================== I ===================== -->
+<h2 id="I">I · 緊急回退</h2>
+<p>如果 H-1 或 H-2 失敗無法很快查清楚原因，直接回退：</p>
+<div class="cmd"><span class="host">內網</span><pre><code>cd ~/ISO42001Deploy
+# 1. 還原 code
+tar -xzf ~/iso42001-backup-${TS}.tar.gz
+
+# 2. 重啟完整 stack
+docker compose up -d --build
+
+# 3. 確認
+docker compose ps</code></pre></div>
+<div class="box info"><div class="box-title">不會丟資料</div>
+因為從頭到尾都沒動 <code>RAG/data/*</code>，回退後 audit log / 對話歷史 / 向量庫都還在。
+</div>
+
+<hr>
+
+<h2>核對清單</h2>
+<p>列印或螢幕對照，每完成一項打勾：</p>
+<ul class="check">
+  <li>B-1 LLM 模型清單看到 gpt-oss-20b</li>
+  <li>B-2 reasoning_effort 測試 content 非空</li>
+  <li>B-3 Triton nv-embed-v2 READY</li>
+  <li>C nc -zv 9001 succeeded</li>
+  <li>D-2 zip 5–8MB 含 docker-compose</li>
+  <li>D-3 完整 stack image tar 已產出</li>
+  <li>F-1 內網備份完成（記下 TS）</li>
+  <li>F-2 unzip 成功</li>
+  <li>F-3 docker-compose diff 為空（或符合預期）</li>
+  <li>F-4 .env 三個雷都避開（model name / 9001 / embed-proxy:7100）</li>
+  <li>G-1 完整 stack 啟動完成</li>
+  <li>G-3 docker compose ps 已確認</li>
+  <li>G-4 所有核心容器 healthy / running</li>
+  <li>H-1 /v1/models 看到 rag-agent</li>
+  <li>H-2 真實 query 有回覆且 retrieve 不空</li>
+  <li>H-3 verify_integrity valid=True</li>
+  <li>H-4 query log 6 個新欄位都有</li>
+  <li>H-5 交付測試前已執行 ./reset_data.sh（系統為乾淨狀態）</li>
+</ul>
+
+<footer>
+ISO/IEC 42001 Annex A 合規部署文件 · 外部稽核準備整理版 · 2026-07-07<br>
+本文已依完整 stack 與乾淨基線更新
+</footer>
+
+</div>
+</body>
+</html>

@@ -6,6 +6,8 @@
 .env
 .env.*
 .env.local
+# 範本（僅佔位值，無機密）須納入版控供部署參照
+!.env.example
 
 # Python 快取
 __pycache__/
@@ -34,16 +36,37 @@ ENV/
 .DS_Store
 
 # Docker tar 映像（檔案很大，不需進版控）
+images/
 images/*.tar
+
+# 部署包建置產物（可由 save_images.sh / make_update_package.sh 重建）
+deploy_packages/
+deploy_packages.zip
+deploy_packages/images/
+deploy_packages/*.zip
+deploy_packages/*.tar
+
+# 大型開發歸檔（一次性快照，非規制證據）
+_dev_archive/
+_dev_archive/*.tar.gz
 
 # 日誌與暫存
 *.log
 *.tmp
 logs.txt
 
+# 本機 AI/IDE agent 狀態
+.agents/
+.antigravitycli/
+.claude/
+.codex/
+
 # 資料目錄（執行期產生，不進版控）
 RAG/data/audit_logs/
+RAG/data/audit_logs_archive*
 RAG/data/reports/
+RAG/data/versions/*
+!RAG/data/versions/.gitkeep
 RAG/data/versions/*.tar.gz
 RAG/data/input/*
 RAG/data/output/*
@@ -51,6 +74,20 @@ RAG/data/processed/*
 !RAG/data/input/.gitkeep
 !RAG/data/output/.gitkeep
 !RAG/data/processed/.gitkeep
+# 註：RAG/data/versions/*.json（SHA-256 快照）刻意保留追蹤 —— A.6.2.5 變更管理證據
+
+# monitoring_addon 執行期狀態（高頻變動，非證據；golden_dataset 與
+# drift_baseline 為穩定證據，刻意保留追蹤）
+monitoring_addon/data/alerts.jsonl
+monitoring_addon/data/alerts_drift_state.json
+monitoring_addon/data/alerts_health_state.json
+monitoring_addon/data/availability_log*.jsonl
+monitoring_addon/data/integrity_state.json
+monitoring_addon/data/stability_records.json
+monitoring_addon/data/reports/*
+!monitoring_addon/data/reports/.gitkeep
+monitoring_addon/data/experiments/*
+monitoring_addon/data/reports_archive_*/
 
 # SSL 憑證私鑰
 nginx/ssl/*.key

@@ -106,6 +106,7 @@ class RAGConfig:
     embed_api_base: Optional[str] = None
     llm_api_base: Optional[str] = None  # Separate base for LLM
     embed_api_key: Optional[str] = None
+    llm_api_key: Optional[str] = None
 
     # SSL settings — default True; set VERIFY_SSL=false to disable (dev only)
     verify_ssl: bool = True
@@ -148,6 +149,9 @@ class RAGConfig:
         if not self.embed_api_key:
             self.embed_api_key = os.environ.get("EMBED_API_KEY")
 
+        if not self.llm_api_key:
+            self.llm_api_key = os.environ.get("LLM_API_KEY", self.embed_api_key)
+
     @classmethod
     def from_env(cls) -> "RAGConfig":
         """Create configuration from environment variables."""
@@ -166,6 +170,7 @@ class RAGConfig:
             embed_api_base=embed_base,
             llm_api_base=llm_base,
             embed_api_key=os.environ.get("EMBED_API_KEY"),
+            llm_api_key=os.environ.get("LLM_API_KEY", os.environ.get("EMBED_API_KEY")),
             embed_model=os.environ.get("EMBED_MODEL_NAME", DEFAULT_EMBED_MODEL),
             chat_model=os.environ.get("CHAT_MODEL_NAME", DEFAULT_CHAT_MODEL),
             top_k=top_k,
@@ -190,6 +195,7 @@ class RAGConfig:
         """Hash based on key config fields for reliable caching."""
         return hash((
             self.conn_string, self.embed_api_base, self.llm_api_base,
+            self.embed_api_key, self.llm_api_key,
             self.embed_model, self.chat_model, self.temperature,
             self.top_k, self.rerank_top_n,
         ))

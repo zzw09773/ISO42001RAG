@@ -1,10 +1,8 @@
 # =============================================================
-# ISO42001 系統 — 統一 Docker Compose
-# 7 個服務：db, rag-api, embed-proxy, openwebui, nginx, jupyter, monitoring
-#
-# 精簡部署（save_images.sh + deploy.sh）：只動 RAG 組 + monitoring
-#   - 啟動：rag-api、jupyter、monitoring（自動拉起 db、embed-proxy）
-#   - 不啟動：openwebui、nginx（內網側自行管理前端代理）
+# ISO42001 系統 — 外部稽核準備 Docker Compose
+# 主要服務：rag-api, embed-proxy, jupyter, openwebui, keycloak,
+#           code-server, nginx, monitoring
+# 基礎依賴：db / pgvector
 # =============================================================
 
 services:
@@ -63,15 +61,14 @@ services:
     environment:
       # DB — 使用 service name
       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
-      # Embed — 直接打 GPU gateway HTTPS 端點（bypass embed-proxy）
+      # Embedding：經 embed-proxy（OpenAI HTTP → Triton gRPC 轉換）
       EMBED_API_KEY: ${EMBED_API_KEY}
-      EMBED_API_BASE: "https://${LLM_HOST}/v1"
+      EMBED_API_BASE: ${EMBED_API_BASE:-http://embed-proxy:7100/v1}
       EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
-      # LLM — 同一 HTTPS gateway
+      # LLM：http://10.53.100.12:7000/v1（由 .env 的 LLM_API_BASE 設定）
       LLM_API_KEY: ${LLM_API_KEY}
-      LLM_API_BASE: "https://${LLM_HOST}/v1"
-      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
-      # SSL — gateway 是 self-signed，必須關閉驗證
+      LLM_API_BASE: ${LLM_API_BASE}
+      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-gpt-oss-20b}
       VERIFY_SSL: ${VERIFY_SSL:-false}
       # RAG 配置
       TOP_K: ${TOP_K:-5}
@@ -95,36 +92,67 @@ services:
     container_name: ISO42001_openwebui
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${OPENWEBUI_PORT:-18088}:8080"
     depends_on:
       rag-api:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     environment:
-      # 連接 RAG API (service name) 和外部 LLM (LLM_HOST + LLM_PORT 變數)
+      # 連接 RAG API (service name) 和推論後端 LLM (LLM_HOST + LLM_PORT 變數)
       OPENAI_API_BASE_URLS: "http://rag-api:8000/v1;http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
       OPENAI_API_KEYS: ${OPENAI_API_KEYS:-dummy-key;dummy-key}
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-your-secret-key-here}
-      WEBUI_URL: "https://judge.local"
+      WEBUI_URL: "${WEBUI_URL:-https://aimla.ai.example.com:${NGINX_HTTPS_PORT:-8443}}"
       ENABLE_RAG_WEB_SEARCH: "false"
       ENABLE_RAG_WEB_LOADER_SSL_VERIFICATION: "false"
+      # Keycloak OIDC（外部稽核準備先用本 compose 內的 keycloak；正式內網可改 OPENID_PROVIDER_URL）
+      ENABLE_OAUTH_SIGNUP: ${ENABLE_OAUTH_SIGNUP:-true}
+      OAUTH_PROVIDER_NAME: ${OAUTH_PROVIDER_NAME:-Keycloak}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-openwebui}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-openwebui-dev-client-secret-change-me}
+      OPENID_PROVIDER_URL: ${OPENID_PROVIDER_URL:-http://keycloak:8080/realms/iso42001/.well-known/openid-configuration}
+      OAUTH_SCOPES: ${OAUTH_SCOPES:-openid email profile}
+      OAUTH_MERGE_ACCOUNTS_BY_EMAIL: ${OAUTH_MERGE_ACCOUNTS_BY_EMAIL:-true}
     volumes:
       - openwebui_data:/app/backend/data
 
-  # ---------- 5. Nginx (HTTPS 反向代理) ----------
+  # ---------- 5. Keycloak (OpenWebUI OIDC / 強密碼政策) ----------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.5.6
+    container_name: ISO42001_keycloak
+    restart: unless-stopped
+    command:
+      - start-dev
+      - --http-enabled=true
+      - --hostname-strict=false
+      - --import-realm
+    ports:
+      - "${KEYCLOAK_PORT:-18080}:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-this-keycloak-admin-password}
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+
+  # ---------- 6. Nginx (HTTPS 反向代理；host 端避開 80/443) ----------
   nginx:
     image: nginx:alpine
     container_name: ISO42001_nginx
     restart: unless-stopped
     ports:
-      - "${HTTP_PORT:-80}:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT:-8088}:80"
+      - "${NGINX_HTTPS_PORT:-8443}:443"
     depends_on:
       - openwebui
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
 
-  # ---------- 6. Jupyter Notebook ----------
+  # ---------- 7. Jupyter Notebook ----------
   jupyter:
     build:
       context: ./RAG
@@ -132,7 +160,7 @@ services:
     container_name: ISO42001_jupyter
     restart: unless-stopped
     ports:
-      - "${JUPYTER_PORT:-25678}:${JUPYTER_PORT:-25678}"
+      - "${JUPYTER_PORT:-25678}:8888"
     depends_on:
       db:
         condition: service_healthy
@@ -144,22 +172,46 @@ services:
       NB_GID: ${HOST_GID:-1001}
       NB_USER: jovyan
       GRANT_SUDO: "yes"
-      JUPYTER_PORT: "${JUPYTER_PORT:-25678}"
+      # Container 內固定 8888；宿主對外 port 由上方 ports 的 JUPYTER_PORT 控制。
+      JUPYTER_PORT: "8888"
       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
-      # Embed — 直接打 GPU gateway HTTPS 端點（bypass embed-proxy）
+      # Embedding 經 embed-proxy；LLM 由 .env 的 LLM_API_BASE 設定（同 rag-api）
       EMBED_API_KEY: ${EMBED_API_KEY}
-      EMBED_API_BASE: "https://${LLM_HOST}/v1"
+      EMBED_API_BASE: ${EMBED_API_BASE:-http://embed-proxy:7100/v1}
       EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
       LLM_API_KEY: ${LLM_API_KEY}
-      LLM_API_BASE: "https://${LLM_HOST}/v1"
-      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-openai/gpt-oss-20b}
+      LLM_API_BASE: ${LLM_API_BASE}
+      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-gpt-oss-20b}
       VERIFY_SSL: ${VERIFY_SSL:-false}
       TOP_K: ${TOP_K:-5}
       CHUNK_SIZE: ${CHUNK_SIZE:-1000}
     volumes:
       - ./RAG:/home/jovyan/work
 
-  # ---------- 7. Monitoring Addon (ISO 42001 A.6.2.4 儀表板) ----------
+  # ---------- 8. Code Server（掛載整個 ISO42001 專案） ----------
+  code-server:
+    build:
+      context: ./code-server
+    container_name: ISO42001_code_server
+    restart: unless-stopped
+    ports:
+      - "${CODESERVER_PORT:-18443}:8080"
+    environment:
+      PASSWORD: ${CODESERVER_PASSWORD:-change-this-code-server-password}
+      SUDO_PASSWORD: ${CODESERVER_SUDO_PASSWORD:-change-this-code-server-sudo-password}
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - ./:/home/coder/project
+      - code_server_config:/home/coder/.local/share/code-server
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      # HOST_GID lets code-server read the mounted project when the host repo is
+      # group-restricted; DOCKER_GID lets the Containers extension use docker.sock.
+      - "${HOST_GID:-1001}"
+      - "${DOCKER_GID:-999}"
+    working_dir: /home/coder/project
+
+  # ---------- 9. Monitoring Addon (ISO 42001 A.6.2.4 儀表板) ----------
   monitoring:
     build:
       context: ./monitoring_addon
@@ -173,17 +225,54 @@ services:
     environment:
       # 唯讀掛載 RAG/data 進來，路徑透過 RAG_DATA_DIR 統一
       RAG_DATA_DIR: /rag_data
+      OPENWEBUI_DB: /openwebui_data/webui.db
       MONITORING_PORT: "8200"
+      # 漂移暖機：基線為真實使用前 = false（只計算/顯示，不發 critical）。
+      # 用 --from-audit-logs 從真實 audit log 重建基線後，改 true 才開始告警。
+      DRIFT_ALARM_ENABLED: ${DRIFT_ALARM_ENABLED:-false}
+      # PSI/JSD 最小樣本數（低於此判 insufficient_data，不評分不告警）
+      MIN_DRIFT_SAMPLE: ${MIN_DRIFT_SAMPLE:-100}
+      # 升級需連續 N 窗確認才告警（抑制單窗 max-dim 噪聲誤報）
+      DRIFT_CONFIRM_WINDOWS: ${DRIFT_CONFIRM_WINDOWS:-2}
+      # faithfulness 報告超過此天數，儀表板標記為過期（提醒重跑 RAGAS）
+      RAGAS_FRESHNESS_DAYS: ${RAGAS_FRESHNESS_DAYS:-30}
       # Embedding drift（可選）— 沿用主系統 embed-proxy
       EMBED_API_KEY: ${EMBED_API_KEY}
       EMBED_API_BASE: "http://embed-proxy:7100/v1"
       EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/nv-embed-v2}
+      # LLM judge — RAGAS faithfulness 評估用，須與 rag-api 同一 gateway。
+      # 缺這幾個，run_ragas_evaluation 的 judge 會 fallback 打 embed-proxy 而失敗
+      # → faithfulness 算不出（內網試做「看不到 faithfulness」的根因之一）。
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_API_BASE: ${LLM_API_BASE}
+      CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-gpt-oss-20b}
+      VERIFY_SSL: ${VERIFY_SSL:-false}
+      # 容器內呼叫 RAG API 用「服務名」，非 host port（localhost:8043 在容器內無效）。
+      # run_ragas_evaluation / run_online_vv 預設讀此值；未設時退回 localhost:8043（供 host 執行）。
+      RAG_API_URL: "http://rag-api:8000"
+      # v2.7 — 即時告警迴圈間隔（秒）；設 ALERT_LOOPS_DISABLED=true 可關閉
+      ALERT_ANOMALY_INTERVAL_SEC: ${ALERT_ANOMALY_INTERVAL_SEC:-300}
+      ALERT_DRIFT_INTERVAL_SEC: ${ALERT_DRIFT_INTERVAL_SEC:-900}
+      ALERT_INTEGRITY_INTERVAL_SEC: ${ALERT_INTEGRITY_INTERVAL_SEC:-3600}
+      ALERT_DEDUP_WINDOW_SEC: ${ALERT_DEDUP_WINDOW_SEC:-600}
+      # v2.7 — SMTP relay（內網郵件告警）；ALERT_SMTP_HOST 留空 → 只寫 alerts.jsonl
+      ALERT_SMTP_HOST: ${ALERT_SMTP_HOST:-}
+      ALERT_SMTP_PORT: ${ALERT_SMTP_PORT:-25}
+      ALERT_SMTP_USE_TLS: ${ALERT_SMTP_USE_TLS:-false}
+      ALERT_SMTP_USER: ${ALERT_SMTP_USER:-}
+      ALERT_SMTP_PASS: ${ALERT_SMTP_PASS:-}
+      ALERT_SMTP_FROM: ${ALERT_SMTP_FROM:-monitoring@iso42001.local}
+      ALERT_RECIPIENTS: ${ALERT_RECIPIENTS:-}
     volumes:
       # RAG audit_logs + reports — 唯讀（monitoring 不該寫主系統）
       - ./RAG/data:/rag_data:ro
+      # OpenWebUI chat DB — 唯讀，用於 audit UI 交叉查詢前端 chat/user 來源
+      - openwebui_data:/openwebui_data:ro
       # monitoring 自己的輸出（dashboard / drift / online_vv 報告）
       - ./monitoring_addon/data:/app/data
 
 volumes:
   pgdata:
   openwebui_data:
+  keycloak_data:
+  code_server_config:

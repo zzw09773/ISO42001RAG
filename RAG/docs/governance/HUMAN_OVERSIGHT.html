@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人為監督程序（Human Oversight Procedure）</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/governance/HUMAN_OVERSIGHT.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="human-oversight-procedure">人為監督程序（Human Oversight Procedure）</h1>
+<blockquote>
+<p>ISO 42001 A.9（負責任使用）+ 條文 8（運作）證據。
+狀態：v1.1.0（2026-06-10 編製）</p>
+</blockquote>
+<p>本系統<strong>不做自動決策</strong>——所有輸出為 AI 輔助資訊，對人生效的判斷由
+法律承辦人作成。人為監督建立在四個查核點：</p>
+<h2 id="1">1. 使用端監督（每次查詢）</h2>
+<ul>
+<li>系統輸出附條文引用，承辦人<strong>必須</strong>對引用條文進行原文查證後才能採用。</li>
+<li>輸出定位為「AI 輔助，非法律建議」（見 MODEL_CARD §4）。</li>
+<li>防過度依賴（automation bias）：承辦人教育訓練應涵蓋本程序。
+  <!-- TODO(單位)：教育訓練的實施紀錄保存位置：＿＿＿＿＿ -->
+</li>
+</ul>
+<h2 id="2">2. 稽核端監督（持續）</h2>
+<ul>
+<li>系統管理者定期抽查稽核日誌雜湊鏈、<code>actions</code> 軌跡與安全事件紀錄。</li>
+<li>重大異常依 <code>INCIDENT_RESPONSE.md</code> 進入人工調查；<strong>每筆處置由人作成並簽核</strong>，
+  AI 不得自動結案。</li>
+</ul>
+<h2 id="3">3. 變更端監督（每次發布）</h2>
+<ul>
+<li>版本發布前：V&amp;V 評估（Hit Rate gating）結果由稽核負責人核定。</li>
+<li>CHANGELOG 每版「審核簽名」欄由核定人親簽。</li>
+</ul>
+<h2 id="4">4. 治理端監督（每季）</h2>
+<ul>
+<li>倫理審查清單 <code>ETHICS_CHECKLIST.md</code> 由審查負責人逐項勾選並簽名。</li>
+<li>風險評估 <code>AI_RISK_ASSESSMENT.md</code> 同步重評。</li>
+</ul>
+<h2 id="_1">決策權限矩陣</h2>
+<table>
+<thead>
+<tr>
+<th>決策</th>
+<th>權限</th>
+<th>AI 系統可否代行</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>對當事人的法律處置判斷</td>
+<td>法律承辦人</td>
+<td><strong>否</strong></td>
+</tr>
+<tr>
+<td>事件結案</td>
+<td>稽核負責人</td>
+<td><strong>否</strong>（AI 可提供調查材料）</td>
+</tr>
+<tr>
+<td>版本發布放行</td>
+<td>單位主管／稽核負責人</td>
+<td><strong>否</strong>（gating 指標達標為必要非充分條件）</td>
+</tr>
+<tr>
+<td>檢索與生成（系統功能本身）</td>
+<td>系統</td>
+<td>是（在上述監督下）</td>
+</tr>
+</tbody>
+</table>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/HUMAN_OVERSIGHT.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

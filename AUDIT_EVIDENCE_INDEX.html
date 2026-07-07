@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISO 42001 稽核證據索引（Audit Evidence Index）</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · AUDIT_EVIDENCE_INDEX.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="iso-42001-audit-evidence-index">ISO 42001 稽核證據索引（Audit Evidence Index）</h1>
+<p><strong>編製日期</strong>：2026-07-07　<strong>系統版本</strong>：v1.1.0 外部稽核準備基線<br>
+<strong>用途</strong>：稽核應對總導覽，列 ISO42001 RAG 主系統證據。</p>
+<p>本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。</p>
+<hr>
+<h2 id="1">1. 系統範圍</h2>
+<table>
+<thead>
+<tr>
+<th>範圍</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAG API 與檢索生成管線</td>
+<td><code>RAG/rag_system/agent/</code>、<code>RAG/rag_system/services/</code>、<code>RAG/api.py</code></td>
+</tr>
+<tr>
+<td>知識庫與向量索引</td>
+<td><code>RAG/data/converted_md/</code>、PostgreSQL/pgvector</td>
+</tr>
+<tr>
+<td>稽核日誌與防竄改鏈</td>
+<td><code>RAG/rag_system/core/audit_logger.py</code>、<code>RAG/docs/AUDIT_LOG_SCHEMA.md</code></td>
+</tr>
+<tr>
+<td>Prompt 與行為版本管理</td>
+<td><code>RAG/docs/PROMPT_VERSIONS.md</code>、<code>RAG/rag_system/core/prompts.py</code></td>
+</tr>
+<tr>
+<td>部署與內網入口</td>
+<td><code>docker-compose.yaml</code>、<code>nginx/nginx.conf</code>、<code>keycloak/import/iso42001-realm.json</code></td>
+</tr>
+<tr>
+<td>安全控制與人為監督</td>
+<td><code>RAG/docs/SAFETY_CONTROLS.md</code>、<code>RAG/docs/governance/HUMAN_OVERSIGHT.md</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="2">2. 證據地圖</h2>
+<table>
+<thead>
+<tr>
+<th>ISO 要求</th>
+<th>證據</th>
+<th>狀態</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>組織脈絡與系統邊界</td>
+<td><code>RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</code></td>
+<td>內網基線已更新</td>
+</tr>
+<tr>
+<td>需求與適用範圍</td>
+<td><code>RAG/docs/requirements_review_report.md</code></td>
+<td>已建立</td>
+</tr>
+<tr>
+<td>角色職責</td>
+<td><code>RAG/docs/governance/RACI_MATRIX.md</code></td>
+<td>待主管指派人員</td>
+</tr>
+<tr>
+<td>AI 風險評估</td>
+<td><code>RAG/docs/governance/AI_RISK_ASSESSMENT.md</code></td>
+<td>待評定等級與接受決定</td>
+</tr>
+<tr>
+<td>AI 影響評估</td>
+<td><code>RAG/docs/governance/AI_IMPACT_ASSESSMENT.md</code></td>
+<td>待審查負責人結論</td>
+</tr>
+<tr>
+<td>模型卡</td>
+<td><code>RAG/docs/governance/MODEL_CARD.md</code></td>
+<td>草案待核定</td>
+</tr>
+<tr>
+<td>Prompt 版控</td>
+<td><code>RAG/docs/PROMPT_VERSIONS.md</code></td>
+<td>已建立</td>
+</tr>
+<tr>
+<td>變更管理</td>
+<td><code>RAG/CHANGELOG.md</code>、<code>RAG/data/versions/</code></td>
+<td>乾淨基線保留 <code>.gitkeep</code>，正式快照可重新產生</td>
+</tr>
+<tr>
+<td>稽核日誌 schema</td>
+<td><code>RAG/docs/AUDIT_LOG_SCHEMA.md</code></td>
+<td>已建立</td>
+</tr>
+<tr>
+<td>安全控制</td>
+<td><code>RAG/docs/SAFETY_CONTROLS.md</code>、<code>RAG/tests/evaluation/test_prompt_security.py</code></td>
+<td>已建立</td>
+</tr>
+<tr>
+<td>人為監督</td>
+<td><code>RAG/docs/governance/HUMAN_OVERSIGHT.md</code></td>
+<td>草案待核定</td>
+</tr>
+<tr>
+<td>事件回應</td>
+<td><code>RAG/docs/governance/INCIDENT_RESPONSE.md</code></td>
+<td>SLA/通報矩陣待單位核定</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3">3. 稽核前待辦</h2>
+<ol>
+<li>建立 <code>.env</code>，填入強密碼、Keycloak/OpenWebUI 設定與內網推論後端。</li>
+<li>啟動內網 stack 後，確認 <code>rag-api</code>、<code>openwebui</code>、<code>keycloak</code>、<code>nginx</code>、<code>db</code>、<code>embed-proxy</code>、<code>jupyter</code>、<code>code-server</code> 狀態。</li>
+<li>重新建立法規索引，並保留 reindex 操作紀錄。</li>
+<li>由權責人員完成 <code>ETHICS_CHECKLIST.md</code>、<code>RACI_MATRIX.md</code>、<code>AI_RISK_ASSESSMENT.md</code>、<code>AI_IMPACT_ASSESSMENT.md</code> 簽核欄位。</li>
+<li>正式測試開始後，不再清空稽核日誌；需要證明完整性時，以 <code>AUDIT_LOG_SCHEMA.md</code> 所述雜湊鏈驗證。</li>
+</ol>
+<h2 id="4">4. 預期稽核問答</h2>
+<table>
+<thead>
+<tr>
+<th>問題</th>
+<th>回答位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系統包含哪些服務？</td>
+<td><code>README.md</code>、<code>RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</code></td>
+</tr>
+<tr>
+<td>AI 回答如何追溯？</td>
+<td><code>RAG/docs/AUDIT_LOG_SCHEMA.md</code>、<code>RAG/rag_system/core/audit_logger.py</code></td>
+</tr>
+<tr>
+<td>Prompt 變更如何控管？</td>
+<td><code>RAG/docs/PROMPT_VERSIONS.md</code>、<code>RAG/CHANGELOG.md</code></td>
+</tr>
+<tr>
+<td>使用者如何登入？</td>
+<td><code>keycloak/import/iso42001-realm.json</code>、<code>docker-compose.yaml</code> OpenWebUI/Keycloak 設定</td>
+</tr>
+<tr>
+<td>管理入口如何降低暴露面？</td>
+<td><code>RAG/docs/governance/DEPLOYMENT_HARDENING.md</code></td>
+</tr>
+<tr>
+<td>AI 出錯誰負責？</td>
+<td><code>RAG/docs/governance/HUMAN_OVERSIGHT.md</code></td>
+</tr>
+</tbody>
+</table>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>AUDIT_EVIDENCE_INDEX.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

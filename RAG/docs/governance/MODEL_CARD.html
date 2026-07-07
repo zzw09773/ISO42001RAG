@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型卡（Model Card）— ISO 42001 RAG 法律文件查詢系統</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/governance/MODEL_CARD.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="model-card-iso-42001-rag">模型卡（Model Card）— ISO 42001 RAG 法律文件查詢系統</h1>
+<blockquote>
+<p>ISO 42001 A.4（AI 系統生命週期文件化）證據。
+狀態：v1.1.0（2026-06-10 編製，待審查負責人核定）</p>
+</blockquote>
+<h2 id="1">1. 系統概述</h2>
+<table>
+<thead>
+<tr>
+<th>欄位</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系統名稱</td>
+<td>ISO 42001 RAG 法律文件查詢系統</td>
+</tr>
+<tr>
+<td>系統版本</td>
+<td>v1.1.0（2026-06-08，見 <code>RAG/CHANGELOG.md</code>）</td>
+</tr>
+<tr>
+<td>用途</td>
+<td>國軍法律承辦人於內網查詢軍事法規條文（AI 輔助，非法律建議）</td>
+</tr>
+<tr>
+<td>部署環境</td>
+<td>內網 10.53.100.12（開發驗證環境：172.16.120.35 後端）</td>
+</tr>
+<tr>
+<td>系統形態</td>
+<td>Retrieval-Augmented Generation（RAG），LangGraph 工作流</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2">2. 模型組件</h2>
+<table>
+<thead>
+<tr>
+<th>組件</th>
+<th>模型</th>
+<th>服務方式</th>
+<th>備註</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>生成 LLM</td>
+<td><code>openai/gpt-oss-20b</code></td>
+<td>vLLM（OpenAI 相容 API）</td>
+<td>reasoning model，自動帶 <code>reasoning_effort=medium</code>（可由 <code>REASONING_EFFORT</code> 覆寫）</td>
+</tr>
+<tr>
+<td>Embedding</td>
+<td><code>nvidia/NV-embed-V2</code></td>
+<td>Triton gRPC + embed-proxy 轉換層</td>
+<td>非對稱設計：query 端加英文指令 prefix，文件端不加</td>
+</tr>
+<tr>
+<td>向量庫</td>
+<td>PostgreSQL + pgvector</td>
+<td>容器 <code>ISO42001_pgvector</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>兩個模型皆為<strong>預訓練模型推論使用，本專案未進行任何訓練／微調</strong>；
+不存在本專案的訓練資料集。</p>
+<h2 id="3">3. 知識庫與檢索</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>知識庫</td>
+<td>軍事法規條文（Markdown），Article-Aware Chunking（以「條」為切分單位）</td>
+</tr>
+<tr>
+<td>檢索策略</td>
+<td>向量檢索 + HyDE 雙路徑（僅抽象查詢）+ Self-Query 跨法過濾 + LLM 重排</td>
+</tr>
+<tr>
+<td>工作流</td>
+<td>classify → retrieve → generate → verify（LangGraph）；另有 ReAct 模式（<code>REACT_MODE</code>，預設關閉）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4">4. 預期使用與限制</h2>
+<p><strong>預期使用</strong>：法律承辦人輸入中文法律問題，系統檢索相關條文並生成附引用的回答。</p>
+<p><strong>明確不適用</strong>：
+- 非法規範圍的問題（系統依 <code>SAFETY_CONTROLS.md</code> 規則拒答）
+- 作為法律決定的唯一依據（輸出為 AI 輔助資訊，最終判斷由承辦人負責）</p>
+<p><strong>已知限制</strong>：
+- 生成內容可能與條文不一致（幻覺）——以 verify 節點、引用標註與人工查證緩解
+- 知識庫未涵蓋的法規無法回答
+- 後端推論伺服器不可用時系統降級（fallback 行為見 audit log <code>actions</code> 欄位）
+- 偏誤風險——以 <code>tests/evaluation/test_bias_fairness.py</code>（8 案例）定期檢測</p>
+<h2 id="5-v110">5. 評估結果（v1.1.0）</h2>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>值</th>
+<th>證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hit Rate（唯一 gating，目標 ≥ 0.90）</td>
+<td><strong>0.9355</strong></td>
+<td>歷史 V&amp;V 報告；外部稽核準備基線需重新產生</td>
+</tr>
+<tr>
+<td>Recall@K</td>
+<td>0.9032</td>
+<td>同上（informational）</td>
+</tr>
+<tr>
+<td>Precision@K</td>
+<td>0.7231</td>
+<td>同上（informational）</td>
+</tr>
+<tr>
+<td>拒答正確率（out-of-scope）</td>
+<td>1.0</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>評估資料集</td>
+<td>34 筆 golden dataset（31 筆含 ground truth）</td>
+<td>內網基線需由權責人員確認資料集版本</td>
+</tr>
+</tbody>
+</table>
+<h2 id="6">6. 安全與稽核</h2>
+<ul>
+<li>安全控制：<code>RAG/docs/SAFETY_CONTROLS.md</code>（9 道守則、8 種威脅偵測）</li>
+<li>稽核日誌：<code>RAG/docs/AUDIT_LOG_SCHEMA.md</code>（SHA-256 雜湊鏈防竄改）</li>
+<li>Prompt 版控：<code>RAG/docs/PROMPT_VERSIONS.md</code>（單一 <code>SYSTEM_PROMPT_BASELINE</code> + hash）</li>
+</ul>
+<h2 id="7">7. 版本與變更</h2>
+<p>版控機制：SHA-256 快照（<code>RAG/data/versions/snapshot_*.json</code>）+ tar.gz 備份 +
+<code>RAG/CHANGELOG.md</code>（Keep a Changelog 格式）。內網環境無 Git，此為 A.6.2.5
+變更管理的正式機制。</p>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/MODEL_CARD.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISO42001 完整 Stack 更新流程</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--ok:#166534;--warn:#92400e;--danger:#991b1b;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:920px;margin:0 auto;background:var(--bg);min-height:100vh;border-left:1px solid var(--border);border-right:1px solid var(--border);}
+.hero{background:linear-gradient(135deg,#1e3a8a,#1e40af);color:#fff;padding:30px 44px;}
+.hero h1{margin:0 0 6px;font-size:25px;font-weight:900;}
+.hero .sub{font-size:13.5px;color:#cfe0ff;}
+.content{padding:22px 44px 60px;}
+h2{font-size:19px;font-weight:800;color:var(--accent);margin:30px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--accent);}
+h2 .n{display:inline-block;background:var(--accent);color:#fff;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-size:15px;margin-right:8px;}
+h3{font-size:15.5px;font-weight:800;margin:18px 0 6px;}
+p{margin:.6em 0;}
+code{font-family:"JetBrains Mono","Consolas",monospace;font-size:.87em;background:#eef2f7;color:#0f172a;padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.6;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+.box{border-radius:7px;padding:13px 18px;margin:14px 0;border:1px solid;}
+.box.danger{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
+.box.warn{background:#fffbeb;border-color:#fde68a;color:#78350f;}
+.box.ok{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.box.info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;}
+.box b{font-weight:800;}
+ul,ol{margin:.5em 0;padding-left:1.6em;}
+li{margin:.3em 0;}
+.foot{margin:34px 44px 0;padding-top:14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);text-align:center;}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:#e7ecf5;color:#1e3a8a;}
+@media print{body{background:#fff;}.wrap{border:0;}.hero,th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}pre{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>ISO42001 完整 Stack 更新流程</h1>
+    <div class="sub">外部稽核準備乾淨基線 · rag-api / embed-proxy / jupyter / openwebui / keycloak / code-server / nginx</div>
+  </div>
+  <div class="content">
+
+    <div class="box info">
+      <b>本文適用情境</b>：從外部稽核準備乾淨基線建立或更新完整 ISO42001 stack。
+      目前專案已清空歷史稽核日誌、部署包、Docker tar、舊憑證與 <code>.env</code>。
+      全新啟動請先 <code>cp .env.example .env</code> 並填入強密碼與推論後端。
+    </div>
+    <div class="box ok">
+      <b>完整 stack</b>：<code>db</code>（pgvector 基礎依賴）、<code>embed-proxy</code>、
+      <code>rag-api</code>、<code>jupyter</code>、<code>openwebui</code>、<code>keycloak</code>、
+      <code>code-server</code>、<code>nginx</code>。
+      nginx 對 host 使用 <code>8088/8443</code>，避開內網既有 <code>80/443</code>。
+    </div>
+
+    <h2><span class="n">0</span>更新包內容</h2>
+    <table>
+      <thead><tr><th>檔案</th><th>必要性</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td><code>full-stack-code.zip</code></td><td>★ 必要</td><td>程式碼 + 文件（含 HTML）+ compose + .env.example；<b>不含</b>執行期資料與機密</td></tr>
+        <tr><td><code>images/*.tar</code></td><td>★ 必要</td><td>完整 stack images：rag-api、embed-proxy、jupyter、code-server、pgvector、openwebui、keycloak、nginx</td></tr>
+        <tr><td><code>MANIFEST.txt</code></td><td>—</td><td>檔案清單 + SHA-256 完整性驗證碼</td></tr>
+      </tbody>
+    </table>
+
+    <h2><span class="n">1</span>內網連線設定（本版重點）</h2>
+    <p>模型連線由 <code>.env</code> 控制，且 <b>embedding 走 embed-proxy</b>（因 nv-embed-v2 為 Triton gRPC）：</p>
+    <table>
+      <thead><tr><th>項目</th><th>內網值</th></tr></thead>
+      <tbody>
+        <tr><td>LLM（gpt-oss-20b）</td><td><code>http://10.53.100.12:7000/v1</code></td></tr>
+        <tr><td>Embedding（nv-embed-v2）</td><td>Triton gRPC <code>10.53.100.12:9000</code>（或 9001），由 embed-proxy 轉換</td></tr>
+        <tr><td>rag-api 取 embedding</td><td>經 <code>http://embed-proxy:7100/v1</code>（內部 service）</td></tr>
+      </tbody>
+    </table>
+    <div class="box warn">
+      <b>請先確認 embed 的 gRPC port 是 9000 還是 9001</b>，於 <code>.env</code> 設定
+      <code>EMBED_GRPC_PORT</code>（步驟 5）。compose 已改為由 <code>.env</code> 驅動，
+      dev 與內網用各自 <code>.env</code> 切換，互不影響。
+    </div>
+
+    <h2><span class="n">2</span>前置備份（最重要，勿略過）</h2>
+    <div class="box danger">
+      <b>更新前務必備份。</b>稽核日誌（雜湊鏈）一旦遺失無法重建，且為 ISO 42001 A.6/A.9 證據。
+    </div>
+    <p>在內網部署目錄（如 <code>~/ISO42001Deploy</code>）執行：</p>
+    <pre><code># 1. 用內建版本工具做快照 + tar.gz 備份（A.6.2.5 變更管理）
+docker exec ISO42001_rag_api python3 scripts/version_tracker.py snapshot \
+  -m "完整 stack 更新前備份" -o "&lt;操作者&gt;" -v "pre-full-stack-update" --backup
+
+# 2. 另外手動備份執行期資料與 .env（雙保險）
+ts=$(date +%Y%m%d_%H%M)
+tar czf ~/iso42001_backup_${ts}.tar.gz \
+  RAG/data/audit_logs RAG/data/versions RAG/data/processed .env
+echo "備份完成：~/iso42001_backup_${ts}.tar.gz"</code></pre>
+
+    <h2><span class="n">3</span>傳輸與完整性驗證</h2>
+    <pre><code># dev 端 → 內網／部署機
+scp full-stack-code.zip images/*.tar MANIFEST.txt \
+    &lt;使用者&gt;@10.53.100.12:~/iso42001-update/
+
+# 內網端：核對 SHA-256 與 MANIFEST 一致
+cd ~/iso42001-update
+sha256sum full-stack-code.zip images/*.tar
+#   ↑ 比對 MANIFEST.txt 內的值，必須完全相同</code></pre>
+
+    <h2><span class="n">4</span>載入 images</h2>
+    <pre><code>cd ~/iso42001-update
+for f in images/*.tar; do docker load -i "$f"; done</code></pre>
+
+    <h2><span class="n">5</span>展開源碼 + 設定連線</h2>
+    <div class="box ok">
+      <b>安全</b>：<code>full-stack-code.zip</code> 不含 <code>audit_logs/</code>、<code>processed/</code>、
+      <code>versions/</code>、<code>.env</code>，解壓<b>不會覆蓋</b>內網既有的稽核日誌、向量索引與機密。
+    </div>
+    <pre><code># 展開到部署目錄（覆蓋程式碼與文件，保留執行期資料）
+cd ~/ISO42001Deploy
+unzip -o ~/iso42001-update/full-stack-code.zip -d .
+
+# 確認 .env 的連線值（沿用既有 .env，按本版內網端點調整）：
+#   LLM_API_BASE=http://10.53.100.12:7000/v1
+#   EMBED_API_BASE=http://embed-proxy:7100/v1
+#   LLM_HOST=10.53.100.12
+#   LLM_PORT=7000
+#   EMBED_GRPC_PORT=9000        # 若實際為 9001 改此值
+#   TRITON_MODEL_NAME=nv-embed-v2
+nano .env     # 對照 .env.example 補上/調整以上欄位</code></pre>
+
+    <h2><span class="n">6</span>重建容器</h2>
+    <pre><code>cd ~/ISO42001Deploy
+# 以新 image + 新程式碼重建完整 stack
+docker compose up -d --build
+
+# 等待健康
+docker compose ps</code></pre>
+    <div class="box info">也可執行 <code>./deploy.sh</code>，腳本會自動偵測 UID/GID、產生自簽憑證、載入 <code>images/*.tar</code> 並啟動完整 stack。</div>
+
+    <h2><span class="n">7</span>驗證更新成功</h2>
+    <pre><code># a. 服務健康
+curl -fsS http://localhost:8043/health && echo " rag-api OK"
+
+# b. LLM / embed 連線（送一筆真實查詢，應得到非空、含條文的回答）
+curl -s http://localhost:8043/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"rag-agent","messages":[{"role":"user","content":"軍人酒駕會受到什麼懲罰？"}],"stream":false}' \
+  | head -c 400
+
+# c. 稽核日誌完整性（雜湊鏈未被破壞）
+docker exec ISO42001_rag_api python3 -c \
+  "from rag_system.core.audit_logger import AuditLogger; from pathlib import Path; import glob; \
+   print(AuditLogger.verify_integrity(Path(sorted(glob.glob('data/audit_logs/*.jsonl'))[-1])))"</code></pre>
+    <div class="box ok"><b>更新成功判準</b>：a–c 全綠；查詢回非空且含條文；雜湊鏈 <code>valid=True</code>。</div>
+
+    <h2><span class="n">7b</span>疑難排解：embedding 回 500</h2>
+    <div class="box warn">
+      <b>已知議題</b>：nv-embed-v2 為 Triton gRPC，embed-proxy 的 gRPC 埠若設錯（<code>compose 預設 9000，實際常為 9001</code>）、
+      或模型名/tensor 名不符，<code>/v1/embeddings</code> 會回 <b>500</b>，連帶 rag-api 檢索失敗。
+    </div>
+    <p>embed-proxy 內建診斷端點 <code>/ready</code>，<b>第一步先打它</b>：</p>
+    <pre><code># 直接問 embed-proxy：Triton 連得到嗎？模型載入了嗎？期望什麼 tensor？
+curl -s http://localhost:17100/ready | python3 -m json.tool</code></pre>
+    <table>
+      <thead><tr><th>/ready 顯示</th><th>研判</th><th>處置</th></tr></thead>
+      <tbody>
+        <tr><td><code>error: ...Connection refused</code></td><td>gRPC 埠/主機不通</td><td>多半是埠：設 <code>.env</code> <code>EMBED_GRPC_PORT=9001</code>（或正確值），重啟 embed-proxy</td></tr>
+        <tr><td><code>server_live:true, model_ready:false</code></td><td>模型未載入或名稱不符</td><td>確認 Triton 上模型名＝<code>TRITON_MODEL_NAME</code>（nv-embed-v2）</td></tr>
+        <tr><td><code>hints: 名稱不符</code></td><td>input/output tensor 名與 proxy 預期（query/documents/embeddings）不符</td><td>對照 <code>expected_inputs/outputs</code> 調整 <code>embed_proxy/proxy.py</code></td></tr>
+        <tr><td><code>hints: 相符</code></td><td>連線與格式都對</td><td>再送一筆實測 <code>/v1/embeddings</code> 確認</td></tr>
+      </tbody>
+    </table>
+    <pre><code># 看 embed-proxy 即時錯誤日誌（本版已把錯誤寫入 stdout）
+docker logs --tail 50 ISO42001_embed_proxy
+
+# 改埠後重啟
+nano .env        # EMBED_GRPC_PORT=9001
+docker compose up -d --build embed-proxy
+curl -s http://localhost:17100/ready | python3 -m json.tool   # 再確認</code></pre>
+
+    <h2><span class="n">7c</span>試做前清空資料（交付單位人員測試前）</h2>
+    <div class="box info">
+      此為<b>試做</b>：交付單位人員主動測試前，先清空既有的使用/測試資料，讓他們從<b>乾淨狀態</b>開始，
+      使用資料與稽核日誌都是空的。
+    </div>
+    <pre><code># 清空使用資料（保留法規語料、golden_dataset；外部稽核準備版本快照已清空）
+./reset_data.sh        # 互動確認後執行；會 TRUNCATE conversations、清 audit_logs</code></pre>
+    <table>
+      <thead><tr><th>會清空</th><th>會保留</th></tr></thead>
+      <tbody>
+        <tr><td>稽核日誌（audit_logs）</td><td>向量索引（pgvector 知識庫）</td></tr>
+        <tr><td>對話歷史（conversations 表）</td><td>法規語料 converted_md</td></tr>
+        <tr><td>版本 snapshot（外部稽核準備已清空）</td><td>必要時重新產生版本快照</td></tr>
+      </tbody>
+    </table>
+    <div class="box danger">
+      <b>本腳本會重置稽核日誌的雜湊鏈，僅限「真實測試開始前」執行一次。</b>
+      單位人員真實測試一旦開始，稽核日誌即為 ISO 42001 A.6/A.9 證據，<b>不可再清空</b>。
+    </div>
+
+    <h2><span class="n">8</span>回退程序（如更新後異常）</h2>
+    <pre><code>cd ~/ISO42001Deploy
+# 1. 停止完整 stack
+docker compose down
+# 2. 還原程式碼與資料（用步驟 2 的備份）
+tar xzf ~/iso42001_backup_&lt;時間戳&gt;.tar.gz -C .
+# 3. 還原 .env（若有改動）並重啟
+docker compose up -d --build
+# 4. 確認查詢正常、稽核日誌完整</code></pre>
+    <div class="box warn">回退後請保留更新失敗的紀錄（容器日誌、錯誤訊息）以便排查，
+    並依 <code>governance/INCIDENT_RESPONSE.html</code> 留下處置紀錄。</div>
+
+    <h2><span class="n">9</span>更新檢核表</h2>
+    <table>
+      <thead><tr><th>#</th><th>項目</th><th>完成</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>已做版本快照 + tar.gz 備份（含 audit_logs / .env）</td><td>☐</td></tr>
+        <tr><td>2</td><td>SHA-256 與 MANIFEST 比對一致</td><td>☐</td></tr>
+        <tr><td>3</td><td>完整 stack images 已 docker load</td><td>☐</td></tr>
+        <tr><td>4</td><td>源碼 zip 已展開，稽核日誌未被覆蓋</td><td>☐</td></tr>
+        <tr><td>5</td><td>.env 連線值已設（LLM:7000、embed-proxy、gRPC port 9000/9001）</td><td>☐</td></tr>
+        <tr><td>6</td><td>完整 stack 啟動後全部 healthy</td><td>☐</td></tr>
+        <tr><td>7</td><td>真實查詢回非空含條文；儀表板載入；51 測試過；雜湊鏈 valid</td><td>☐</td></tr>
+        <tr><td>8</td><td>操作者 / 日期 / 結果已記錄</td><td>☐</td></tr>
+      </tbody>
+    </table>
+
+  </div>
+  <div class="foot">
+    ISO 42001 RAG 法律文件查詢系統 · 完整 stack 更新流程 · 自包含 HTML，可離線開啟與列印<br>
+    相關：部署 <code>INTRANET_DEPLOYMENT_RUNBOOK.html</code> · 變更管理 <code>CHANGELOG.html</code> · 證據總覽 <code>../../AUDIT_EVIDENCE_INDEX.html</code>
+  </div>
+</div>
+</body>
+</html>

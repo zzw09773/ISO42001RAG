@@ -1,41 +1,48 @@
 # ISO42001 實作系統 — 一鍵離線部署包
 
-這是一個整合了 Retrieval-Augmented Generation (RAG) API、Open WebUI 視覺化前端介面、PostgreSQL 向量資料庫（pgvector）與 Jupyter Notebook 開發環境的完整系統。
-本專案已設定為**完全支援內部網路的離線部署**，並解決了 Docker 環境下檔案權限（UID/GID）的問題。
+這是一個整合 Retrieval-Augmented Generation (RAG) API、Open WebUI、Keycloak、Code Server、PostgreSQL/pgvector、Jupyter 與 Nginx 的 ISO42001 外部稽核準備部署專案。
+本專案保留完整服務架構，但已清空歷史稽核資料、部署包、Docker tar 與本機機密設定。
+本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。
 
 ---
 
 ## 🏗️ 系統服務架構
 
-本系統透過單一 `docker-compose.yaml` 管理以下 **6 個核心服務**：
+本系統透過單一 `docker-compose.yaml` 管理以下服務。`db/pgvector` 是 RAG 基礎依賴；其餘為主要內網入口與維運服務。
 
 | 服務 | 說明 | Port |
 |---|---|---|
 | **pgvector** (`db`) | PostgreSQL + pgvector 向量資料庫 | `15432` |
-| **embed-proxy** | OpenAI Embeddings API ↔ Triton gRPC 轉換層 | 內部 `8100` |
-| **rag-api** | FastAPI RAG 服務（向量檢索 + LLM 回答） | `8000` |
-| **openwebui** | 使用者聊天介面 | `8080` / `443` |
-| **nginx** | HTTPS 反向代理 | `80`, `443` |
-| **jupyter** | 開發 / 索引環境 | `25678` |
+| **embed-proxy** | OpenAI Embeddings API ↔ Triton gRPC 轉換層 | `17100` → `7100` |
+| **rag-api** | FastAPI RAG 服務（向量檢索 + LLM 回答） | `8043` → `8000` |
+| **openwebui** | 使用者聊天介面 | `18088` → `8080` |
+| **keycloak** | OpenWebUI OIDC / 強密碼註冊用 | `18080` → `8080` |
+| **code-server** | 瀏覽器 IDE，掛載整個 ISO42001 專案，含 container/Docker extension | `18443` → `8080` |
+| **nginx** | HTTPS 反向代理，宿主端避開內網既有 80/443 服務 | `8088` → `80`, `8443` → `443` |
+| **jupyter** | 開發 / 索引環境 | `25678` → `8888` |
 
 ```
 使用者瀏覽器
     │ HTTPS
     ▼
-  Nginx (:443)
-    ├── / → Open WebUI (:8080)
-    └── API 請求 → RAG API (:8000)
-                      ├── pgvector (:5432)   [向量搜尋]
-                      ├── embed-proxy (:8100) [Embedding]
-                      │       └── Triton gRPC (:9001) [GPU 推論]
-                      └── LLM HTTP (:7000)   [語言生成]
+  Nginx (:8443 on host)
+    └── / → Open WebUI (:8080)
+
+Open WebUI
+    ├── OIDC → Keycloak (:8080)
+    └── OpenAI API → RAG API (:8000)
+                      ├── pgvector (:5432)
+                      ├── embed-proxy (:7100) → Triton gRPC (:9001)
+                      └── LLM HTTP (:7000)
+
+Code Server (:18443) 掛載整個專案並透過 Docker socket 管理容器。
 ```
 
 ---
 
 ## ⚙️ LLM 與 Embedding 服務設定
 
-本系統不內建 LLM 或 Embedding 模型，需要外部的 **GPU 推論伺服器**（Triton）。
+本系統不內建 LLM 或 Embedding 模型，需要連接內網 **GPU 推論伺服器**（Triton）。
 
 ### 架構說明
 
@@ -115,21 +122,21 @@ LLM_HOST=<新的 GPU 伺服器 IP>
 
 ## 🚀 部署流程（一鍵腳本）
 
-系統設計為「先打包，後離線部署」的工作流：
+系統設計為內網離線部署工作流：先在內網維運機準備 `images/` 映像檔，再搬移到目標內網主機執行部署。
 
-### 階段一：有網路環境時打包 (Online Preparation)
+### 階段一：內網部署包準備
 
-在可以連線網際網路的機器上執行，此步驟會自動建置包含所有 Python pip 套件的 Image，並匯出為 `.tar` 檔。
+在內網維運機執行，此步驟會建置本專案 images、拉取已核定的固定版本基礎 images，並匯出為 `.tar` 檔。
 
 ```bash
 chmod +x save_images.sh
 ./save_images.sh
 ```
-執行完畢後，所有所需映像檔將打包至 `images/` 目錄下（共約 5.5GB）。
+執行完畢後，所有所需映像檔將打包至 `images/` 目錄下；大小依 image 版本而定。
 
-### 階段二：內網離線部署 (Offline Deployment)
+### 階段二：內網目標主機部署
 
-將整個 `ISO42001Deploy/` 資料夾（包含 `images/` 目錄）複製到完全無網路的內網機器。
+將整個 `ISO42001Deploy/` 資料夾（包含 `images/` 目錄）複製到目標內網主機。
 **只需執行一鍵部署腳本**：
 
 ```bash
@@ -150,8 +157,11 @@ chmod +x deploy.sh
 
 部署完成後，可透過瀏覽器存取以下連結（請將 `<主機IP>` 替換為實際的伺服器 IP）：
 
-- **聊天介面 (Open WebUI)**: `https://<主機IP>/` 
-- **RAG API 狀態**: `http://<主機IP>:8000/health`
+- **Nginx / Open WebUI**: `https://aimla.ai.example.com:8443/`
+- **Open WebUI direct**: `http://<主機IP>:18088/`
+- **Keycloak**: `http://<主機IP>:18080/`
+- **Code Server**: `http://<主機IP>:18443/`
+- **RAG API 狀態**: `http://<主機IP>:8043/health`
 - **開發環境 (Jupyter)**: `http://<主機IP>:25678/`
 
 *附註：由於 Nginx 使用的是本地自簽憑證，在首次存取 HTTPS (Open WebUI) 時，瀏覽器會跳出「您的連線不是私人連線」的警告。請點擊「進階」並選擇「繼續前往」即可。*

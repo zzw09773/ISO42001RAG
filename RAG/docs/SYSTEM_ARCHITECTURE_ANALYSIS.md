@@ -1,0 +1,332 @@
+# 系統架構分析（System Architecture Analysis）
+
+> ISO/IEC 42001 條文 4.1（組織脈絡）、6.1（風險與機會）、A.4（AI 系統生命週期資源）、
+> A.6.2（AI 系統生命週期）證據。本文件系統性描述 ISO 42001 RAG 法律文件查詢系統
+> 的部署架構、AI 處理管線、資料生命週期、安全縱深與稽核機制，每項架構主張附
+> **可開檔驗證的 file:line 級證據**，並誠實揭露已驗證的已知限制。
+>
+> **編製方法**：本版以檔案逐項核對四個架構面（基礎設施／安全／資料／AI 管線），
+> 僅收錄能以 file:line 證據支持的主張；覆核時被修正者採正確版本、無法驗證者剔除。
+> 覆核覆蓋 74 條架構主張。
+>
+> **狀態**：外部稽核準備整理版（2026-07-07）　**系統版本**：v1.1.0 基線 + 內網完整 stack
+> **權責**：龔修潁負責 RAG 相關後端與稽核日誌證據整理；張丘負責強密碼、憑證與
+> OpenWebUI/Keycloak 入口整理。風險接受決定見 `governance/AI_RISK_ASSESSMENT.md`，
+> 由稽核負責人評定。
+
+---
+
+## 0. 摘要
+
+本系統是一套中文法律 RAG（檢索增強生成）系統，供國軍法律承辦人查詢軍事法規條文。
+目前工作區定位為**外部稽核準備乾淨基線**：保留完整容器服務架構，清空歷史稽核日誌、
+部署包、Docker tar、版本 snapshot、舊憑證與本機機密設定。架構特徵：
+
+- **模型外置**：系統本身不含 LLM 與 Embedding 模型，透過環境變數契約連接內網
+  GPU 推論伺服器（Triton + vLLM）。系統可被完整稽核的是「編排、檢索、治理」層。
+- **AI 管線**：LangGraph 狀態圖,classify → retrieve → generate → verify 四節點,
+  含 verify→retrieve 自我修正迴圈;另有預設關閉的 ReAct 代理路徑（feature flag）。
+- **縱深防禦**：認證 → 速率限制 → 確定性輸入清洗 → 範疇分類 → 檢索過濾 →
+  輸出遮蔽 → 防竄改雜湊鏈稽核,共多層,安全檢查確定性先行、不委派 LLM。
+- **完整內網 stack**：除 `rag-api`、`embed-proxy`、`jupyter` 外，
+  另納入 Open WebUI 0.7.2、Keycloak 26.5.6、code-server 與 nginx。nginx 在宿主端
+  使用 8088/8443，避開內網既有 80/443 服務；正式內網可替換 DNS 憑證。
+
+本系統的證據強項在於**完整的稽核軌跡**（雜湊鏈日誌、prompt 版控、actions 軌跡）。
+本文件同時誠實列出已驗證的架構限制（§7），其中
+部署組態類（直連服務明文 HTTP、Jupyter 無認證、DB 預設帳密、code-server Docker socket）
+影響面最大,均附證據
+並對應到風險登錄。
+
+---
+
+## 1. 部署拓撲
+
+### 1.1 容器與職責
+
+`docker-compose.yaml` 的 ISO42001 主系統範圍包含 8 個主要 services，全部 `restart: unless-stopped`。其中
+`db/pgvector` 是 RAG 必要基礎依賴；其餘對應外部稽核準備主要服務：
+
+| 服務 | 角色 | 對宿主埠 | 證據 |
+|---|---|---|---|
+| `db` (pgvector) | PostgreSQL 17 + pgvector 向量庫；亦存對話歷史 | 15432→5432 | docker-compose.yaml:9-27 |
+| `embed-proxy` | OpenAI `/v1/embeddings` HTTP ↔ Triton gRPC 轉譯 | 17100→7100 | docker-compose.yaml:28-45；embed_proxy/proxy.py |
+| `rag-api` | FastAPI RAG 主服務（檢索＋生成＋稽核） | 8043→8000 | docker-compose.yaml:47-87 |
+| `openwebui` | Open WebUI 0.7.2 使用者聊天前端 | 18088→8080 | docker-compose.yaml:89-118 |
+| `keycloak` | Keycloak 26.5.6；OpenWebUI OIDC 與強密碼註冊 | 18080→8080 | docker-compose.yaml:120-139；keycloak/import/iso42001-realm.json |
+| `nginx` | HTTPS 反向代理；外部稽核準備宿主端避開 80/443 | 8088→80, 8443→443 | docker-compose.yaml:141-153；nginx/nginx.conf |
+| `jupyter` | 開發／法規索引環境 | 25678→8888 | docker-compose.yaml:155-188 |
+| `code-server` | 瀏覽器 IDE，掛載整個 ISO42001 專案，含 container/Docker extension | 18443→8080 | docker-compose.yaml:190-208；code-server/Dockerfile |
+
+### 1.2 已驗證的架構事實
+
+- **模型外置契約**：rag-api、jupyter 的 Embedding 皆經
+  `http://embed-proxy:7100/v1`；LLM 仍由 `.env` 的 `LLM_API_BASE` 指向推論後端
+  （docker-compose.yaml:64-71,177-183）。
+- **健康依賴鏈**：rag-api 依賴 db 與 embed-proxy 的 `service_healthy`;openwebui 依賴
+  rag-api healthy 與 keycloak started（docker-compose.yaml:56-60,96-100）。
+- **完整 stack 部署**：`deploy.sh` 載入 `images/*.tar`（如存在）後執行
+  `docker compose up -d --build`，啟動內網主系統 stack（deploy.sh:6-16,64-84）。
+- **TLS 邊界**：nginx 在容器內 listen 80/443，宿主端映射為 8088/8443；HTTP 轉向
+  `https://aimla.ai.example.com:8443/`，TLS 反代 OpenWebUI `/`
+  （docker-compose.yaml:146-153；nginx/nginx.conf:1-47）。
+- **外部稽核準備清理狀態**：目前工作區無 `.env`、舊憑證私鑰、部署包、Docker tar、
+  audit log、version snapshot；啟動後由 runtime 重新產生。
+
+> ⚠ **此拓撲的重要後果**：nginx 已提供 OpenWebUI 的 HTTPS 入口，但
+> rag-api(8043)、jupyter(25678)、db(15432)、embed-proxy(17100)、keycloak(18080)、
+> code-server(18443) 仍有直連宿主埠。未套用 hardening 或
+> 防火牆前，這些直連入口仍需視為部署層風險。詳見 §7 風險 R-INFRA-1/R-INFRA-2/R-INFRA-3。
+
+---
+
+## 2. AI 處理管線
+
+### 2.1 經典工作流（生產預設）
+
+LangGraph `StateGraph`,進入點 `classify`,四路條件路由(graph.py:45-142)：
+
+```
+classify ──┬─ legal ──────→ retrieve → generate → verify ─┬─ END
+           │                              ↑________________│ needs_retry
+           ├─ reject ────────────────────────────────────→ END
+           ├─ passthrough ──────────────────────────────→ END
+           └─ security_block ───────────────────────────→ END
+```
+
+| 節點 | 職責 | 證據 |
+|---|---|---|
+| `classify` | sanitize 確定性先行 → `### Task:` 前綴判定 → LLM JSON 路由 → regex 關鍵字 fallback | nodes.py:107-153 |
+| `retrieve` | 多階段混合檢索(見 §2.3);例外→空 context 誠實降級 | nodes.py:260-365 |
+| `generate` | 注入 context 生成;retry 時注入 verify feedback;輸出過 filter_output | nodes.py:374-490 |
+| `verify` | **現行為 regex 引用檢查**(見下);失敗回邊 retrieve,MAX_RETRIES=2 後強制 PASS | nodes.py:528-605；graph.py:97-104 |
+
+**稽核軌跡**:`GraphState.actions` 以 `Annotated[list, operator.add]` reducer 累積各節點
+動作,最終形成有序軌跡(如 `classify=llm:legal → retrieve(docs=5) → generate(citations=3)
+→ verify=passed(regex)`),非串流路徑由 api.py 整批寫入稽核日誌(state.py:40-43；api.py:331-360)。
+此為 ISO 42001 A.6.2(生命週期軌跡)的核心證據。
+
+### 2.2 verify 節點的真實行為（重要澄清）
+
+交叉覆核修正了一項常見誤解:**生產環境的 verify 節點實際執行的是 regex 引用結構檢查,
+不是 LLM 語意自省**。`graph.py:104` 明確以 `create_verify_node(llm=None)` 接線;程式碼
+保留了 LLM verify 能力但未啟用——這是 v1.2 實驗的數據驅動回退(LLM verify 使
+Precision 0.78→0.71 而 Hit Rate 無增益,故回退,決策見 graph.py:97-103 註解)。
+
+現行 regex verify 檢查回答是否含「第N條」引用與結構字串,**不比對 retrieved_docs**,
+因此無法偵測「引用了未檢索到的條文」(幻覺引用)。此外 verify 有無條件 PASS 條款:
+回答含五個誠實措辭片語之一(尚未收錄／無法提供／未發現／未檢索到／沒有相關)即跳過
+檢查直接通過(nodes.py:543-568)。此設計避免懲罰正確的拒答,但也意味長答案夾帶此類
+措辭可繞過引用審查。列為 §7 風險 R-PIPE-1。
+
+### 2.3 檢索層（多階段混合管線）
+
+檢索是六階段混合管線(retrieval.py),非單一向量檢索：
+
+| 階段 | 機制 | 觸發條件 | 證據 |
+|---|---|---|---|
+| Stage 0 | 條號快速通道:BM25 精準命中直接 pin | 查詢含「第N條」 | retrieval.py:167-237 |
+| Stage 0.5 | HyDE:LLM 生成假設文件再檢索 | 查詢**無**條號 | retrieval.py:285-294 |
+| Stage 0.75 | Self-Query:LLM 抽法規名→metadata 過濾(加法合併,非限縮) | cross_reference 且抽出 law_names | retrieval.py:303-315,364-410 |
+| Stage 1 | BM25 + 向量混合,來源多樣性 round-robin 合併 | 恆 | retrieval.py:455-517 |
+| Stage 2 | LLM listwise 重排取 top-N | 恆(pinned 免重排) | retrieval.py:520-600 |
+| Stage 3 | 以 doc_id 取回「一條一父文件」全文 | 恆 | retrieval.py:602-632 |
+
+所有 LLM 步驟失敗均 **fail-open** 回退基礎混合結果。條號快速通道使命中條文本身免經
+rerank,但同一查詢仍對其餘候選執行 rerank 以挑背景文件。
+
+> **重試迴圈的架構盲點**:verify 失敗回邊 retrieve 時,對同一 question 用相同(確定性)
+> 查詢,取回**完全相同**的文件,自我修正只靠 feedback 改寫 generate prompt。換言之,
+> 若失敗根因是「檢索沒撈到正確條文」,重試無法補救。詳見 §7 風險 R-PIPE-2。
+
+### 2.4 ReAct 代理路徑（feature flag，預設關閉）
+
+`react_workflow.py` 以 `create_react_agent` 包裝單一檢索工具,LLM 自主決定檢索時機與
+次數(理論多跳)。由 `REACT_MODE` 環境變數開關,**預設關閉**,零碼回滾(graph.py:145-148)。
+
+**治理狀態(照實揭露)**:此路徑定位為保留的原型(CHANGELOG.md:248),經交叉覆核確認
+尚未達生產治理標準:
+- 串流路徑缺 pre-classify／post-verify／filter_output(react_workflow.py:411-457);
+- 稽核軌跡降級:回傳無 actions 鍵 → 稽核記 `actions=[]`(react_workflow.py:393-408;api.py:358);
+- 無明確最大步數,超限拋未捕捉的 HTTP 500(react_workflow.py:341);
+- 零測試、未對 golden dataset 跑過正式 gating 評測。
+
+**結論**:現行生產系統(REACT_MODE 關閉)的可稽核性完整;ReAct 路徑的正式啟用須先
+通過治理閘(影子評估 + actions schema + 測試),屬稽核後 roadmap。本系統交付狀態
+**不依賴**此路徑。
+
+---
+
+## 3. 資料架構與生命週期
+
+### 3.1 資料流
+
+```
+法規 Markdown (converted_md/, 2 部法)
+  └─reindex.py→ IngestionService「第N條」感知切分
+       ├─ parent(每條全文)→ LocalFileStore docstore（外部稽核準備目前已清空，reindex 後重建）
+       └─ child chunk(800字/重疊100)→ pgvector「laws_vectors」collection
+查詢 → AuditLogger → audit_YYYY-MM-DD.jsonl(雜湊鏈,UTC+8 滾動,0o640；目前乾淨基線無歷史檔)
+對話 → conversations 表(同一 PostgreSQL,session_id 隔離)
+原始碼/設定/法規 → version_tracker SHA-256 快照（外部稽核準備目前只保留 versions/.gitkeep，正式快照重新產生）
+```
+
+### 3.2 已驗證事實
+
+- **Article-Aware Chunking**:以整行正規式「第N條」(支援阿拉伯與中文數字)為界,每條
+  一個 parent Document;條文內容不注入前綴(曾致 Hit Rate 0.871→0.806,故移除)
+  (ingestion.py:32-35,85-155)。
+- **Metadata 溯源**:子 chunk 帶 source/hash/article_id/law_name/doc_id;刪除與稽核皆
+  依 metadata 定位(ingestion.py:143-159)。（註:law_name 僅條文 parent 帶,preamble 與
+  fallback chunk 不含——交叉覆核修正。）
+- **稽核日誌防竄改**:每筆 `entry_hash = SHA256(prev_hash + canonical_json)`,genesis 為
+  64 個 0,跨實例共享 `_LAST_HASH` + `threading.Lock` 防鏈分叉(audit_logger.py:108-122)。
+- **變更管理(無 Git)**:version_tracker 可對追蹤檔(含法規 md)做 SHA-256 快照,排除
+  執行期資料並自動追加 CHANGELOG(version_tracker.py:118-160)。外部稽核準備已刪除舊
+  snapshot 與 tar 備份，避免把舊執行期證據混入乾淨內網基線。
+
+### 3.3 資料生命週期的已知缺口
+
+交叉覆核發現多項生命週期終端控制缺失,均列入 §7：
+- 稽核日誌 24 個月保留(NFR-M-06)**僅文件宣告,無自動化清理/輪替機制**(R-DATA-1);
+- 對話表無 TTL/去識別化,含個資的查詢原文無限期累積(R-DATA-2);
+- 文件刪除端點 `DELETE /v1/documents/{filename}` **不寫稽核**(R-DATA-3);
+- 雜湊鏈以「每日檔」為錨點,**整日日誌檔遭刪除無法由 verify_integrity 偵測**(R-DATA-4)。
+
+---
+
+## 4. 安全縱深架構
+
+### 4.1 防禦層次（已對程式碼逐層驗證）
+
+| 層 | 機制 | 證據 | ISO 對應 |
+|---|---|---|---|
+| 網路 | nginx TLS（OpenWebUI `/`）；其他直連埠需靠 hardening/防火牆收斂 | nginx.conf | 27001 A.8.15 |
+| 認證 | API key／Intranet mode／503 fail-closed;X-Forwarded-For 僅信任 TRUSTED_PROXIES | auth.py:52-97,116-131 | 42001 A.9 |
+| 速率限制 | 每金鑰 60 req/min,超限 429+Retry-After | rate_limiter.py:27-45;api.py:145 | 42001 A.9 |
+| 輸入清洗 | 確定性 regex,8 種威脅,LLM 前攔截,上限 2000 字 | input_sanitizer.py:130-200 | 42001 A.8 |
+| 範疇分類 | security 永遠先行,security_block 寫 security_alert | nodes.py:111-120,175-205 | 42001 A.8/A.9 |
+| 檢索過濾 | Self-Query metadata 過濾（加法式） | retrieval.py:364-410 | 42001 A.7 |
+| 輸出遮蔽 | filter_output 6 條敏感樣式規則 | output_filter.py:17-49 | 42001 A.8 |
+| 稽核 | SHA-256 雜湊鏈日誌 + verify_integrity | audit_logger.py:108-160 | 27001 A.5.28/A.8.15 |
+
+### 4.2 核心安全保證（已驗證）
+
+- **安全先行不委派 LLM**:sanitize 在任何 LLM 路由前執行,LLM 故障無法繞過
+  (nodes.py:103-104 docstring,111-120)。
+- **Fail-closed 認證**:API_KEYS 未設且未明確啟用 intranet mode 時,受保護端點回 503
+  而非靜默放行(auth.py:72-77)。
+- **來源 IP 防偽**:X-Forwarded-For 僅在直接 TCP peer 屬 TRUSTED_PROXIES 時採信,直連
+  客戶端無法偽造稽核來源 IP(auth.py:116-131)。
+- **SAFETY_CONTROLS.md 守則對應**:9 道守則中 7 道(認證、速率、輸入清洗、範疇分類、
+  Self-Query、輸出過濾、雜湊鏈)可逐一對應程式碼。文件-程式碼一致性已覆核:
+  守則⑦(verify)的文件描述「regex 為現行、LLM 為已回退實驗」**與部署一致**(graph.py:104
+  傳 llm=None);對話摘要功能確實存在(memory.py `ConversationSummarizer`)。
+
+### 4.3 已驗證的安全缺口
+
+交叉覆核確認以下缺口(均列 §7,部分為高風險):
+- 串流路徑繞過輸出過濾與(ReAct)pre-classify/post-verify(R-SEC-1,high);
+- session_id 取自未驗證 header 且未綁 API key,可載入他人對話歷史(R-SEC-2,high);
+- CORS 預設 `allow_origins='*'` 且 `allow_credentials=True`(R-SEC-3);
+- 速率限制僅掛 chat 端點,upload/documents/reindex 無速率限制(R-SEC-4);
+- passthrough 路由繞過輸出過濾(R-SEC-5)。
+
+---
+
+## 5. 稽核與驗證機制
+
+ISO42001 主系統以稽核日誌、版本紀錄與測試結果作為可查核證據。
+
+| 機制 | 目的 | 證據 |
+|---|---|---|
+| RAG API 系統版號 | 對外顯示主系統基線版號，供 OpenAPI、`/health`、`/v1/models` 查核 | `rag_system/core/version.py`、`api.py` |
+| 雜湊鏈稽核日誌 | 追溯每筆查詢、安全事件、認證事件與工作流 actions | `audit_logger.py`、`AUDIT_LOG_SCHEMA.md` |
+| Prompt 基線 hash | 將回覆行為對應到當時 `SYSTEM_PROMPT_BASELINE` | `prompts.py`、`PROMPT_VERSIONS.md` |
+| 版本快照 | 對原始碼、設定與法規語料產生 SHA-256 版控快照 | `scripts/version_tracker.py`、`RAG/data/versions/` |
+| V&V 測試 | 驗證檢索與回答品質是否達成業務目標 | `RAG/tests/evaluation/`、`scripts/run_vv_evaluation.py` |
+| 安全測試 | 驗證 prompt injection、惡意輸入與敏感輸出控制 | `RAG/tests/evaluation/test_prompt_security.py` |
+
+---
+
+## 6. ISO 42001 控制對應總表
+
+| ISO 42001 | 架構證據（本文件章節） | 補充文件 |
+|---|---|---|
+| 4.1 組織脈絡 | §0 摘要、§1 拓撲 | requirements_review_report.md |
+| 6.1 風險與機會 | §7 已知限制 | governance/AI_RISK_ASSESSMENT.md |
+| A.4 生命週期資源 | §1 模型外置、§3 資料、governance/MODEL_CARD.md | MODEL_CARD.md |
+| A.6.2 生命週期 | §2 AI 管線、actions 軌跡 | CHANGELOG.md |
+| A.6.2.4 生命週期監督 | §5 稽核與驗證機制 | AUDIT_LOG_SCHEMA.md |
+| A.6.2.5 變更管理 | §3.2 version_tracker、§5 版本快照 | PROMPT_VERSIONS.md |
+| A.7 資料治理 | §3 資料架構、metadata 溯源 | AUDIT_LOG_SCHEMA.md |
+| A.8 安全 | §4 縱深防禦 | SAFETY_CONTROLS.md |
+| A.9 負責任使用 | §4.2 認證、governance/HUMAN_OVERSIGHT.md | HUMAN_OVERSIGHT.md |
+| 27001 A.5.28/A.8.15 | §3.2/§4 雜湊鏈、來源 IP | AUDIT_LOG_SCHEMA.md |
+
+---
+
+## 7. 已知限制與風險登錄
+
+> **誠實揭露原則**:以下為交叉覆核確認屬實的架構限制。列出它們不是弱點,而是
+> ISO 42001 條文 6.1 要求的風險識別證據。風險等級與接受決定見
+> `governance/AI_RISK_ASSESSMENT.md`,由稽核負責人評定;本表僅陳述技術事實。
+> 多數高影響項屬**部署組態**,可在不解凍 RAG/ 程式碼的前提下,於部署層處置。
+
+### 7.1 部署組態類（影響面最大，多數可在部署層處置）
+
+> **修正狀態（2026-07-07）**：外部稽核準備已改為完整 stack，nginx 已納入預設部署，
+> host 端口避開 80/443，Keycloak 與 code-server 已建入 compose。仍需由系統管理者
+> 依部署邊界決定是否套用 `docker-compose.hardening.yml`、防火牆或反代策略。
+
+| ID | 限制 | 證據 | 嚴重度 | 修正 |
+|---|---|---|---|---|
+| R-INFRA-1 | nginx 已提供 OpenWebUI HTTPS 入口，但 rag-api、jupyter、db、embed-proxy、keycloak、code-server 仍有宿主直連埠；未套用 hardening/防火牆前仍有明文或管理入口暴露面 | docker-compose.yaml:14-15,34-35,54-55,94-95,130-131,146-148,162-163,196-197;nginx/nginx.conf:31-47 | high | 🔧 依部署邊界套用埠綁 127.0.0.1、防火牆或增加 nginx 反代路由 |
+| R-INFRA-2 | Jupyter 無認證(空 token/密碼)、容器內可 sudo、rw 掛載 RAG 原始碼、埠 25678 開放——等同未認證程式碼執行入口 | RAG/Dockerfile:22;docker-compose.yaml:155-188 | high | 🔧 強化：套用 `docker-compose.hardening.yml`、設定 Jupyter token，或只在需要索引時啟動 |
+| R-INFRA-3 | DB 發布於宿主 15432，若 `.env` 沿用預設帳密，conversations 與向量庫可繞過全部應用層防護直接存取 | docker-compose.yaml:14-21;.env.example:29-33 | high | 🔧 埠綁本機 + `.env` 強密碼 |
+| R-INFRA-4 | 主系統 services 無自訂 networks,全落同一 default bridge；code-server/Jupyter 若遭濫用可直連 db、embed-proxy | docker-compose.yaml(全文無 networks) | medium | 📋 拓撲變更建議 |
+| R-INFRA-5 | `.env.example` 曾缺失導致部署 bootstrap 斷鏈 | .env.example | medium | ✅ **已修正**（已建 .env.example + gitignore 例外） |
+| R-INFRA-6 | code-server 掛載整個專案並掛 Docker socket；若密碼弱或對外暴露，等同可控制本機 Docker 與專案檔案 | docker-compose.yaml:190-208;code-server/Dockerfile | high | 🔧 強密碼、限制來源 IP、必要時移除 Docker socket 或改本機-only |
+
+### 7.2 安全機制類
+
+| ID | 限制 | 證據 | 嚴重度 |
+|---|---|---|---|
+| R-SEC-1 | 串流路徑繞過 filter_output;ReAct 串流另繞過 pre-classify/post-verify | graph.py:261-266;react_workflow.py:447-454 | high |
+| R-SEC-2 | session_id 取自未驗證 header 且未綁 API key,可指定他人 session 載入其對話歷史 | api.py:155-159,184-199 | high |
+| R-SEC-3 | CORS 預設 `allow_origins='*'` + `allow_credentials=True` | api.py:29-36 | medium |
+| R-SEC-4 | 速率限制僅掛 chat 端點;upload/documents/reindex 無速率限制 | api.py:145 vs 383,488,539,652 | medium |
+| R-SEC-5 | passthrough 路由繞過輸出過濾;LLM classify 可將任意查詢判為 passthrough | nodes.py:212-240 | medium |
+
+### 7.3 AI 管線與資料類
+
+| ID | 限制 | 證據 | 嚴重度 |
+|---|---|---|---|
+| R-PIPE-1 | verify 為 regex 引用檢查,不比對 retrieved_docs,無法偵測幻覺引用;含誠實措辭即無條件 PASS | graph.py:104;nodes.py:543-568 | medium |
+| R-PIPE-1b | 回答含「思考過程」段使 `extract_cited_articles` 掃全文時可能納入推理段列舉的候選條文（非最終引用），扭曲評估端 cited 集。**註：思考過程段本身為刻意的透明度設計（A.9，營運單位要求），非缺陷;修正僅在評估端做 section-aware 抽取,不動 prompt** | prompts.py:69-70（刻意設計）；評估端引用抽取工具 | low（僅評估端） |
+| R-PIPE-2 | verify 失敗重試不改變檢索(同查詢同結果),檢索層失敗無法由重試補救 | nodes.py:295-306;graph.py:259 | medium |
+| R-PIPE-3 | `prompt_version_hash` 只雜湊版本號登錄表不雜湊 prompt 內文,改字串未 bump 版本則 hash 不變,A.4 溯源依賴人工紀律 | prompts.py:45-46 | medium |
+| R-DATA-1 | 24 個月保留僅文件宣告,無自動清理/輪替機制 | grep retention 無命中 | medium |
+| R-DATA-2 | 對話表無 TTL/去識別化,含個資查詢原文無限期累積 | conversation_store.py:102-114 | medium |
+| R-DATA-3 | 文件刪除端點不寫稽核日誌 | api.py DELETE /v1/documents | medium |
+| R-DATA-4 | 雜湊鏈以每日檔為錨點,整日日誌檔遭刪無法由 verify_integrity 偵測 | audit_logger.py:63-66 | medium |
+
+---
+
+## 8. 結論
+
+本系統的核心 AI 治理架構——**多階段檢索 + 自我修正管線 + 完整 actions 稽核軌跡 +
+防竄改雜湊鏈日誌 + Prompt 版控 + V&V 測試**——結構完整且每一環節皆有 file:line
+級證據支撐,可逐項向稽核委員展示。生產交付狀態(ReAct 關閉)的可稽核性不依賴任何
+未治理的實驗路徑。
+
+§7 列出的限制中,影響面最大者集中於**部署組態**(直連埠、Jupyter 無認證、DB 預設帳密、
+code-server Docker socket),這些**不需解凍 RAG/ 程式碼**即可在部署層收斂——應由系統管理者
+依風險評定優先序處置,並更新 `governance/AI_RISK_ASSESSMENT.md` 的接受決定。AI 管線層
+的限制(verify 不接地、重試不改檢索)屬稽核後的精進 roadmap,已記錄於
+`[[project-agentic-rag-review]]` 對應的三波路線圖,不影響當前 Hit Rate 0.9355 達標。
+
+---
+*本文件已於 2026-07-07 依內網完整 stack 與清理後基線更新部署拓撲、資料生命週期與部署風險。
+龔修潁負責 RAG 相關後端內容，張丘負責強密碼、憑證與 OpenWebUI 入口內容；風險接受決定
+由稽核負責人另行評定。*

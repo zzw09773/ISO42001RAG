@@ -21,8 +21,13 @@ COPY monitoring/ /app/monitoring/
 COPY scripts/    /app/scripts/
 COPY service/    /app/service/
 
-# Addon 自己的 golden_dataset 與 reports 目錄
-COPY data/        /app/data/
+# 只烤入「參考資料」——golden_dataset（V&V 測試集）。
+# 刻意不烤 dev 的執行期資料（reports / alerts / experiments / stability），
+# 確保全新部署 image 內為乾淨狀態（無任何 dev 使用/監測紀錄）。reports 目錄
+# 由 app 執行期自建；正式部署另以 bind mount 覆蓋 /app/data。
+# （drift_baseline.json 已隨分布漂移移除——改為服務健康監測。）
+COPY data/golden_dataset.json /app/data/golden_dataset.json
+RUN mkdir -p /app/data/reports
 
 # RAG 主系統的 audit_logs 與 reports 透過 docker volume 掛載到此路徑
 ENV RAG_DATA_DIR=/rag_data \

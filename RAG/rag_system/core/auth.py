@@ -102,6 +102,17 @@ def key_prefix(key: str) -> str:
     return key[:24]
 
 
+def get_client_ip(request: Request) -> str:
+    """Public wrapper — extract the real client IP (spoof-guarded).
+
+    Used by api.py to stamp every audit event with the originating IP
+    (ISO 27001 A.8.15 network address). Honours X-Forwarded-For only from
+    TRUSTED_PROXIES peers, so the logged IP can't be forged by direct
+    clients.
+    """
+    return _get_client_ip(request)
+
+
 def _get_client_ip(request: Request) -> str:
     """
     Extract real client IP, guarding against header spoofing.

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>事件回應程序（Incident Response Procedure）</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/governance/INCIDENT_RESPONSE.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="incident-response-procedure">事件回應程序（Incident Response Procedure）</h1>
+<blockquote>
+<p>ISO 42001 A.8（事件管理）證據。
+狀態：v1.1.0（2026-06-10 編製，SLA 與通報對象待單位核定）</p>
+</blockquote>
+<h2 id="1">1. 事件分類與來源</h2>
+<table>
+<thead>
+<tr>
+<th>類別</th>
+<th>偵測來源</th>
+<th>範例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>安全事件</td>
+<td>audit log <code>security_alert</code> 事件</td>
+<td>prompt 注入、越權嘗試、異常存取模式</td>
+</tr>
+<tr>
+<td>品質事件</td>
+<td>V&amp;V fail、人工抽查</td>
+<td>Hit Rate 跌破 0.90、引用條文不一致</td>
+</tr>
+<tr>
+<td>完整性事件</td>
+<td>稽核日誌雜湊鏈驗證</td>
+<td>稽核日誌雜湊鏈斷裂</td>
+</tr>
+<tr>
+<td>可用性事件</td>
+<td>容器健康檢查、audit log fallback 軌跡</td>
+<td>推論後端中斷、服務降級</td>
+</tr>
+</tbody>
+</table>
+<p>事件紀錄以稽核日誌、CHANGELOG 與本文件指定的人工處置紀錄為準。</p>
+<h2 id="2">2. 回應流程</h2>
+<pre><code>事件發現 → 系統管理者確認（分級）→ 調查 → 矯正/緩解 → 處置紀錄 → 結案簽核
+</code></pre>
+<ol>
+<li><strong>確認</strong>：系統管理者於 SLA 內確認事件（見 §3），判定真實事件或誤報。</li>
+<li><strong>調查</strong>：以 audit log（<code>actions</code> 欄位含完整工作流軌跡）還原事件；
+   critical 安全事件須通報稽核負責人。</li>
+<li><strong>矯正</strong>：依事件類別處置（重啟服務／調整控制／重新索引／回退版本——
+   回退程序見 <code>INTRANET_DEPLOYMENT_RUNBOOK.html</code> 緊急回退章節）。</li>
+<li><strong>紀錄</strong>：每筆 warning 以上事件須留下處置紀錄
+   （調查 → 根因 → 矯正 → 處置決定），由稽核負責人簽核結案。</li>
+<li><strong>根因迴饋</strong>：若根因屬系統性缺陷，更新 <code>AI_RISK_ASSESSMENT.md</code> 風險登錄。</li>
+</ol>
+<h2 id="3-sla">3. 回應 SLA（單位核定）</h2>
+<!-- TODO(單位主管)：核定各級事件的確認與處置時限。建議值僅供討論。 -->
+
+<table>
+<thead>
+<tr>
+<th>嚴重度</th>
+<th>確認時限（建議）</th>
+<th>處置時限（建議）</th>
+<th>核定值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>critical</td>
+<td>4 小時</td>
+<td>1 個工作日</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>warning</td>
+<td>1 個工作日</td>
+<td>5 個工作日</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>info</td>
+<td>巡檢時</td>
+<td>—</td>
+<td>☐</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4">4. 通報矩陣（單位核定）</h2>
+<!-- TODO(單位主管)：填寫各級事件的通報對象與方式。 -->
+
+<table>
+<thead>
+<tr>
+<th>嚴重度</th>
+<th>通報對象</th>
+<th>方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>critical</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>warning</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/INCIDENT_RESPONSE.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

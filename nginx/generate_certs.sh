@@ -1,15 +1,45 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 產生測試用自簽憑證
-mkdir -p ssl
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SSL_DIR="$SCRIPT_DIR/ssl"
+DOMAIN="${CERT_DNS:-aimla.ai.example.com}"
 
-# 產生私鑰
-openssl genrsa -out ssl/cert.key 2048
+mkdir -p "$SSL_DIR"
 
-# 產生憑證簽署請求 (CSR)
-openssl req -new -key ssl/cert.key -out ssl/cert.csr -subj "/C=TW/ST=Taiwan/L=Taipei/O=MyCompany/OU=IT/CN=judge.local"
+OPENSSL_CONF="$(mktemp)"
+trap 'rm -f "$OPENSSL_CONF"' EXIT
 
-# 產生自簽憑證
-openssl x509 -req -days 365 -in ssl/cert.csr -signkey ssl/cert.key -out ssl/cert.crt
+cat > "$OPENSSL_CONF" <<EOF
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
 
-echo "測試憑證已建立於 ssl/ 目錄下。請注意這只是用於測試，正式環境請替換為合法憑證。"
+[dn]
+C = TW
+ST = Taiwan
+L = Taipei
+O = NCSIST
+OU = AIMLA
+CN = ${DOMAIN}
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${DOMAIN}
+EOF
+
+openssl genrsa -out "$SSL_DIR/cert.key" 2048
+openssl req -new -key "$SSL_DIR/cert.key" -out "$SSL_DIR/cert.csr" -config "$OPENSSL_CONF"
+openssl x509 -req -days 365 \
+  -in "$SSL_DIR/cert.csr" \
+  -signkey "$SSL_DIR/cert.key" \
+  -out "$SSL_DIR/cert.crt" \
+  -extensions req_ext \
+  -extfile "$OPENSSL_CONF"
+
+echo "自簽憑證已建立於 $SSL_DIR，DNS SAN: $DOMAIN"

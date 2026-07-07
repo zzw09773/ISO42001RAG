@@ -1,365 +1,185 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>中文法律 RAG 系統 — 需求規格審查報告</title>
-  <style>
-    /* ───────── 基底字型 ───────── */
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=swap');
-
-    :root {
-      --c-text: #1a1f2c;
-      --c-muted: #5b6578;
-      --c-border: #d9dee6;
-      --c-border-strong: #b6bdcc;
-      --c-bg: #ffffff;
-      --c-bg-soft: #f6f8fc;
-      --c-bg-stripe: #f0f3f9;
-      --c-accent: #1e3a8a;   /* 深藍 — 政府／企業審查色 */
-      --c-accent-soft: #e8edf8;
-      --c-good: #166534;
-      --c-good-soft: #dcfce7;
-      --c-warn: #92400e;
-      --c-warn-soft: #fef3c7;
-      --c-bad: #991b1b;
-      --c-bad-soft: #fee2e2;
-      --c-info: #1e40af;
-      --c-info-soft: #dbeafe;
-    }
-
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 15px;
-      line-height: 1.75;
-      color: var(--c-text);
-      background: var(--c-bg-soft);
-      margin: 0;
-      padding: 0;
-    }
-    code, pre, .mono { font-family: 'JetBrains Mono', "SFMono-Regular", Menlo, Consolas, monospace; }
-
-    /* ───────── 版面 ───────── */
-    .page {
-      max-width: 1080px;
-      margin: 0 auto;
-      background: var(--c-bg);
-      padding: 56px 64px;
-      border-left: 1px solid var(--c-border);
-      border-right: 1px solid var(--c-border);
-      min-height: 100vh;
-    }
-
-    /* ───────── 標題區（封面）───────── */
-    .cover {
-      border-top: 4px solid var(--c-accent);
-      border-bottom: 1px solid var(--c-border);
-      padding: 24px 0 28px;
-      margin-bottom: 36px;
-    }
-    .cover-eyebrow {
-      display: inline-block;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.18em;
-      color: var(--c-accent);
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-    .cover h1 {
-      margin: 0 0 18px;
-      font-size: 28px;
-      font-weight: 900;
-      letter-spacing: 0.02em;
-    }
-    .cover-meta {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      gap: 6px 24px;
-      font-size: 14px;
-      color: var(--c-text);
-    }
-    .cover-meta dt { color: var(--c-muted); font-weight: 500; }
-    .cover-meta dd { margin: 0; font-weight: 500; }
-    .verdict {
-      display: inline-block;
-      margin-top: 14px;
-      padding: 6px 14px;
-      background: var(--c-warn-soft);
-      color: var(--c-warn);
-      font-size: 13px;
-      font-weight: 700;
-      border: 1px solid #f0c269;
-      border-radius: 4px;
-    }
-
-    /* ───────── 目錄 ───────── */
-    .toc {
-      background: var(--c-bg-soft);
-      border: 1px solid var(--c-border);
-      padding: 20px 28px;
-      margin-bottom: 44px;
-      border-radius: 4px;
-    }
-    .toc h2 {
-      margin: 0 0 12px;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--c-muted);
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-    .toc ol {
-      margin: 0;
-      padding-left: 20px;
-      column-count: 2;
-      column-gap: 32px;
-      font-size: 14px;
-    }
-    .toc a { color: var(--c-text); text-decoration: none; }
-    .toc a:hover { color: var(--c-accent); text-decoration: underline; }
-
-    /* ───────── 章節標題 ───────── */
-    h2.section {
-      font-size: 22px;
-      font-weight: 900;
-      color: var(--c-accent);
-      padding-bottom: 8px;
-      border-bottom: 2px solid var(--c-accent);
-      margin: 56px 0 18px;
-      letter-spacing: 0.01em;
-    }
-    h3 {
-      font-size: 17px;
-      font-weight: 700;
-      margin: 32px 0 14px;
-      color: var(--c-text);
-    }
-    h4 {
-      font-size: 15px;
-      font-weight: 700;
-      margin: 22px 0 10px;
-    }
-    p { margin: 0 0 14px; }
-    ul, ol { margin: 0 0 14px; padding-left: 22px; }
-    li { margin-bottom: 4px; }
-
-    /* ───────── 表格 ───────── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 14px 0 22px;
-      font-size: 13.5px;
-      background: var(--c-bg);
-    }
-    thead th {
-      background: var(--c-accent);
-      color: #fff;
-      font-weight: 700;
-      text-align: left;
-      padding: 9px 12px;
-      font-size: 13px;
-      letter-spacing: 0.02em;
-    }
-    tbody td {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--c-border);
-      vertical-align: top;
-    }
-    tbody tr:nth-child(even) td { background: var(--c-bg-stripe); }
-    tbody tr:hover td { background: #eef3fb; }
-    td.id, td.center { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; white-space: nowrap; }
-    td.center { text-align: center; }
-
-    /* ───────── 內聯標籤 ───────── */
-    .tag {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 3px;
-      border: 1px solid currentColor;
-      letter-spacing: 0.04em;
-    }
-    .tag.good { color: var(--c-good); background: var(--c-good-soft); border-color: #86efac; }
-    .tag.warn { color: var(--c-warn); background: var(--c-warn-soft); border-color: #fcd34d; }
-    .tag.info { color: var(--c-info); background: var(--c-info-soft); border-color: #93c5fd; }
-    .tag.bad  { color: var(--c-bad);  background: var(--c-bad-soft);  border-color: #fca5a5; }
-
-    .verifiable { color: var(--c-good); font-weight: 700; }
-    .partial    { color: var(--c-warn); font-weight: 700; }
-    .procedural { color: var(--c-muted); font-weight: 700; }
-
-    /* ───────── 程式碼／圖塊 ───────── */
-    pre {
-      background: #0f172a;
-      color: #e2e8f0;
-      padding: 16px 18px;
-      border-radius: 4px;
-      font-size: 12.5px;
-      line-height: 1.55;
-      overflow-x: auto;
-      margin: 14px 0 22px;
-    }
-    pre.ascii {
-      background: var(--c-bg-soft);
-      color: var(--c-text);
-      border: 1px solid var(--c-border);
-      line-height: 1.45;
-    }
-    code.inline {
-      background: var(--c-bg-soft);
-      color: var(--c-accent);
-      padding: 1px 6px;
-      border-radius: 3px;
-      font-size: 13px;
-      border: 1px solid var(--c-border);
-    }
-
-    /* ───────── 引用 / placeholder ───────── */
-    .callout {
-      border-left: 4px solid var(--c-accent);
-      background: var(--c-accent-soft);
-      padding: 14px 18px;
-      margin: 18px 0;
-      font-size: 14px;
-    }
-    .callout.warn  { border-left-color: #b45309; background: var(--c-warn-soft); }
-    .callout.bad   { border-left-color: var(--c-bad); background: var(--c-bad-soft); }
-    .callout.empty {
-      border-left-color: var(--c-muted);
-      background: #fafbfd;
-      color: var(--c-muted);
-      font-style: italic;
-    }
-    .signoff {
-      border: 1px dashed var(--c-border-strong);
-      padding: 12px 18px;
-      background: #fafbfd;
-      font-size: 13px;
-      color: var(--c-muted);
-      margin: 14px 0;
-    }
-
-    /* ───────── 頁尾 ───────── */
-    .footer {
-      margin-top: 72px;
-      padding-top: 20px;
-      border-top: 1px solid var(--c-border);
-      font-size: 12px;
-      color: var(--c-muted);
-      text-align: center;
-    }
-
-    /* ───────── 列印 ───────── */
-    @media print {
-      body { background: #fff; }
-      .page { padding: 24px 28px; max-width: none; border: 0; }
-      a { color: inherit; text-decoration: none; }
-      h2.section { page-break-before: auto; page-break-after: avoid; }
-      table, pre, .callout { page-break-inside: avoid; }
-      thead { display: table-header-group; }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中文法律 RAG 系統 — 需求規格審查報告</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
 </head>
 <body>
-<div class="page">
-
-  <!-- ════════ 封面 ════════ -->
-  <section class="cover">
-    <div class="cover-eyebrow">Requirements Review Report</div>
-    <h1>中文法律 RAG 系統 — 需求規格審查報告</h1>
-    <dl class="cover-meta">
-      <dt>系統名稱</dt><dd>中文法律 RAG 系統（Chinese Law RAG System）</dd>
-      <dt>目標版本</dt><dd>v1.0.0（首發版本，需求單位與開發團隊需求討論階段）</dd>
-      <dt>審查階段</dt><dd>開發前需求審查（Pre-Development Requirements Review）</dd>
-      <dt>審查日期</dt><dd>2026-05-26</dd>
-      <dt>適用標準</dt><dd>IEEE 830-1998 SRS、ISO/IEC 42001:2023 Annex A</dd>
-    </dl>
-    <span class="verdict">審查結論：有條件通過（Approved with Conditions）</span>
-  </section>
-
-  <!-- ════════ 目錄 ════════ -->
-  <nav class="toc">
-    <h2>目錄 · Contents</h2>
-    <ol>
-      <li><a href="#s1">執行摘要</a></li>
-      <li><a href="#s2">系統概述與目標</a></li>
-      <li><a href="#s3">系統架構總覽</a></li>
-      <li><a href="#s4">功能需求</a></li>
-      <li><a href="#s5">非功能需求</a></li>
-      <li><a href="#s6">ISO 42001 合規追溯矩陣</a></li>
-      <li><a href="#s7">技術可行性評估</a></li>
-      <li><a href="#s8">驗證與確認策略</a></li>
-      <li><a href="#s9">風險評估</a></li>
-      <li><a href="#s10">時程與里程碑</a></li>
-      <li><a href="#s11">審查結論與建議</a></li>
-    </ol>
-  </nav>
-
-  <!-- ════════ §1 執行摘要 ════════ -->
-  <h2 class="section" id="s1">1. 執行摘要</h2>
-  <p>本報告針對「中文法律 RAG 系統 v1.0.0」需求規格進行開發前審查。系統目標為以檢索增強生成（RAG）技術，提供國軍法律承辦人員在<strong>完全離線內網環境</strong>下檢索陸海空軍懲罰法等中文法規條文的能力，並符合 <strong>ISO/IEC 42001:2023</strong> 之 AI 管理系統控制要求（A.5 / A.6 / A.8 / A.9）。</p>
-
-  <h3>1.1 審查範圍</h3>
-  <table>
-    <thead><tr><th style="width: 22%">範圍</th><th>涵蓋</th></tr></thead>
-    <tbody>
-      <tr><td>功能需求</td><td>RAG 檢索流程、API 介面、文件攝取、代理工作流、部署維運</td></tr>
-      <tr><td>非功能需求</td><td>安全性、監控稽核、偏誤公平性、V&amp;V、效能、可靠性</td></tr>
-      <tr><td>合規對照</td><td>ISO 42001 Annex A 控制項追溯矩陣</td></tr>
-      <tr><td>不在範圍</td><td>上游 LLM / Embedding 模型本身的訓練、底層 Triton 推論伺服器運維</td></tr>
-    </tbody>
-  </table>
-
-  <h3>1.2 審查結論摘要</h3>
-  <ul>
-    <li>功能需求共 <strong>31 項</strong>，全數可驗證；無互斥或矛盾。</li>
-    <li>非功能需求共 <strong>24 項</strong>，其中 22 項可驗證，2 項屬「過程性要求」需以稽核流程佐證。</li>
-    <li>識別出 <strong>5 項條件式改善建議</strong>（Conditional Recommendations），均為開發起點即應落實的基線控制，<strong>不構成阻擋（non-blocking gate）</strong>。</li>
-    <li>系統範圍與業務目標一致，技術可行性高，風險可控。</li>
-  </ul>
-
-  <h3>1.3 整體評定</h3>
-  <p>詳見 <a href="#s11">§11.1</a>。</p>
-
-  <!-- ════════ §2 系統概述與目標 ════════ -->
-  <h2 class="section" id="s2">2. 系統概述與目標</h2>
-
-  <h3>2.1 業務背景</h3>
-  <p>法律承辦人員在處理懲罰、申訴、覆審等案件時，需要在<strong>短時間內精確檢索</strong>特定條文，並能交叉比對相關規範。傳統做法（紙本法典、PDF Ctrl+F、政府公開查詢站）有以下痛點：</p>
-  <ol>
-    <li>無法在無外網的內網環境使用雲端 LLM 法律助手。</li>
-    <li>PDF 全文搜尋僅匹配字串，無法處理同義詞或語意推理（例：「停役」與「不得繼續服役」）。</li>
-    <li>法規修訂頻繁，版本控管與來源可追溯性多依賴人工。</li>
-    <li>對話式問答（追問、補充）在純文件檢索工具中無法保留上下文。</li>
-  </ol>
-
-  <h3>2.2 系統目的</h3>
-  <p>建置一套<strong>離線可部署、可審計、可驗證</strong>的中文法律 RAG 系統，具備：</p>
-  <ul>
-    <li>精確的條文檢索（條號、語意、混合）；</li>
-    <li>OpenAI 相容 API（無痛接入 Open WebUI 等前端）；</li>
-    <li>完整的安全控制與稽核日誌；</li>
-    <li>符合 ISO 42001 的 AI 治理證據鏈。</li>
-  </ul>
-
-  <h3>2.3 利害關係人</h3>
-  <table>
-    <thead><tr><th>角色</th><th>關切點</th></tr></thead>
-    <tbody>
-      <tr><td>法律承辦人員（主要使用者）</td><td>查得到、查得快、查得準；可追問</td></tr>
-      <tr><td>單位資安／資訊室</td><td>內網不外洩、存取受控、行為可稽核</td></tr>
-      <tr><td>法務主管／稽核單位</td><td>回答可追溯來源；偏誤可量化；版本可比對</td></tr>
-      <tr><td>ISO 42001 稽核員</td><td>控制項證據齊備；變更可追溯；風險已評估</td></tr>
-      <tr><td>系統運維人員</td><td>容器化部署、可離線出貨、可回滾</td></tr>
-    </tbody>
-  </table>
-
-  <h3>2.4 系統邊界與範圍</h3>
-<pre class="ascii">┌──────────────────────────────────────────────────────────────┐
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/requirements_review_report.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="rag">中文法律 RAG 系統 — 需求規格審查報告</h1>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>系統名稱</strong></td>
+<td>中文法律 RAG 系統（Chinese Law RAG System）</td>
+</tr>
+<tr>
+<td><strong>目標版本</strong></td>
+<td>v1.0.0（首發版本，需求單位與開發團隊需求討論階段）</td>
+</tr>
+<tr>
+<td><strong>審查階段</strong></td>
+<td>開發前需求審查（Pre-Development Requirements Review）</td>
+</tr>
+<tr>
+<td><strong>審查日期</strong></td>
+<td>2026-05-26</td>
+</tr>
+<tr>
+<td><strong>適用標準</strong></td>
+<td>IEEE 830-1998 SRS、ISO/IEC 42001:2023 Annex A</td>
+</tr>
+<tr>
+<td><strong>審查結論</strong></td>
+<td><strong>有條件通過（Approved with Conditions）</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="1">1. 執行摘要</h2>
+<p>本報告針對「中文法律 RAG 系統 v1.0.0」需求規格進行開發前審查。系統目標為以檢索增強生成（RAG）技術，提供國軍法律承辦人員在<strong>完全離線內網環境</strong>下檢索陸海空軍懲罰法等中文法規條文的能力，並符合 <strong>ISO/IEC 42001:2023</strong> 之 AI 管理系統控制要求（A.5 / A.6 / A.8 / A.9）。</p>
+<h3 id="11">1.1 審查範圍</h3>
+<table>
+<thead>
+<tr>
+<th>範圍</th>
+<th>涵蓋</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>功能需求</td>
+<td>RAG 檢索流程、API 介面、文件攝取、代理工作流、部署維運</td>
+</tr>
+<tr>
+<td>非功能需求</td>
+<td>安全性、稽核維運、偏誤公平性、V&amp;V、效能、可靠性</td>
+</tr>
+<tr>
+<td>合規對照</td>
+<td>ISO 42001 Annex A 控制項追溯矩陣</td>
+</tr>
+<tr>
+<td>不在範圍</td>
+<td>上游 LLM / Embedding 模型本身的訓練、底層 Triton 推論伺服器運維</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12">1.2 審查結論摘要</h3>
+<ul>
+<li>功能需求共 <strong>31 項</strong>，全數可驗證；無互斥或矛盾。</li>
+<li>非功能需求共 <strong>24 項</strong>，其中 22 項可驗證，2 項屬「過程性要求」需以稽核流程佐證。</li>
+<li>識別出 <strong>5 項條件式改善建議</strong>（Conditional Recommendations），均為開發起點即應落實的基線控制，<strong>不構成阻擋（non-blocking gate）</strong>。</li>
+<li>系統範圍與業務目標一致，技術可行性高，風險可控。</li>
+</ul>
+<h3 id="13">1.3 整體評定</h3>
+<blockquote>
+<p>詳見 §11.1。</p>
+</blockquote>
+<hr>
+<h2 id="2">2. 系統概述與目標</h2>
+<h3 id="21">2.1 業務背景</h3>
+<p>法律承辦人員在處理懲罰、申訴、覆審等案件時，需要在<strong>短時間內精確檢索</strong>特定條文，並能交叉比對相關規範。傳統做法（紙本法典、PDF Ctrl+F、政府公開查詢站）有以下痛點：</p>
+<ol>
+<li><strong>無法在封閉內網環境使用</strong>雲端 LLM 法律助手。</li>
+<li>PDF 全文搜尋僅匹配字串，<strong>無法處理同義詞或語意推理</strong>（例：「停役」與「不得繼續服役」）。</li>
+<li>法規修訂頻繁，<strong>版本控管與來源可追溯性</strong>多依賴人工。</li>
+<li>對話式問答（追問、補充）在純文件檢索工具中<strong>無法保留上下文</strong>。</li>
+</ol>
+<h3 id="22">2.2 系統目的</h3>
+<p>建置一套<strong>離線可部署、可審計、可驗證</strong>的中文法律 RAG 系統，具備：</p>
+<ul>
+<li>精確的條文檢索（條號、語意、混合）；</li>
+<li>OpenAI 相容 API（無痛接入 Open WebUI 等前端）；</li>
+<li>完整的安全控制與稽核日誌；</li>
+<li>符合 ISO 42001 的 AI 治理證據鏈。</li>
+</ul>
+<h3 id="23">2.3 利害關係人</h3>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th>關切點</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>法律承辦人員（主要使用者）</td>
+<td>查得到、查得快、查得準；可追問</td>
+</tr>
+<tr>
+<td>單位資安／資訊室</td>
+<td>內網不外洩、存取受控、行為可稽核</td>
+</tr>
+<tr>
+<td>法務主管／稽核單位</td>
+<td>回答可追溯來源；偏誤可量化；版本可比對</td>
+</tr>
+<tr>
+<td>ISO 42001 稽核員</td>
+<td>控制項證據齊備；變更可追溯；風險已評估</td>
+</tr>
+<tr>
+<td>系統運維人員</td>
+<td>容器化部署、可離線出貨、可回滾</td>
+</tr>
+</tbody>
+</table>
+<h3 id="24">2.4 系統邊界與範圍</h3>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
 │                     系統範圍（in-scope）                       │
 │                                                                │
 │  RAG API (FastAPI)  ──  Agent (LangGraph)  ──  pgvector       │
@@ -370,17 +190,16 @@
 │  Audit Logger / Anomaly Detector / Bias Evaluator              │
 └──────────────────────────────────────────────────────────────┘
         ↑                                          ↓
-   ┌─ 外部相依（out-of-scope）─────────────────────┐
-   │  Triton Inference Server（GPU 主機，外部團隊）  │
+   ┌─推論後端相依（out-of-scope）────────────────────────┐
+   │  Triton Inference Server（內網 GPU 主機，推論後端維運團隊）  │
    │  LLM Backbone（openai/gpt-oss-20b）             │
    │  Embedding Model（nvidia/nv-embed-v2）          │
-   └────────────────────────────────────────────────┘</pre>
-
-  <!-- ════════ §3 系統架構總覽 ════════ -->
-  <h2 class="section" id="s3">3. 系統架構總覽</h2>
-
-  <h3>3.1 高階架構</h3>
-<pre class="ascii">[ 使用者 / Open WebUI ]
+   └─────────────────────────────────────────────────┘
+</code></pre>
+<hr>
+<h2 id="3">3. 系統架構總覽</h2>
+<h3 id="31">3.1 高階架構</h3>
+<pre><code>[ 使用者 / Open WebUI ]
             │ HTTPS, Bearer Token
             ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -420,417 +239,1229 @@
                           │ Triton Server   │
                           │  nv-embed-v2    │
                           │  gpt-oss-20b    │
-                          └─────────────────┘</pre>
-
-  <h3>3.2 模組分層</h3>
-  <table>
-    <thead><tr><th style="width: 14%">層</th><th>模組</th><th>職責</th></tr></thead>
-    <tbody>
-      <tr><td>介面層</td><td><code class="inline">api.py</code></td><td>OpenAI 相容 HTTP、認證、限流、CORS</td></tr>
-      <tr><td>工作流層</td><td><code class="inline">rag_system/agent/</code></td><td>LangGraph 節點、Agent 狀態、對話記憶</td></tr>
-      <tr><td>服務層</td><td><code class="inline">rag_system/services/</code></td><td>文件攝取、混合檢索、格式轉換、對話儲存</td></tr>
-      <tr><td>核心層</td><td><code class="inline">rag_system/core/</code></td><td>設定、工廠、Prompt、安全控制、稽核、評估</td></tr>
-      <tr><td>維運層</td><td><code class="inline">scripts/</code></td><td>Reindex、監控報告、V&amp;V 評估、版本追蹤</td></tr>
-    </tbody>
-  </table>
-
-  <h3>3.3 部署拓樸</h3>
-  <ul>
-    <li><strong>容器化</strong>：Docker Compose 統一管理。</li>
-    <li><strong>離線</strong>：<code class="inline">save_images.sh</code> 打包所有映像為 <code class="inline">.tar</code>，可搬運至內網。</li>
-    <li><strong>外部依賴</strong>：僅 Triton GPU 主機，透過內網 IP 連線。</li>
-    <li><strong>持久化</strong>：pgvector volume、<code class="inline">data/audit_logs/</code>、<code class="inline">data/versions/</code>、<code class="inline">data/converted_md/</code>。</li>
-  </ul>
-
-  <!-- ════════ §4 功能需求 ════════ -->
-  <h2 class="section" id="s4">4. 功能需求（Functional Requirements）</h2>
-  <p>所有需求採「The system shall ...」句型；每項給 FR-XX-NN 編號。「可驗證性」欄位採三級：<span class="verifiable">✅ 完全可驗證</span>、<span class="partial">◐ 部分可驗證</span>、<span class="procedural">◌ 流程性</span>。</p>
-
-  <h3>4.1 RAG 核心檢索與生成（FR-R）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">FR-R-01</td><td>系統<strong>應</strong>支援以阿拉伯數字與中文數字辨識條文號碼（例：「第46條」「第四十六條」），並啟動快速路徑（Article Fast-Path）以 BM25 精確比對直接回傳。</td><td class="center"><span class="verifiable">✅</span></td><td>單元測試：對 30 筆條號變體進行偵測。</td></tr>
-      <tr><td class="id">FR-R-02</td><td>系統<strong>應</strong>提供混合檢索：BM25 關鍵字 + Vector 語意搜尋，並以 Round-Robin 合併結果。</td><td class="center"><span class="verifiable">✅</span></td><td>單元測試：模擬只 BM25 命中 / 只 Vector 命中 / 兩者命中三種情境。</td></tr>
-      <tr><td class="id">FR-R-03</td><td>系統<strong>應</strong>對候選 chunks 執行 LLM Reranker，取 Top-3 進入後續流程。</td><td class="center"><span class="verifiable">✅</span></td><td>整合測試：黃金資料集 Top-3 命中率。</td></tr>
-      <tr><td class="id">FR-R-04</td><td>系統<strong>應</strong>採用 Parent-Child 階層式索引；以小 chunk 做向量搜尋，命中後取回完整父文件段落作為上下文。</td><td class="center"><span class="verifiable">✅</span></td><td>單元測試：驗證父文件 ID 一致性。</td></tr>
-      <tr><td class="id">FR-R-05</td><td>系統<strong>應</strong>以 LangGraph 實作 Agent 工作流，節點包含：<code class="inline">classify → retrieve → generate → verify</code> 主流程，與 <code class="inline">reject / security_block / passthrough</code> 分支。</td><td class="center"><span class="verifiable">✅</span></td><td>圖結構單元測試 + 路由測試。</td></tr>
-      <tr><td class="id">FR-R-06</td><td>系統<strong>應</strong>在回答產生後執行 <code class="inline">verify_node</code> 檢查引用格式與條文存在性；驗證失敗應重試（上限 <code class="inline">MAX_RETRIES=2</code>）。</td><td class="center"><span class="verifiable">✅</span></td><td>整合測試：強制注入錯誤條號驗證重試行為。</td></tr>
-      <tr><td class="id">FR-R-07</td><td>系統<strong>應</strong>支援多輪對話：以 <code class="inline">x-session-id</code> HTTP header 識別會話，並透過摘要壓縮控制上下文長度（目標 ≤ 3000 tokens）。</td><td class="center"><span class="verifiable">✅</span></td><td>單元測試：模擬 10 輪對話的記憶壓縮輸出 token 數。</td></tr>
-      <tr><td class="id">FR-R-08</td><td>系統<strong>應</strong>對非法律領域之查詢由 <code class="inline">classify_node</code> 判定為 out-of-scope 並以 <code class="inline">reject_node</code> 回應標準拒絕訊息。</td><td class="center"><span class="verifiable">✅</span></td><td>黃金資料集 <code class="inline">category=out_of_scope</code> 案例。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>4.2 API 與介面層（FR-A）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">FR-A-01</td><td>系統<strong>應</strong>提供 OpenAI 相容 <code class="inline">POST /v1/chat/completions</code> 端點，支援 streaming 與 non-streaming 兩種模式。</td><td class="center"><span class="verifiable">✅</span></td><td>對齊 OpenAI SDK 整合測試。</td></tr>
-      <tr><td class="id">FR-A-02</td><td>系統<strong>應</strong>提供 <code class="inline">GET /v1/models</code> 以供前端探測可用模型清單。</td><td class="center"><span class="verifiable">✅</span></td><td>API 契約測試。</td></tr>
-      <tr><td class="id">FR-A-03</td><td>系統<strong>應</strong>提供 <code class="inline">POST /v1/upload</code>、<code class="inline">/v1/upload/batch</code>、<code class="inline">DELETE /v1/documents/{filename}</code>、<code class="inline">GET /v1/documents</code>、<code class="inline">POST /v1/reindex</code>。</td><td class="center"><span class="verifiable">✅</span></td><td>API 契約測試。</td></tr>
-      <tr><td class="id">FR-A-04</td><td>系統<strong>應</strong>提供無認證 <code class="inline">GET /health</code> 端點供監控使用。</td><td class="center"><span class="verifiable">✅</span></td><td>API 契約測試。</td></tr>
-      <tr><td class="id">FR-A-05</td><td>系統<strong>應</strong>支援 CORS，且允許來源透過 <code class="inline">ALLOWED_ORIGINS</code> 環境變數控制（逗號分隔白名單；預設不應為 <code class="inline">*</code> 於生產環境）。</td><td class="center"><span class="verifiable">✅</span></td><td>CORS pre-flight 整合測試。</td></tr>
-      <tr><td class="id">FR-A-06</td><td>Streaming 回應<strong>應</strong>遵循 SSE（<code class="inline">text/event-stream</code>）格式，每個 token 一個 <code class="inline">data:</code> chunk，並以 <code class="inline">data: [DONE]</code> 結束。</td><td class="center"><span class="verifiable">✅</span></td><td>SSE 串流整合測試。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>4.3 文件攝取管線（FR-I）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">FR-I-01</td><td>系統<strong>應</strong>支援 PDF / DOCX / RTF / TXT / MD 五種格式之輸入文件，並轉換為 Markdown 標準中間格式。</td><td class="center"><span class="verifiable">✅</span></td><td>單元測試：每種格式各一個樣本。</td></tr>
-      <tr><td class="id">FR-I-02</td><td>系統<strong>應</strong>對上傳檔案計算 SHA-256，若 metadata 已有相同 hash 則回傳 <code class="inline">status: skipped</code>，避免重複索引（除非顯式 <code class="inline">overwrite=true</code>）。</td><td class="center"><span class="verifiable">✅</span></td><td>整合測試：同一檔案重複上傳。</td></tr>
-      <tr><td class="id">FR-I-03</td><td>系統<strong>應</strong>提供 <code class="inline">scripts/reindex.py</code>，支援三種模式：全量重建、單檔 upsert、單檔刪除。</td><td class="center"><span class="verifiable">✅</span></td><td>CLI 行為測試。</td></tr>
-      <tr><td class="id">FR-I-04</td><td>索引管線<strong>應</strong>將文件以階層方式儲存：父文件（完整段落）入 docstore JSON、子 chunk 入 pgvector。</td><td class="center"><span class="verifiable">✅</span></td><td>資料庫狀態檢查。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>4.4 提示詞與回應管理（FR-P）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">FR-P-01</td><td>所有 Prompt <strong>應</strong>集中於 <code class="inline">rag_system/core/prompts.py</code>，禁止散佈於各節點中。</td><td class="center"><span class="partial">◐</span></td><td>Code review + grep 檢查。</td></tr>
-      <tr><td class="id">FR-P-02</td><td>系統 Prompt <strong>應</strong>明確限定回答範圍為中文法律領域，並要求引用條文編號。</td><td class="center"><span class="partial">◐</span></td><td>人工抽樣 + 黃金資料集引用率指標。</td></tr>
-      <tr><td class="id">FR-P-03</td><td>系統<strong>應</strong>在回答中以可解析格式呈現條文引用（如「第X條」），以利後續 <code class="inline">verify_node</code> 與 <code class="inline">answer_evaluator</code> 評估。</td><td class="center"><span class="verifiable">✅</span></td><td>正則匹配率 ≥ 0.95（黃金資料集）。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>4.5 部署與維運（FR-O）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">FR-O-01</td><td>系統<strong>應</strong>完全容器化；外部使用者僅需 <code class="inline">docker compose up -d</code> 即可啟動全部服務。</td><td class="center"><span class="verifiable">✅</span></td><td>CI smoke test：乾淨環境啟動 + <code class="inline">/health</code> 200。</td></tr>
-      <tr><td class="id">FR-O-02</td><td>系統<strong>應</strong>提供 <code class="inline">save_images.sh</code> 將所有映像匯出為 tar 檔，總大小 ≤ 6 GB，便於離線搬運。</td><td class="center"><span class="verifiable">✅</span></td><td>打包後檔案大小檢查。</td></tr>
-      <tr><td class="id">FR-O-03</td><td>所有設定<strong>應</strong>集中於 <code class="inline">ISO42001Deploy/.env</code>，搬遷時僅需修改 <code class="inline">LLM_HOST</code> 一項。</td><td class="center"><span class="partial">◐</span></td><td>文件審查 + 部署演練。</td></tr>
-      <tr><td class="id">FR-O-04</td><td>系統<strong>應</strong>提供版本追蹤腳本 <code class="inline">scripts/version_tracker.py</code>，支援 <code class="inline">snapshot / diff / verify / list</code> 四個子命令，並可選 <code class="inline">--backup</code> 同步輸出 tar.gz。</td><td class="center"><span class="verifiable">✅</span></td><td>CLI 行為測試。</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ════════ §5 非功能需求 ════════ -->
-  <h2 class="section" id="s5">5. 非功能需求（Non-Functional Requirements）</h2>
-
-  <h3>5.1 安全性需求（NFR-S，對應 ISO 42001 A.8）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">NFR-S-01</td><td>系統<strong>應</strong>對所有非健康檢查端點強制 Bearer Token 認證；驗證失敗回 HTTP 401。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">tests/unit/test_auth.py</code></td></tr>
-      <tr><td class="id">NFR-S-02</td><td>系統<strong>應</strong>提供「內網信任模式」：當 <code class="inline">API_KEYS</code> 未設定且 <code class="inline">ALLOW_INTRANET_MODE=true</code> 時，以 Client IP 作為稽核身分。</td><td class="center"><span class="verifiable">✅</span></td><td>認證測試案例。</td></tr>
-      <tr><td class="id">NFR-S-03</td><td>系統<strong>應 Fail-Closed</strong>：當 <code class="inline">API_KEYS</code> 與 <code class="inline">ALLOW_INTRANET_MODE</code> 皆未設定時，回傳 HTTP 503，<strong>絕不靜默暴露未受保護端點</strong>。</td><td class="center"><span class="verifiable">✅</span></td><td>認證測試案例。</td></tr>
-      <tr><td class="id">NFR-S-04</td><td>系統<strong>應</strong>僅對列於 <code class="inline">TRUSTED_PROXIES</code> 的 immediate peer 信任 <code class="inline">X-Forwarded-For</code> header，防止 IP 偽造。</td><td class="center"><span class="verifiable">✅</span></td><td>認證測試案例（偽造 XFF）。</td></tr>
-      <tr><td class="id">NFR-S-05</td><td>系統<strong>應</strong>對每個 API Key 實施速率限制：預設 60 requests / minute（滑動視窗）；超過回傳 HTTP 429。</td><td class="center"><span class="verifiable">✅</span></td><td>速率限制單元測試。</td></tr>
-      <tr><td class="id">NFR-S-06</td><td>系統<strong>應</strong>對使用者輸入執行<strong>七類攻擊偵測</strong>：Prompt Injection、系統資訊探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換；命中即拒絕並記錄 <code class="inline">security_alert</code>。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">test_prompt_security.py</code>（79 cases）。</td></tr>
-      <tr><td class="id">NFR-S-07</td><td>系統<strong>應</strong>拒絕長度超過 2000 字元之輸入。</td><td class="center"><span class="verifiable">✅</span></td><td>安全測試案例。</td></tr>
-      <tr><td class="id">NFR-S-08</td><td>系統<strong>應</strong>對 LLM 輸出執行敏感資訊遮蔽：連線字串、伺服器路徑、API Key、Base64 Token 等。</td><td class="center"><span class="verifiable">✅</span></td><td>輸出過濾單元測試。</td></tr>
-      <tr><td class="id">NFR-S-09</td><td>系統<strong>應</strong>預設啟用 SSL 驗證（<code class="inline">VERIFY_SSL=true</code>）；該設定必須可由環境變數覆寫且實際生效。</td><td class="center"><span class="verifiable">✅</span></td><td>Config 載入測試。</td></tr>
-      <tr><td class="id">NFR-S-10</td><td>系統<strong>應</strong>將 <code class="inline">ALLOWED_ORIGINS</code> 限制為白名單；生產環境<strong>不得</strong>設為 <code class="inline">*</code>。</td><td class="center"><span class="partial">◐</span></td><td>部署檢核表（pre-prod gate）。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>5.2 監控與稽核需求（NFR-M，對應 ISO 42001 A.6）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">NFR-M-01</td><td>系統<strong>應</strong>對每次查詢、拒絕、上傳、reindex、認證事件、安全告警寫入結構化稽核日誌（JSONL，每日滾動）。</td><td class="center"><span class="verifiable">✅</span></td><td>整合測試：呼叫 API 後檢查 <code class="inline">audit_*.jsonl</code>。</td></tr>
-      <tr><td class="id">NFR-M-02</td><td>稽核日誌<strong>應</strong>包含：時間、session_id、event_type、scope_check、model_name、response_time_ms、retrieval_doc_count、citation_count、retry_count、anomaly_flags。</td><td class="center"><span class="verifiable">✅</span></td><td>JSON schema 比對。</td></tr>
-      <tr><td class="id">NFR-M-03</td><td>系統<strong>應</strong>以滑動視窗實施即時異常偵測：延遲突增（&gt; 2× p95）、拒絕率突升（&gt; 50% 近 10 筆）、安全事件叢集（≥3）、連續重試（retry_count ≥ 2）。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">test_anomaly_detector.py</code>（15 cases）。</td></tr>
-      <tr><td class="id">NFR-M-04</td><td>系統<strong>應</strong>提供 <code class="inline">scripts/generate_monitoring_report.py</code>，輸出 JSON + Markdown 雙格式之每日／月度監控報告。</td><td class="center"><span class="verifiable">✅</span></td><td>腳本輸出格式檢查。</td></tr>
-      <tr><td class="id">NFR-M-05</td><td>系統<strong>應</strong>提供版本追蹤：SHA-256 快照、差異比對、完整性驗證；變更應同步寫入 <code class="inline">CHANGELOG.md</code>，並保留人工「審核簽名」欄位。</td><td class="center"><span class="verifiable">✅</span></td><td>腳本行為測試 + CHANGELOG 格式檢查。</td></tr>
-      <tr><td class="id">NFR-M-06</td><td>監控報告<strong>應</strong>保留至少 24 個月，作為稽核證據。</td><td class="center"><span class="procedural">◌</span></td><td>維運程序文件。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>5.3 偏誤與公平性需求（NFR-F，對應 ISO 42001 A.5）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">NFR-F-01</td><td>系統<strong>應</strong>建立成對問題偏誤測試資料集，涵蓋性別、族群、社經地位、身心障礙等面向。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">bias_test_dataset.json</code></td></tr>
-      <tr><td class="id">NFR-F-02</td><td>系統<strong>應</strong>提供偏誤評估器：對成對問題比對關鍵字覆蓋率與語意相似度，回報「一致 / 不一致」。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">test_bias_fairness.py</code>（8 cases）。</td></tr>
-      <tr><td class="id">NFR-F-03</td><td>系統<strong>應</strong>保留人工填寫之倫理審查清單（<code class="inline">docs/governance/ETHICS_CHECKLIST.md</code>），作為 A.5 影響評估書面證據。</td><td class="center"><span class="procedural">◌</span></td><td>文件審查。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>5.4 驗證與確認需求（NFR-V，對應 ISO 42001 A.9）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">NFR-V-01</td><td>系統<strong>應</strong>維護黃金資料集（≥ 30 筆），每筆含：query、expected_answer、expected_keywords、expected_articles、expected_docs、category、difficulty。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">golden_dataset.json</code> 結構與筆數檢查。</td></tr>
-      <tr><td class="id">NFR-V-02</td><td>系統<strong>應</strong>提供 V&amp;V 評估器，計算 Hit Rate、Precision@K、MRR、關鍵字覆蓋率、條文引用匹配率、結構完整率。</td><td class="center"><span class="verifiable">✅</span></td><td><code class="inline">test_vv_pipeline.py</code>（28 cases）。</td></tr>
-      <tr><td class="id">NFR-V-03</td><td>V&amp;V 通過門檻<strong>應</strong>為：Hit Rate ≥ 0.60、Precision@K ≥ 0.50、MRR ≥ 0.40。</td><td class="center"><span class="verifiable">✅</span></td><td>評估報告 pass/fail 判定。</td></tr>
-      <tr><td class="id">NFR-V-04</td><td>系統<strong>應</strong>提供 <code class="inline">scripts/run_vv_evaluation.py</code>，輸出 JSON + Markdown 雙格式 V&amp;V 報告。</td><td class="center"><span class="verifiable">✅</span></td><td>腳本輸出檢查。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>5.5 效能需求（NFR-P）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">NFR-P-01</td><td>在標準硬體（外部 GPU；本機 4 vCPU / 8 GB）下，非串流查詢的 P95 延遲<strong>應</strong> ≤ 8 秒。</td><td class="center"><span class="verifiable">✅</span></td><td>負載測試（locust / k6）。</td></tr>
-      <tr><td class="id">NFR-P-02</td><td>串流查詢的首 token 延遲（TTFT）<strong>應</strong> ≤ 2 秒。</td><td class="center"><span class="verifiable">✅</span></td><td>SSE 計時測試。</td></tr>
-      <tr><td class="id">NFR-P-03</td><td>在 60 rpm 速率限制下，系統<strong>應</strong>穩定運行不出現記憶體洩漏（24 hr soak test）。</td><td class="center"><span class="partial">◐</span></td><td>24 小時壓測。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>5.6 可靠性與可維運需求（NFR-R）</h3>
-  <table>
-    <thead><tr><th style="width: 9%">ID</th><th>需求描述</th><th style="width: 11%">可驗證性</th><th style="width: 22%">驗證方法</th></tr></thead>
-    <tbody>
-      <tr><td class="id">NFR-R-01</td><td>系統<strong>應</strong>提供完整的回滾程序文件，包含「停服 → 還原 → 驗證 → 重啟 → 記錄」五步驟。</td><td class="center"><span class="procedural">◌</span></td><td>README 文件審查。</td></tr>
-      <tr><td class="id">NFR-R-02</td><td>上游服務（Triton / pgvector）短暫不可用時，系統<strong>應</strong>回傳清楚的 5xx 錯誤而非靜默失敗。</td><td class="center"><span class="verifiable">✅</span></td><td>故障注入測試。</td></tr>
-      <tr><td class="id">NFR-R-03</td><td>系統<strong>應</strong>將 pgvector data、audit_logs、versions、converted_md 透過 Docker volume 持久化，避免容器重啟後資料遺失。</td><td class="center"><span class="verifiable">✅</span></td><td>docker-compose 設定審查。</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ════════ §6 追溯矩陣 ════════ -->
-  <h2 class="section" id="s6">6. ISO 42001 合規追溯矩陣</h2>
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 16%">ISO 42001 控制項</th>
-        <th>控制要求摘要</th>
-        <th style="width: 16%">對應需求</th>
-        <th style="width: 22%">對應實作模組</th>
-        <th style="width: 20%">書面證據</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td class="id">A.5.2 AI 影響評估</td><td>評估對個人 / 群體的潛在影響</td><td class="id">NFR-F-03</td><td><code class="inline">docs/governance/ETHICS_CHECKLIST.md</code></td><td>倫理審查清單（人工填寫）</td></tr>
-      <tr><td class="id">A.5.3 偏誤評估</td><td>評估訓練／檢索資料偏誤</td><td class="id">NFR-F-01, F-02</td><td><code class="inline">core/bias_evaluator.py</code></td><td><code class="inline">test_bias_fairness.py</code></td></tr>
-      <tr><td class="id">A.6.2.4 生命週期監控</td><td>持續監控部署後行為</td><td class="id">NFR-M-01..04</td><td><code class="inline">anomaly_detector.py</code>、<code class="inline">audit_logger.py</code></td><td><code class="inline">data/reports/monitoring_*.md</code></td></tr>
-      <tr><td class="id">A.6.2.5 變更管理</td><td>受控之變更與版本管理</td><td class="id">NFR-M-05</td><td><code class="inline">scripts/version_tracker.py</code>、<code class="inline">CHANGELOG.md</code></td><td>快照 + 雜湊驗證紀錄</td></tr>
-      <tr><td class="id">A.6.2.8 V&amp;V</td><td>驗證與確認</td><td class="id">NFR-V-01..04</td><td><code class="inline">retrieval_evaluator.py</code>、<code class="inline">answer_evaluator.py</code></td><td><code class="inline">data/reports/vv_report_*.md</code></td></tr>
-      <tr><td class="id">A.8.2 存取控制</td><td>認證與授權</td><td class="id">NFR-S-01..05</td><td><code class="inline">auth.py</code>、<code class="inline">rate_limiter.py</code></td><td><code class="inline">test_auth.py</code>（12 cases）</td></tr>
-      <tr><td class="id">A.8.3 輸入安全</td><td>防範惡意輸入</td><td class="id">NFR-S-06, S-07</td><td><code class="inline">input_sanitizer.py</code></td><td><code class="inline">test_prompt_security.py</code>（79 cases）</td></tr>
-      <tr><td class="id">A.8.4 輸出安全</td><td>防止敏感資料洩漏</td><td class="id">NFR-S-08</td><td><code class="inline">output_filter.py</code></td><td>同上</td></tr>
-      <tr><td class="id">A.9.2 使用紀錄</td><td>完整稽核軌跡</td><td class="id">NFR-M-01, M-02</td><td><code class="inline">audit_logger.py</code></td><td><code class="inline">data/audit_logs/audit_*.jsonl</code></td></tr>
-    </tbody>
-  </table>
-  <div class="callout">追溯矩陣涵蓋率：<strong>100%</strong>（所有列出的 A 控制項皆有對應需求、實作與證據）。</div>
-
-  <!-- ════════ §7 技術可行性 ════════ -->
-  <h2 class="section" id="s7">7. 技術可行性評估</h2>
-
-  <h3>7.1 技術棧成熟度</h3>
-  <table>
-    <thead><tr><th>元件</th><th>版本</th><th>成熟度</th><th>風險</th></tr></thead>
-    <tbody>
-      <tr><td>LangGraph</td><td>0.2.x</td><td><span class="tag warn">快速演進中</span></td><td>API 可能變動 → 需鎖版本</td></tr>
-      <tr><td>LangChain</td><td>0.3.x</td><td><span class="tag warn">快速演進中</span></td><td>同上</td></tr>
-      <tr><td>FastAPI</td><td>0.100+</td><td><span class="tag good">穩定</span></td><td>低</td></tr>
-      <tr><td>PostgreSQL + pgvector</td><td>PG 16 + pgvector 0.7</td><td><span class="tag good">穩定</span></td><td>低</td></tr>
-      <tr><td>Triton Inference Server</td><td>24.xx</td><td><span class="tag good">NVIDIA 官方支援</span></td><td>由外部團隊維運</td></tr>
-      <tr><td>nv-embed-v2</td><td>NVIDIA 1.5B</td><td><span class="tag good">公開可下載</span></td><td>模型本身為固定資產</td></tr>
-      <tr><td>openai/gpt-oss-20b</td><td>20B</td><td><span class="tag warn">開源權重</span></td><td>推理品質需 V&amp;V 持續驗證</td></tr>
-    </tbody>
-  </table>
-
-  <h3>7.2 外部相依評估</h3>
-  <table>
-    <thead><tr><th>依賴</th><th>影響</th><th>緩解</th></tr></thead>
-    <tbody>
-      <tr><td>GPU 主機 / Triton</td><td><span class="tag bad">致命</span></td><td>提供 <code class="inline">/health</code> 健康檢查 + 5xx 明確錯誤；運維協議（SLA）約定</td></tr>
-      <tr><td>pgvector</td><td><span class="tag bad">致命</span></td><td>容器內建；資料 volume 持久化；版本鎖定</td></tr>
-      <tr><td>外網下載</td><td><span class="tag good">無</span></td><td>全離線打包（<code class="inline">save_images.sh</code>）</td></tr>
-    </tbody>
-  </table>
-
-  <h3>7.3 開發工作量估算</h3>
-  <table>
-    <thead><tr><th>Phase</th><th>模組數</th><th>估計工時</th><th>依賴</th></tr></thead>
-    <tbody>
-      <tr><td>Phase 3：Prompt 安全</td><td>3 新增 + 1 修改</td><td>~ 5 人日</td><td>無</td></tr>
-      <tr><td>Phase 2：存取控制</td><td>2 新增 + 2 修改</td><td>~ 4 人日</td><td>Phase 3 完成（共用 audit）</td></tr>
-      <tr><td>Phase 1：監控異常</td><td>2 新增 + 1 修改</td><td>~ 3 人日</td><td>Phase 2</td></tr>
-      <tr><td>Phase 5：V&amp;V</td><td>3 新增 + 1 資料集建立</td><td>~ 5 人日</td><td>Phase 1</td></tr>
-      <tr><td>Phase 4：偏誤倫理</td><td>3 新增 + 1 文件</td><td>~ 3 人日</td><td>Phase 5</td></tr>
-      <tr><td><strong>合計</strong></td><td>—</td><td><strong>~ 20 人日</strong></td><td>—</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ════════ §8 V&V 策略 ════════ -->
-  <h2 class="section" id="s8">8. 驗證與確認策略</h2>
-
-  <h3>8.1 測試分層</h3>
-  <table>
-    <thead><tr><th>層</th><th>工具</th><th>目標覆蓋率</th></tr></thead>
-    <tbody>
-      <tr><td>單元測試</td><td><code class="inline">pytest</code></td><td>核心邏輯 ≥ 80%</td></tr>
-      <tr><td>整合測試</td><td><code class="inline">pytest</code> + FastAPI TestClient</td><td>所有 API 端點</td></tr>
-      <tr><td>安全測試</td><td>自訂 <code class="inline">test_prompt_security.py</code></td><td>79 攻擊案例 100% 攔截</td></tr>
-      <tr><td>V&amp;V 評估</td><td><code class="inline">run_vv_evaluation.py</code></td><td>Hit Rate ≥ 0.60、Precision@K ≥ 0.50、MRR ≥ 0.40</td></tr>
-      <tr><td>偏誤評估</td><td><code class="inline">test_bias_fairness.py</code></td><td>8 對成對問題一致性 100%</td></tr>
-      <tr><td>24 hr 壓測</td><td>locust / k6</td><td>60 rpm 穩定無洩漏</td></tr>
-    </tbody>
-  </table>
-
-  <h3>8.2 預期測試案例總數</h3>
-  <table>
-    <thead><tr><th>套件</th><th>預估案例數</th></tr></thead>
-    <tbody>
-      <tr><td><code class="inline">test_anomaly_detector.py</code></td><td>15</td></tr>
-      <tr><td><code class="inline">test_auth.py</code></td><td>12</td></tr>
-      <tr><td><code class="inline">test_prompt_security.py</code></td><td>79</td></tr>
-      <tr><td><code class="inline">test_bias_fairness.py</code></td><td>8</td></tr>
-      <tr><td><code class="inline">test_vv_pipeline.py</code></td><td>28</td></tr>
-      <tr><td><strong>合計</strong></td><td><strong>142</strong></td></tr>
-    </tbody>
-  </table>
-
-  <h3>8.3 黃金資料集設計</h3>
-<pre>{
-  "id": "eval_001",
-  "query": "陸海空軍懲罰法第46條規定為何？",
-  "expected_answer": "...",
-  "expected_keywords": ["停役", "降階"],
-  "expected_articles": ["第46條"],
-  "expected_docs": ["陸海空軍懲罰法.md#第46條"],
-  "category": "single_article | cross_reference | out_of_scope | ambiguous",
-  "difficulty": "easy | medium | hard"
-}</pre>
-
-  <!-- ════════ §9 風險評估 ════════ -->
-  <h2 class="section" id="s9">9. 風險評估</h2>
-
-  <h3>9.1 技術風險</h3>
-  <table>
-    <thead><tr><th>風險</th><th>機率</th><th>影響</th><th>緩解措施</th></tr></thead>
-    <tbody>
-      <tr><td>LangGraph API 變動破壞工作流</td><td>中</td><td>高</td><td>鎖版本 + Smoke test</td></tr>
-      <tr><td>Embed proxy 與 Triton 介面漂移</td><td>低</td><td>高</td><td>雙向契約測試</td></tr>
-      <tr><td>pgvector 索引效能退化</td><td>低</td><td>中</td><td><code class="inline">check_db_status.py</code> 巡檢；定期 ANALYZE</td></tr>
-      <tr><td>LLM 幻覺引用不存在條文</td><td>中</td><td>高</td><td><code class="inline">verify_node</code> + 重試上限</td></tr>
-    </tbody>
-  </table>
-
-  <h3>9.2 合規風險</h3>
-  <table>
-    <thead><tr><th>風險</th><th>機率</th><th>影響</th><th>緩解措施</th></tr></thead>
-    <tbody>
-      <tr><td>認證設定錯誤暴露端點</td><td>中</td><td><span class="tag bad">致命</span></td><td><strong>Fail-Closed 設計（NFR-S-03）</strong></td></tr>
-      <tr><td>稽核日誌遺失</td><td>低</td><td>高</td><td>Volume 持久化 + 24 個月保留</td></tr>
-      <tr><td>偏誤評估流於形式</td><td>中</td><td>中</td><td>季度抽查 + 倫理審查清單人工簽署</td></tr>
-      <tr><td>版本控管不完整無法回滾</td><td>低</td><td>高</td><td><code class="inline">version_tracker.py --backup</code> 強制建立 tar.gz</td></tr>
-    </tbody>
-  </table>
-
-  <h3>9.3 營運風險</h3>
-  <table>
-    <thead><tr><th>風險</th><th>機率</th><th>影響</th><th>緩解措施</th></tr></thead>
-    <tbody>
-      <tr><td>內網無 Git / GitLab</td><td>高</td><td>中</td><td>自包含的 <code class="inline">version_tracker.py</code></td></tr>
-      <tr><td>GPU 主機更換造成 <code class="inline">LLM_HOST</code> 漂移</td><td>中</td><td>中</td><td>集中於 <code class="inline">.env</code>，僅一處需改</td></tr>
-      <tr><td>法規修訂未及時 reindex</td><td>高</td><td>高</td><td>維運 SOP：法規公報發布 24 hr 內 reindex</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ════════ §10 時程 ════════ -->
-  <h2 class="section" id="s10">10. 時程與里程碑</h2>
-
-  <h3>10.1 開發路徑（依風險優先序）</h3>
-<pre class="ascii">Pre-0: 清理失效測試（tests/unit/test_sources.py）
+                          └─────────────────┘
+</code></pre>
+<h3 id="32">3.2 模組分層</h3>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>模組</th>
+<th>職責</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>介面層</td>
+<td><code>api.py</code></td>
+<td>OpenAI 相容 HTTP、認證、限流、CORS</td>
+</tr>
+<tr>
+<td>工作流層</td>
+<td><code>rag_system/agent/</code></td>
+<td>LangGraph 節點、Agent 狀態、對話記憶</td>
+</tr>
+<tr>
+<td>服務層</td>
+<td><code>rag_system/services/</code></td>
+<td>文件攝取、混合檢索、格式轉換、對話儲存</td>
+</tr>
+<tr>
+<td>核心層</td>
+<td><code>rag_system/core/</code></td>
+<td>設定、工廠、Prompt、安全控制、稽核、評估</td>
+</tr>
+<tr>
+<td>維運層</td>
+<td><code>scripts/</code></td>
+<td>Reindex、稽核摘要、V&amp;V 評估、版本追蹤</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33">3.3 部署拓樸</h3>
+<ul>
+<li>容器化：Docker Compose 統一管理。</li>
+<li>離線：<code>save_images.sh</code> 打包所有映像為 <code>.tar</code>，可搬運至內網。</li>
+<li>推論後端依賴：僅 Triton GPU 主機，透過內網 IP 連線。</li>
+<li>持久化：pgvector volume、<code>data/audit_logs/</code>、<code>data/versions/</code>、<code>data/converted_md/</code>。</li>
+</ul>
+<hr>
+<h2 id="4-functional-requirements">4. 功能需求（Functional Requirements）</h2>
+<blockquote>
+<p>所有需求採「The system shall ...」句型；每項給 FR-XX-NN 編號。
+「可驗證性」欄位採三級：✅ 完全可驗證（自動測試）、◐ 部分可驗證（需人工抽樣）、◌ 流程性（需文件佐證）。</p>
+</blockquote>
+<h3 id="41-rag-fr-r">4.1 RAG 核心檢索與生成（FR-R）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-R-01</td>
+<td>系統<strong>應</strong>支援以阿拉伯數字與中文數字辨識條文號碼（例：「第46條」「第四十六條」），並啟動快速路徑（Article Fast-Path）以 BM25 精確比對直接回傳。</td>
+<td>✅</td>
+<td>單元測試：對 30 筆條號變體進行偵測。</td>
+</tr>
+<tr>
+<td>FR-R-02</td>
+<td>系統<strong>應</strong>提供混合檢索：BM25 關鍵字 + Vector 語意搜尋，並以 Round-Robin 合併結果。</td>
+<td>✅</td>
+<td>單元測試：模擬只 BM25 命中 / 只 Vector 命中 / 兩者命中三種情境。</td>
+</tr>
+<tr>
+<td>FR-R-03</td>
+<td>系統<strong>應</strong>對候選 chunks 執行 LLM Reranker，取 Top-3 進入後續流程。</td>
+<td>✅</td>
+<td>整合測試：黃金資料集 Top-3 命中率。</td>
+</tr>
+<tr>
+<td>FR-R-04</td>
+<td>系統<strong>應</strong>採用 Parent-Child 階層式索引；以小 chunk 做向量搜尋，命中後<strong>取回完整父文件段落</strong>作為上下文。</td>
+<td>✅</td>
+<td>單元測試：驗證父文件 ID 一致性。</td>
+</tr>
+<tr>
+<td>FR-R-05</td>
+<td>系統<strong>應</strong>以 LangGraph 實作 Agent 工作流，節點包含：<code>classify → retrieve → generate → verify</code> 主流程，與 <code>reject / security_block / passthrough</code> 分支。</td>
+<td>✅</td>
+<td>圖結構單元測試 + 路由測試。</td>
+</tr>
+<tr>
+<td>FR-R-06</td>
+<td>系統<strong>應</strong>在回答產生後執行 <code>verify_node</code> 檢查引用格式與條文存在性；驗證失敗<strong>應</strong>重試（上限 <code>MAX_RETRIES=2</code>）。</td>
+<td>✅</td>
+<td>整合測試：強制注入錯誤條號驗證重試行為。</td>
+</tr>
+<tr>
+<td>FR-R-07</td>
+<td>系統<strong>應</strong>支援多輪對話：以 <code>x-session-id</code> HTTP header 識別會話，並透過摘要壓縮控制上下文長度（目標 ≤ 3000 tokens）。</td>
+<td>✅</td>
+<td>單元測試：模擬 10 輪對話的記憶壓縮輸出 token 數。</td>
+</tr>
+<tr>
+<td>FR-R-08</td>
+<td>系統<strong>應</strong>對非法律領域之查詢由 <code>classify_node</code> 判定為 out-of-scope 並以 <code>reject_node</code> 回應標準拒絕訊息。</td>
+<td>✅</td>
+<td>黃金資料集 <code>category=out_of_scope</code> 案例。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-api-fr-a">4.2 API 與介面層（FR-A）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-A-01</td>
+<td>系統<strong>應</strong>提供 OpenAI 相容 <code>POST /v1/chat/completions</code> 端點，支援 streaming 與 non-streaming 兩種模式。</td>
+<td>✅</td>
+<td>對齊 OpenAI SDK 整合測試。</td>
+</tr>
+<tr>
+<td>FR-A-02</td>
+<td>系統<strong>應</strong>提供 <code>GET /v1/models</code> 以供前端探測可用模型清單。</td>
+<td>✅</td>
+<td>API 契約測試。</td>
+</tr>
+<tr>
+<td>FR-A-03</td>
+<td>系統<strong>應</strong>提供 <code>POST /v1/upload</code>、<code>POST /v1/upload/batch</code>、<code>DELETE /v1/documents/{filename}</code>、<code>GET /v1/documents</code>、<code>POST /v1/reindex</code>。</td>
+<td>✅</td>
+<td>API 契約測試。</td>
+</tr>
+<tr>
+<td>FR-A-04</td>
+<td>系統<strong>應</strong>提供無認證 <code>GET /health</code> 端點供健康檢查使用。</td>
+<td>✅</td>
+<td>API 契約測試。</td>
+</tr>
+<tr>
+<td>FR-A-05</td>
+<td>系統<strong>應</strong>支援 CORS，且允許來源透過 <code>ALLOWED_ORIGINS</code> 環境變數控制（逗號分隔白名單；預設不應為 <code>*</code> 於生產環境）。</td>
+<td>✅</td>
+<td>CORS pre-flight 整合測試。</td>
+</tr>
+<tr>
+<td>FR-A-06</td>
+<td>Streaming 回應<strong>應</strong>遵循 SSE（<code>text/event-stream</code>）格式，每個 token 一個 <code>data:</code> chunk，並以 <code>data: [DONE]</code> 結束。</td>
+<td>✅</td>
+<td>SSE 串流整合測試。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-fr-i">4.3 文件攝取管線（FR-I）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-I-01</td>
+<td>系統<strong>應</strong>支援 PDF / DOCX / RTF / TXT / MD 五種格式之輸入文件，並轉換為 Markdown 標準中間格式。</td>
+<td>✅</td>
+<td>單元測試：每種格式各一個樣本。</td>
+</tr>
+<tr>
+<td>FR-I-02</td>
+<td>系統<strong>應</strong>對上傳檔案計算 SHA-256，若 metadata 已有相同 hash 則回傳 <code>status: skipped</code>，避免重複索引（除非顯式 <code>overwrite=true</code>）。</td>
+<td>✅</td>
+<td>整合測試：同一檔案重複上傳。</td>
+</tr>
+<tr>
+<td>FR-I-03</td>
+<td>系統<strong>應</strong>提供 <code>scripts/reindex.py</code>，支援三種模式：全量重建、單檔 upsert、單檔刪除。</td>
+<td>✅</td>
+<td>CLI 行為測試。</td>
+</tr>
+<tr>
+<td>FR-I-04</td>
+<td>索引管線<strong>應</strong>將文件以階層方式儲存：父文件（完整段落）入 docstore JSON、子 chunk 入 pgvector。</td>
+<td>✅</td>
+<td>資料庫狀態檢查。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="44-fr-p">4.4 提示詞與回應管理（FR-P）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-P-01</td>
+<td>所有 Prompt <strong>應</strong>集中於 <code>rag_system/core/prompts.py</code>，禁止散佈於各節點中。</td>
+<td>◐</td>
+<td>Code review + grep 檢查。</td>
+</tr>
+<tr>
+<td>FR-P-02</td>
+<td>系統 Prompt <strong>應</strong>明確限定回答範圍為中文法律領域，並要求引用條文編號。</td>
+<td>◐</td>
+<td>人工抽樣 + 黃金資料集引用率指標。</td>
+</tr>
+<tr>
+<td>FR-P-03</td>
+<td>系統<strong>應</strong>在回答中以可解析格式呈現條文引用（如「第X條」），以利後續 <code>verify_node</code> 與 <code>answer_evaluator</code> 評估。</td>
+<td>✅</td>
+<td>正則匹配率 ≥ 0.95（黃金資料集）。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="45-fr-o">4.5 部署與維運（FR-O）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FR-O-01</td>
+<td>系統<strong>應</strong>完全容器化；內網使用者僅需 <code>docker compose up -d</code> 即可啟動全部服務。</td>
+<td>✅</td>
+<td>CI smoke test：乾淨環境啟動 + <code>/health</code> 200。</td>
+</tr>
+<tr>
+<td>FR-O-02</td>
+<td>系統<strong>應</strong>提供 <code>save_images.sh</code> 將所有映像匯出為 tar 檔，總大小 ≤ 6 GB，便於離線搬運。</td>
+<td>✅</td>
+<td>打包後檔案大小檢查。</td>
+</tr>
+<tr>
+<td>FR-O-03</td>
+<td>所有設定<strong>應</strong>集中於 <code>ISO42001Deploy/.env</code>，搬遷時僅需修改 <code>LLM_HOST</code> 一項。</td>
+<td>◐</td>
+<td>文件審查 + 部署演練。</td>
+</tr>
+<tr>
+<td>FR-O-04</td>
+<td>系統<strong>應</strong>提供版本追蹤腳本 <code>scripts/version_tracker.py</code>，支援 <code>snapshot / diff / verify / list</code> 四個子命令，並可選 <code>--backup</code> 同步輸出 tar.gz。</td>
+<td>✅</td>
+<td>CLI 行為測試。</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-non-functional-requirements">5. 非功能需求（Non-Functional Requirements）</h2>
+<h3 id="51-nfr-s-iso-42001-a8">5.1 安全性需求（NFR-S，對應 ISO 42001 A.8）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-S-01</td>
+<td>系統<strong>應</strong>對所有非健康檢查端點強制 Bearer Token 認證；驗證失敗回 HTTP 401。</td>
+<td>✅</td>
+<td><code>tests/unit/test_auth.py</code></td>
+</tr>
+<tr>
+<td>NFR-S-02</td>
+<td>系統<strong>應</strong>提供「內網信任模式」：當 <code>API_KEYS</code> 未設定且 <code>ALLOW_INTRANET_MODE=true</code> 時，以 Client IP 作為稽核身分。</td>
+<td>✅</td>
+<td>認證測試案例。</td>
+</tr>
+<tr>
+<td>NFR-S-03</td>
+<td>系統<strong>應 Fail-Closed</strong>：當 <code>API_KEYS</code> 與 <code>ALLOW_INTRANET_MODE</code> 皆未設定時，回傳 HTTP 503，<strong>絕不靜默暴露未受保護端點</strong>。</td>
+<td>✅</td>
+<td>認證測試案例。</td>
+</tr>
+<tr>
+<td>NFR-S-04</td>
+<td>系統<strong>應</strong>僅對列於 <code>TRUSTED_PROXIES</code> 的 immediate peer 信任 <code>X-Forwarded-For</code> header，防止 IP 偽造。</td>
+<td>✅</td>
+<td>認證測試案例（偽造 XFF）。</td>
+</tr>
+<tr>
+<td>NFR-S-05</td>
+<td>系統<strong>應</strong>對每個 API Key 實施速率限制：預設 60 requests / minute（滑動視窗）；超過回傳 HTTP 429。</td>
+<td>✅</td>
+<td>速率限制單元測試。</td>
+</tr>
+<tr>
+<td>NFR-S-06</td>
+<td>系統<strong>應</strong>對使用者輸入執行<strong>七類攻擊偵測</strong>：Prompt Injection、系統資訊探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換；命中即拒絕並記錄 <code>security_alert</code>。</td>
+<td>✅</td>
+<td><code>tests/evaluation/test_prompt_security.py</code>（79 cases）。</td>
+</tr>
+<tr>
+<td>NFR-S-07</td>
+<td>系統<strong>應</strong>拒絕長度超過 2000 字元之輸入。</td>
+<td>✅</td>
+<td>安全測試案例。</td>
+</tr>
+<tr>
+<td>NFR-S-08</td>
+<td>系統<strong>應</strong>對 LLM 輸出執行敏感資訊遮蔽：連線字串、伺服器路徑、API Key、Base64 Token 等。</td>
+<td>✅</td>
+<td>輸出過濾單元測試。</td>
+</tr>
+<tr>
+<td>NFR-S-09</td>
+<td>系統<strong>應</strong>預設啟用 SSL 驗證（<code>VERIFY_SSL=true</code>）；該設定<strong>必須可由環境變數覆寫且實際生效</strong>。</td>
+<td>✅</td>
+<td>Config 載入測試。</td>
+</tr>
+<tr>
+<td>NFR-S-10</td>
+<td>系統<strong>應</strong>將 <code>ALLOWED_ORIGINS</code> 限制為白名單；生產環境<strong>不得</strong>設為 <code>*</code>。</td>
+<td>◐</td>
+<td>部署檢核表（pre-prod gate）。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-nfr-m-iso-42001-a6">5.2 稽核與維運需求（NFR-M，對應 ISO 42001 A.6）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-M-01</td>
+<td>系統<strong>應</strong>對每次查詢、拒絕、上傳、reindex、認證事件、安全告警寫入結構化稽核日誌（JSONL，每日滾動）。</td>
+<td>✅</td>
+<td>整合測試：呼叫 API 後檢查 <code>audit_*.jsonl</code>。</td>
+</tr>
+<tr>
+<td>NFR-M-02</td>
+<td>稽核日誌<strong>應</strong>包含：時間、session_id、event_type、scope_check、model_name、response_time_ms、retrieval_doc_count、citation_count、retry_count、anomaly_flags。</td>
+<td>✅</td>
+<td>JSON schema 比對。</td>
+</tr>
+<tr>
+<td>NFR-M-03</td>
+<td>系統<strong>應</strong>以滑動視窗實施即時異常偵測：延遲突增（&gt; 2× p95）、拒絕率突升（&gt; 50% 近10筆）、安全事件叢集（≥3）、連續重試（retry_count ≥ 2）。</td>
+<td>✅</td>
+<td><code>tests/unit/test_anomaly_detector.py</code>（15 cases）。</td>
+</tr>
+<tr>
+<td>NFR-M-04</td>
+<td>系統<strong>應</strong>可由稽核日誌輸出 JSON + Markdown 雙格式之每日／月度稽核摘要報告。</td>
+<td>✅</td>
+<td>報告輸出格式檢查。</td>
+</tr>
+<tr>
+<td>NFR-M-05</td>
+<td>系統<strong>應</strong>提供版本追蹤：SHA-256 快照、差異比對、完整性驗證；變更<strong>應</strong>同步寫入 <code>CHANGELOG.md</code>，並保留人工「審核簽名」欄位。</td>
+<td>✅</td>
+<td>腳本行為測試 + CHANGELOG 格式檢查。</td>
+</tr>
+<tr>
+<td>NFR-M-06</td>
+<td>稽核摘要報告<strong>應</strong>保留至少 24 個月，作為稽核證據。</td>
+<td>◌</td>
+<td>維運程序文件。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-nfr-f-iso-42001-a5">5.3 偏誤與公平性需求（NFR-F，對應 ISO 42001 A.5）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-F-01</td>
+<td>系統<strong>應</strong>建立成對問題偏誤測試資料集，涵蓋性別、族群、社經地位、身心障礙等面向。</td>
+<td>✅</td>
+<td><code>tests/evaluation/bias_test_dataset.json</code></td>
+</tr>
+<tr>
+<td>NFR-F-02</td>
+<td>系統<strong>應</strong>提供偏誤評估器：對成對問題比對關鍵字覆蓋率與語意相似度，回報「一致 / 不一致」。</td>
+<td>✅</td>
+<td><code>test_bias_fairness.py</code>（8 cases）。</td>
+</tr>
+<tr>
+<td>NFR-F-03</td>
+<td>系統<strong>應</strong>保留人工填寫之倫理審查清單（<code>docs/governance/ETHICS_CHECKLIST.md</code>），作為 A.5 影響評估書面證據。</td>
+<td>◌</td>
+<td>文件審查。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="54-nfr-v-iso-42001-a9">5.4 驗證與確認需求（NFR-V，對應 ISO 42001 A.9）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-V-01</td>
+<td>系統<strong>應</strong>維護黃金資料集（≥ 30 筆），每筆含：query、expected_answer、expected_keywords、expected_articles、expected_docs、category、difficulty。</td>
+<td>✅</td>
+<td><code>golden_dataset.json</code> 結構與筆數檢查。</td>
+</tr>
+<tr>
+<td>NFR-V-02</td>
+<td>系統<strong>應</strong>提供 V&amp;V 評估器，計算 Hit Rate、Precision@K、MRR、關鍵字覆蓋率、條文引用匹配率、結構完整率。</td>
+<td>✅</td>
+<td><code>test_vv_pipeline.py</code>（28 cases）。</td>
+</tr>
+<tr>
+<td>NFR-V-03</td>
+<td>V&amp;V 通過門檻<strong>應</strong>為：Hit Rate ≥ 0.60、Precision@K ≥ 0.50、MRR ≥ 0.40。</td>
+<td>✅</td>
+<td>評估報告 pass/fail 判定。</td>
+</tr>
+<tr>
+<td>NFR-V-04</td>
+<td>系統<strong>應</strong>提供 <code>scripts/run_vv_evaluation.py</code>，輸出 JSON + Markdown 雙格式 V&amp;V 報告。</td>
+<td>✅</td>
+<td>腳本輸出檢查。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="55-nfr-p">5.5 效能需求（NFR-P）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-P-01</td>
+<td>在標準硬體（內網 GPU；本機 4 vCPU / 8 GB）下，非串流查詢的 P95 延遲<strong>應</strong> ≤ 8 秒。</td>
+<td>✅</td>
+<td>負載測試（locust / k6）。</td>
+</tr>
+<tr>
+<td>NFR-P-02</td>
+<td>串流查詢的首 token 延遲（TTFT）<strong>應</strong> ≤ 2 秒。</td>
+<td>✅</td>
+<td>SSE 計時測試。</td>
+</tr>
+<tr>
+<td>NFR-P-03</td>
+<td>在 60 rpm 速率限制下，系統<strong>應</strong>穩定運行不出現記憶體洩漏（24 hr soak test）。</td>
+<td>◐</td>
+<td>24 小時壓測。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="56-nfr-r">5.6 可靠性與可維運需求（NFR-R）</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>需求描述</th>
+<th>可驗證性</th>
+<th>驗證方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NFR-R-01</td>
+<td>系統<strong>應</strong>提供完整的回滾程序文件，包含「停服 → 還原 → 驗證 → 重啟 → 記錄」五步驟。</td>
+<td>◌</td>
+<td>README 文件審查。</td>
+</tr>
+<tr>
+<td>NFR-R-02</td>
+<td>上游服務（Triton / pgvector）短暫不可用時，系統<strong>應</strong>回傳清楚的 5xx 錯誤而非靜默失敗。</td>
+<td>✅</td>
+<td>故障注入測試。</td>
+</tr>
+<tr>
+<td>NFR-R-03</td>
+<td>系統<strong>應</strong>將 pgvector data、audit_logs、versions、converted_md 透過 Docker volume 持久化，避免容器重啟後資料遺失。</td>
+<td>✅</td>
+<td>docker-compose 設定審查。</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6-iso-42001">6. ISO 42001 合規追溯矩陣</h2>
+<table>
+<thead>
+<tr>
+<th>ISO 42001 Annex A 控制項</th>
+<th>控制要求摘要</th>
+<th>對應需求</th>
+<th>對應實作模組</th>
+<th>書面證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A.5.2</strong> AI 影響評估</td>
+<td>評估對個人 / 群體的潛在影響</td>
+<td>NFR-F-03</td>
+<td><code>docs/governance/ETHICS_CHECKLIST.md</code></td>
+<td>倫理審查清單（人工填寫）</td>
+</tr>
+<tr>
+<td><strong>A.5.3</strong> 偏誤評估</td>
+<td>評估訓練／檢索資料偏誤</td>
+<td>NFR-F-01, F-02</td>
+<td><code>core/bias_evaluator.py</code></td>
+<td><code>test_bias_fairness.py</code> 測試報告</td>
+</tr>
+<tr>
+<td><strong>A.6.2.4</strong> 生命週期監督</td>
+<td>持續監督部署後行為</td>
+<td>NFR-M-01..04</td>
+<td><code>core/anomaly_detector.py</code>、<code>core/audit_logger.py</code></td>
+<td><code>AUDIT_LOG_SCHEMA.md</code>、<code>data/audit_logs/audit_*.jsonl</code></td>
+</tr>
+<tr>
+<td><strong>A.6.2.5</strong> 變更管理</td>
+<td>受控之變更與版本管理</td>
+<td>NFR-M-05</td>
+<td><code>scripts/version_tracker.py</code>、<code>CHANGELOG.md</code></td>
+<td>快照 + 雜湊驗證紀錄</td>
+</tr>
+<tr>
+<td><strong>A.6.2.8</strong> V&amp;V</td>
+<td>驗證與確認</td>
+<td>NFR-V-01..04</td>
+<td><code>core/retrieval_evaluator.py</code>、<code>core/answer_evaluator.py</code></td>
+<td><code>data/reports/vv_report_*.md</code></td>
+</tr>
+<tr>
+<td><strong>A.8.2</strong> 存取控制</td>
+<td>認證與授權</td>
+<td>NFR-S-01..05</td>
+<td><code>core/auth.py</code>、<code>core/rate_limiter.py</code></td>
+<td><code>test_auth.py</code> 測試報告（12 cases）</td>
+</tr>
+<tr>
+<td><strong>A.8.3</strong> 輸入安全</td>
+<td>防範惡意輸入</td>
+<td>NFR-S-06, S-07</td>
+<td><code>core/input_sanitizer.py</code></td>
+<td><code>test_prompt_security.py</code>（79 cases）</td>
+</tr>
+<tr>
+<td><strong>A.8.4</strong> 輸出安全</td>
+<td>防止敏感資料洩漏</td>
+<td>NFR-S-08</td>
+<td><code>core/output_filter.py</code></td>
+<td>同上</td>
+</tr>
+<tr>
+<td><strong>A.9.2</strong> 使用紀錄</td>
+<td>完整稽核軌跡</td>
+<td>NFR-M-01, M-02</td>
+<td><code>core/audit_logger.py</code></td>
+<td><code>data/audit_logs/audit_*.jsonl</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>追溯矩陣涵蓋率：<strong>100%</strong>（所有列出的 A 控制項皆有對應需求、實作與證據）。</p>
+</blockquote>
+<hr>
+<h2 id="7">7. 技術可行性評估</h2>
+<h3 id="71">7.1 技術棧成熟度</h3>
+<table>
+<thead>
+<tr>
+<th>元件</th>
+<th>版本</th>
+<th>成熟度</th>
+<th>風險</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LangGraph</td>
+<td>0.2.x</td>
+<td>🟡 快速演進中</td>
+<td>API 可能變動 → 需鎖版本</td>
+</tr>
+<tr>
+<td>LangChain</td>
+<td>0.3.x</td>
+<td>🟡 同上</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>FastAPI</td>
+<td>0.100+</td>
+<td>🟢 穩定</td>
+<td>低</td>
+</tr>
+<tr>
+<td>PostgreSQL + pgvector</td>
+<td>PG 16 + pgvector 0.7</td>
+<td>🟢 穩定</td>
+<td>低</td>
+</tr>
+<tr>
+<td>Triton Inference Server</td>
+<td>24.xx</td>
+<td>🟢 NVIDIA 官方支援</td>
+<td>由推論後端維運團隊維運</td>
+</tr>
+<tr>
+<td>nv-embed-v2</td>
+<td>NVIDIA 1.5B</td>
+<td>🟢 公開可下載</td>
+<td>模型本身為固定資產</td>
+</tr>
+<tr>
+<td>openai/gpt-oss-20b</td>
+<td>20B</td>
+<td>🟡 開源權重模型</td>
+<td>推理品質需 V&amp;V 持續驗證</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72">7.2 推論後端相依評估</h3>
+<table>
+<thead>
+<tr>
+<th>依賴</th>
+<th>影響</th>
+<th>緩解</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPU 主機 / Triton</td>
+<td>🔴 致命</td>
+<td>提供 <code>/health</code> 健康檢查 + 5xx 明確錯誤；運維協議（SLA）約定</td>
+</tr>
+<tr>
+<td>pgvector</td>
+<td>🔴 致命</td>
+<td>容器內建；資料 volume 持久化；版本鎖定</td>
+</tr>
+<tr>
+<td>離線部署</td>
+<td>🟢 無</td>
+<td>全離線打包（<code>save_images.sh</code>）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="73">7.3 開發工作量估算</h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>模組數</th>
+<th>估計工時</th>
+<th>依賴</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Phase 3：Prompt 安全</td>
+<td>3 新增 + 1 修改</td>
+<td>~ 5 人日</td>
+<td>無</td>
+</tr>
+<tr>
+<td>Phase 2：存取控制</td>
+<td>2 新增 + 2 修改</td>
+<td>~ 4 人日</td>
+<td>Phase 3 完成（共用 audit）</td>
+</tr>
+<tr>
+<td>Phase 1：異常分析</td>
+<td>2 新增 + 1 修改</td>
+<td>~ 3 人日</td>
+<td>Phase 2</td>
+</tr>
+<tr>
+<td>Phase 5：V&amp;V</td>
+<td>3 新增 + 1 資料集建立</td>
+<td>~ 5 人日</td>
+<td>Phase 1</td>
+</tr>
+<tr>
+<td>Phase 4：偏誤倫理</td>
+<td>3 新增 + 1 文件</td>
+<td>~ 3 人日</td>
+<td>Phase 5</td>
+</tr>
+<tr>
+<td><strong>合計</strong></td>
+<td>—</td>
+<td><strong>~ 20 人日</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="8">8. 驗證與確認策略</h2>
+<h3 id="81">8.1 測試分層</h3>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>工具</th>
+<th>目標覆蓋率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>單元測試</td>
+<td><code>pytest</code></td>
+<td>核心邏輯 ≥ 80%</td>
+</tr>
+<tr>
+<td>整合測試</td>
+<td><code>pytest</code> + FastAPI TestClient</td>
+<td>所有 API 端點</td>
+</tr>
+<tr>
+<td>安全測試</td>
+<td>自訂 <code>test_prompt_security.py</code></td>
+<td>79 攻擊案例 100% 攔截</td>
+</tr>
+<tr>
+<td>V&amp;V 評估</td>
+<td><code>run_vv_evaluation.py</code></td>
+<td>Hit Rate ≥ 0.60、Precision@K ≥ 0.50、MRR ≥ 0.40</td>
+</tr>
+<tr>
+<td>偏誤評估</td>
+<td><code>test_bias_fairness.py</code></td>
+<td>8 對成對問題一致性 100%</td>
+</tr>
+<tr>
+<td>24 hr 壓測</td>
+<td>locust / k6</td>
+<td>60 rpm 穩定無洩漏</td>
+</tr>
+</tbody>
+</table>
+<h3 id="82">8.2 預期測試案例總數</h3>
+<table>
+<thead>
+<tr>
+<th>套件</th>
+<th>預估案例數</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_anomaly_detector.py</code></td>
+<td>15</td>
+</tr>
+<tr>
+<td><code>test_auth.py</code></td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>test_prompt_security.py</code></td>
+<td>79</td>
+</tr>
+<tr>
+<td><code>test_bias_fairness.py</code></td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>test_vv_pipeline.py</code></td>
+<td>28</td>
+</tr>
+<tr>
+<td><strong>合計</strong></td>
+<td><strong>142</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="83">8.3 黃金資料集設計</h3>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;eval_001&quot;,
+  &quot;query&quot;: &quot;陸海空軍懲罰法第46條規定為何？&quot;,
+  &quot;expected_answer&quot;: &quot;...&quot;,
+  &quot;expected_keywords&quot;: [&quot;停役&quot;, &quot;降階&quot;],
+  &quot;expected_articles&quot;: [&quot;第46條&quot;],
+  &quot;expected_docs&quot;: [&quot;陸海空軍懲罰法.md#第46條&quot;],
+  &quot;category&quot;: &quot;single_article | cross_reference | out_of_scope | ambiguous&quot;,
+  &quot;difficulty&quot;: &quot;easy | medium | hard&quot;
+}
+</code></pre>
+<hr>
+<h2 id="9">9. 風險評估</h2>
+<h3 id="91">9.1 技術風險</h3>
+<table>
+<thead>
+<tr>
+<th>風險</th>
+<th>機率</th>
+<th>影響</th>
+<th>緩解措施</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LangGraph API 變動破壞工作流</td>
+<td>中</td>
+<td>高</td>
+<td>鎖版本 + Smoke test</td>
+</tr>
+<tr>
+<td>Embed proxy 與 Triton 介面變更</td>
+<td>低</td>
+<td>高</td>
+<td>雙向契約測試</td>
+</tr>
+<tr>
+<td>pgvector 索引效能退化</td>
+<td>低</td>
+<td>中</td>
+<td><code>check_db_status.py</code> 巡檢；定期 ANALYZE</td>
+</tr>
+<tr>
+<td>LLM 幻覺引用不存在條文</td>
+<td>中</td>
+<td>高</td>
+<td><code>verify_node</code> + 重試上限</td>
+</tr>
+</tbody>
+</table>
+<h3 id="92">9.2 合規風險</h3>
+<table>
+<thead>
+<tr>
+<th>風險</th>
+<th>機率</th>
+<th>影響</th>
+<th>緩解措施</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>認證設定錯誤暴露端點</td>
+<td>中</td>
+<td>致命</td>
+<td><strong>Fail-Closed 設計（NFR-S-03）</strong></td>
+</tr>
+<tr>
+<td>稽核日誌遺失</td>
+<td>低</td>
+<td>高</td>
+<td>Volume 持久化 + 24 個月保留</td>
+</tr>
+<tr>
+<td>偏誤評估流於形式</td>
+<td>中</td>
+<td>中</td>
+<td>季度抽查 + 倫理審查清單人工簽署</td>
+</tr>
+<tr>
+<td>版本控管不完整無法回滾</td>
+<td>低</td>
+<td>高</td>
+<td><code>version_tracker.py --backup</code> 強制建立 tar.gz</td>
+</tr>
+</tbody>
+</table>
+<h3 id="93">9.3 營運風險</h3>
+<table>
+<thead>
+<tr>
+<th>風險</th>
+<th>機率</th>
+<th>影響</th>
+<th>緩解措施</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>內網無 Git / GitLab</td>
+<td>高</td>
+<td>中</td>
+<td>自包含的 <code>version_tracker.py</code></td>
+</tr>
+<tr>
+<td>GPU 主機更換造成 <code>LLM_HOST</code> 變更</td>
+<td>中</td>
+<td>中</td>
+<td>集中於 <code>.env</code>，僅一處需改</td>
+</tr>
+<tr>
+<td>法規修訂未及時 reindex</td>
+<td>高</td>
+<td>高</td>
+<td>維運 SOP：法規公報發布 24 hr 內 reindex</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="10">10. 時程與里程碑</h2>
+<h3 id="101">10.1 開發路徑（依風險優先序）</h3>
+<pre><code>Pre-0: 清理失效測試（tests/unit/test_sources.py）
    │
    ├─ Phase 3 (Prompt 安全) ─ 最高優先：直接阻擋資料洩漏路徑
    ├─ Phase 2 (存取控制)     ─ 次高：補上所有未受保護端點
-   ├─ Phase 1 (監控異常)     ─ 為 Phase 4/5 提供基礎設施
+   ├─ Phase 1 (異常分析)     ─ 為 Phase 4/5 提供基礎設施
    ├─ Phase 5 (V&amp;V)          ─ 稽核證據價值高
-   └─ Phase 4 (偏誤倫理)     ─ 最低：依賴前述設施</pre>
+   └─ Phase 4 (偏誤倫理)     ─ 最低：依賴前述設施
+</code></pre>
+<h3 id="102">10.2 里程碑</h3>
+<table>
+<thead>
+<tr>
+<th>里程碑</th>
+<th>預期產出</th>
+<th>退出條件（Exit Criteria）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M1：安全基線</td>
+<td>Phase 3 + Phase 2 完成</td>
+<td>142 cases 中安全相關（91 cases）全綠</td>
+</tr>
+<tr>
+<td>M2：可觀測基線</td>
+<td>Phase 1 完成</td>
+<td>稽核摘要可正常輸出 JSON+MD</td>
+</tr>
+<tr>
+<td>M3：V&amp;V 證據</td>
+<td>Phase 5 完成</td>
+<td>golden dataset ≥ 30 筆，V&amp;V 報告達門檻</td>
+</tr>
+<tr>
+<td>M4：合規完整</td>
+<td>Phase 4 完成</td>
+<td>倫理審查清單簽署、偏誤測試全綠</td>
+</tr>
+<tr>
+<td>M5：v1.0.0 發佈</td>
+<td>全套件測試 + 稽核摘要 + V&amp;V 報告</td>
+<td>完成版本快照與 tar.gz 備份</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="11_1">11. 審查結論與建議</h2>
+<h3 id="111">11.1 整體評定</h3>
+<!--
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⬇⬇⬇  此段請審查負責人親自填寫（建議 5–10 行）  ⬇⬇⬇        │
+  │                                                              │
+  │  撰寫要點：                                                  │
+  │    1. 一句話結論（建議起手式：「本系統需求規格經審查，      │
+  │       評定為『有條件通過』⋯」）                              │
+  │    2. 列舉 2-3 個本次規格的最大優點（例：Fail-Closed         │
+  │       設計、ISO 42001 追溯完整、V&V 門檻清晰）              │
+  │    3. 指出進入下一階段需先解決的條件（指向 §11.2）          │
+  │    4. 簽署人姓名與職稱                                      │
+  │                                                              │
+  │  為什麼這段要你親自寫：                                      │
+  │    審查結論承載「審查委員會的意志」，不能由 AI 代筆。       │
+  │    這段也是 ISO 稽核員會直接讀的段落，必須有具名負責人。   │
+  └─────────────────────────────────────────────────────────────┘
+-->
 
-  <h3>10.2 里程碑</h3>
-  <table>
-    <thead><tr><th>里程碑</th><th>預期產出</th><th>退出條件</th></tr></thead>
-    <tbody>
-      <tr><td>M1：安全基線</td><td>Phase 3 + Phase 2 完成</td><td>142 cases 中安全相關（91 cases）全綠</td></tr>
-      <tr><td>M2：可觀測基線</td><td>Phase 1 完成</td><td>監控報告腳本可正常輸出 JSON+MD</td></tr>
-      <tr><td>M3：V&amp;V 證據</td><td>Phase 5 完成</td><td>golden dataset ≥ 30 筆，V&amp;V 報告達門檻</td></tr>
-      <tr><td>M4：合規完整</td><td>Phase 4 完成</td><td>倫理審查清單簽署、偏誤測試全綠</td></tr>
-      <tr><td>M5：v1.0.0 發佈</td><td>全套件測試 + 監控 + V&amp;V 報告</td><td>完成版本快照與 tar.gz 備份</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ════════ §11 結論 ════════ -->
-  <h2 class="section" id="s11">11. 審查結論與建議</h2>
-
-  <h3>11.1 整體評定</h3>
-  <div class="callout empty">
-    <strong>⬇ 此段請由審查負責人親自填寫（建議 5–10 行）⬇</strong><br><br>
-    撰寫要點：<br>
-    1. 一句話結論（建議起手式：「本系統需求規格經審查，評定為『有條件通過』⋯」）<br>
-    2. 列舉 2–3 個本次規格的最大優點（例：Fail-Closed 設計、ISO 42001 追溯完整、V&amp;V 門檻清晰）<br>
-    3. 指出進入下一階段需先解決的條件（指向 §11.2）<br>
-    4. 簽署人姓名與職稱<br><br>
-    <em>為什麼這段要由審查負責人親自寫：審查結論承載「審查委員會的意志」，不能由 AI 代筆。這段也是 ISO 稽核員會直接讀的段落，必須有具名負責人。</em>
+<blockquote>
+<p><em>（請於此處填入審查結論文字並署名。）</em></p>
+</blockquote>
+<h3 id="112-conditional-recommendations">11.2 條件式建議（Conditional Recommendations）</h3>
+<p>下列 5 項屬於「開發起點即應落實的基線控制」，建議於 Pre-0 / Phase 3 起一併處理；<strong>不構成阻擋性 gate</strong>，但若忽略將於後續 Phase 形成技術債：</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>建議</th>
+<th>對應需求</th>
+<th>為何在 v0 必須處理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C-1</td>
+<td>刪除 <code>tests/unit/test_sources.py</code>（引用不存在的 <code>rag_system.node</code> 模組與函數，屬死測試）。</td>
+<td>—</td>
+<td>死測試會讓 CI 永遠紅燈，阻礙後續所有測試工作。</td>
+</tr>
+<tr>
+<td>C-2</td>
+<td>修正 <code>RAGConfig.from_env()</code> 必須讀取 <code>VERIFY_SSL</code> 環境變數，並將預設值改為 <code>True</code>。</td>
+<td>NFR-S-09</td>
+<td>規格寫了預設啟用 SSL，但若 <code>from_env</code> 未讀取此變數，等同永遠關閉，與規格矛盾。</td>
+</tr>
+<tr>
+<td>C-3</td>
+<td>在 <code>api.py</code> 加入 CORS Middleware，並將 <code>ALLOWED_ORIGINS</code> 列為<strong>必填</strong>環境變數；生產環境禁止 <code>*</code>。</td>
+<td>FR-A-05、NFR-S-10</td>
+<td>開發階段若先預設 <code>*</code>，事後收斂常被遺漏。</td>
+</tr>
+<tr>
+<td>C-4</td>
+<td>黃金資料集 <code>tests/evaluation/golden_dataset.json</code> 自首版即應採完整結構（含 <code>expected_answer</code>、<code>expected_docs</code>、<code>category</code>、<code>difficulty</code> 等欄位），且筆數 ≥ 30 後再進入 Phase 5。</td>
+<td>NFR-V-01</td>
+<td>若資料集筆數不足或欄位殘缺，Hit Rate / MRR 等指標無法計算，V&amp;V 報告將形同空殼，A.9 證據鏈即失效。</td>
+</tr>
+<tr>
+<td>C-5</td>
+<td>所有 API 端點（chat、upload、delete、reindex、list）<strong>必須</strong>從第一個 commit 起就掛上 <code>Security(get_api_key)</code> 依賴。</td>
+<td>NFR-S-01</td>
+<td>認證若採「後補」策略，極可能漏掛端點而靜默暴露。Fail-Closed（NFR-S-03）只能擋住「全無設定」的情境。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="113-non-blocking-suggestions">11.3 非阻擋性改善建議（Non-Blocking Suggestions）</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>建議</th>
+<th>動機</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S-1</td>
+<td>在黃金資料集中加入 <code>expected_docs</code> 後，將 Hit Rate 與 MRR 計算自動納入 CI 流程。</td>
+<td>防止後續模型／檢索改動使品質回退而無人發現。</td>
+</tr>
+<tr>
+<td>S-2</td>
+<td>對 <code>anomaly_detector</code> 之滑動視窗大小（<code>window=50</code>）與門檻（<code>2× p95</code>、<code>&gt; 50%</code>）保留 config 參數化空間，便於後續依正式流量調整。</td>
+<td>上線初期流量分佈未知，固定門檻可能誤報或漏報。</td>
+</tr>
+<tr>
+<td>S-3</td>
+<td><code>verify_node</code> 重試上限 <code>MAX_RETRIES=2</code> 建議移至 <code>RAGConfig</code>，避免日後微調須改 code。</td>
+<td>提升維運效率。</td>
+</tr>
+<tr>
+<td>S-4</td>
+<td>稽核摘要除日／月度外，建議再產出「每安全事件<strong>單獨</strong>事件報告」，便於資安單位處理單案。</td>
+<td>提升 A.6 應變時效。</td>
+</tr>
+<tr>
+<td>S-5</td>
+<td>將 <code>data/audit_logs/</code> 改為「append-only 檔案權限 + 定期離線備份」雙重保護。</td>
+<td>強化 A.9 不可否認性。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="114">11.4 審查委員會簽署欄</h3>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th>姓名</th>
+<th>簽署日期</th>
+<th>簽名</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主審</td>
+<td><em>（待簽）</em></td>
+<td>2026-05-26</td>
+<td></td>
+</tr>
+<tr>
+<td>資訊安全</td>
+<td><em>（待簽）</em></td>
+<td>2026-05-26</td>
+<td></td>
+</tr>
+<tr>
+<td>法務 / 法規</td>
+<td><em>（待簽）</em></td>
+<td>2026-05-26</td>
+<td></td>
+</tr>
+<tr>
+<td>ISO 42001 內審</td>
+<td><em>（待簽）</em></td>
+<td>2026-05-26</td>
+<td></td>
+</tr>
+<tr>
+<td>系統運維</td>
+<td><em>（待簽）</em></td>
+<td>2026-05-26</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="a">附錄 A：縮寫與術語</h2>
+<table>
+<thead>
+<tr>
+<th>縮寫</th>
+<th>全稱</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAG</td>
+<td>Retrieval-Augmented Generation</td>
+<td>檢索增強生成</td>
+</tr>
+<tr>
+<td>BM25</td>
+<td>Best Matching 25</td>
+<td>經典詞頻關鍵字檢索演算法</td>
+</tr>
+<tr>
+<td>MRR</td>
+<td>Mean Reciprocal Rank</td>
+<td>平均倒數排名（IR 指標）</td>
+</tr>
+<tr>
+<td>TTFT</td>
+<td>Time To First Token</td>
+<td>首個 token 出現延遲</td>
+</tr>
+<tr>
+<td>SSE</td>
+<td>Server-Sent Events</td>
+<td>伺服器推送事件（HTTP 串流）</td>
+</tr>
+<tr>
+<td>V&amp;V</td>
+<td>Verification &amp; Validation</td>
+<td>驗證與確認</td>
+</tr>
+<tr>
+<td>SRS</td>
+<td>Software Requirements Specification</td>
+<td>軟體需求規格書</td>
+</tr>
+<tr>
+<td>SLA</td>
+<td>Service Level Agreement</td>
+<td>服務水準協議</td>
+</tr>
+<tr>
+<td>SOP</td>
+<td>Standard Operating Procedure</td>
+<td>標準作業程序</td>
+</tr>
+</tbody>
+</table>
+<h2 id="b">附錄 B：相關文件</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>關係</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>README.md</code></td>
+<td>系統使用與部署說明（與本報告需求應一致）</td>
+</tr>
+<tr>
+<td><code>plan.md</code></td>
+<td>ISO 42001 合規實作計畫（Phase 1–5 開發藍圖）</td>
+</tr>
+<tr>
+<td><code>CHANGELOG.md</code></td>
+<td>變更紀錄（NFR-M-05 證據鏈）</td>
+</tr>
+<tr>
+<td><code>docs/governance/ETHICS_CHECKLIST.md</code></td>
+<td>倫理審查清單（NFR-F-03 證據）</td>
+</tr>
+<tr>
+<td><code>AGENT.md</code></td>
+<td>工程設計哲學與 MCP 整合策略</td>
+</tr>
+</tbody>
+</table>
   </div>
-  <div class="signoff">_（請於此處填入審查結論文字並署名。）_</div>
-
-  <h3>11.2 條件式建議（Conditional Recommendations）</h3>
-  <p>下列 5 項屬於「開發起點即應落實的基線控制」，建議於 Pre-0 / Phase 3 起一併處理；<strong>不構成阻擋性 gate</strong>，但若忽略將於後續 Phase 形成技術債：</p>
-  <table>
-    <thead><tr><th style="width: 6%">#</th><th>建議</th><th style="width: 16%">對應需求</th><th style="width: 30%">為何在 v0 必須處理</th></tr></thead>
-    <tbody>
-      <tr><td class="id">C-1</td><td>刪除 <code class="inline">tests/unit/test_sources.py</code>（引用不存在的 <code class="inline">rag_system.node</code> 模組與函數，屬死測試）。</td><td class="id">—</td><td>死測試會讓 CI 永遠紅燈，阻礙後續所有測試工作。</td></tr>
-      <tr><td class="id">C-2</td><td>修正 <code class="inline">RAGConfig.from_env()</code> 必須讀取 <code class="inline">VERIFY_SSL</code> 環境變數，並將預設值改為 <code class="inline">True</code>。</td><td class="id">NFR-S-09</td><td>規格寫了預設啟用 SSL，但若 <code class="inline">from_env</code> 未讀取此變數，等同永遠關閉，與規格矛盾。</td></tr>
-      <tr><td class="id">C-3</td><td>在 <code class="inline">api.py</code> 加入 CORS Middleware，並將 <code class="inline">ALLOWED_ORIGINS</code> 列為<strong>必填</strong>環境變數；生產環境禁止 <code class="inline">*</code>。</td><td class="id">FR-A-05、NFR-S-10</td><td>開發階段若先預設 <code class="inline">*</code>，事後收斂常被遺漏。</td></tr>
-      <tr><td class="id">C-4</td><td>黃金資料集 <code class="inline">tests/evaluation/golden_dataset.json</code> 自首版即應採完整結構（含 <code class="inline">expected_answer</code>、<code class="inline">expected_docs</code>、<code class="inline">category</code>、<code class="inline">difficulty</code> 等欄位），且筆數 ≥ 30 後再進入 Phase 5。</td><td class="id">NFR-V-01</td><td>若資料集筆數不足或欄位殘缺，Hit Rate / MRR 等指標無法計算，V&amp;V 報告將形同空殼，A.9 證據鏈即失效。</td></tr>
-      <tr><td class="id">C-5</td><td>所有 API 端點（chat、upload、delete、reindex、list）<strong>必須</strong>從第一個 commit 起就掛上 <code class="inline">Security(get_api_key)</code> 依賴。</td><td class="id">NFR-S-01</td><td>認證若採「後補」策略，極可能漏掛端點而靜默暴露。Fail-Closed（NFR-S-03）只能擋住「全無設定」的情境。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>11.3 非阻擋性改善建議（Non-Blocking Suggestions）</h3>
-  <table>
-    <thead><tr><th style="width: 6%">#</th><th>建議</th><th>動機</th></tr></thead>
-    <tbody>
-      <tr><td class="id">S-1</td><td>在黃金資料集中加入 <code class="inline">expected_docs</code> 後，將 Hit Rate 與 MRR 計算自動納入 CI 流程。</td><td>防止後續模型／檢索改動使品質回退而無人發現。</td></tr>
-      <tr><td class="id">S-2</td><td>對 <code class="inline">anomaly_detector</code> 之滑動視窗大小（<code class="inline">window=50</code>）與門檻（<code class="inline">2× p95</code>、<code class="inline">&gt; 50%</code>）保留 config 參數化空間，便於後續依正式流量調整。</td><td>上線初期流量分佈未知，固定門檻可能誤報或漏報。</td></tr>
-      <tr><td class="id">S-3</td><td><code class="inline">verify_node</code> 重試上限 <code class="inline">MAX_RETRIES=2</code> 建議移至 <code class="inline">RAGConfig</code>，避免日後微調須改 code。</td><td>提升維運效率。</td></tr>
-      <tr><td class="id">S-4</td><td>監控報告除日／月度外，建議再產出「每安全事件單獨事件報告」，便於資安單位處理單案。</td><td>提升 A.6 應變時效。</td></tr>
-      <tr><td class="id">S-5</td><td>將 <code class="inline">data/audit_logs/</code> 改為「append-only 檔案權限 + 定期離線備份」雙重保護。</td><td>強化 A.9 不可否認性。</td></tr>
-    </tbody>
-  </table>
-
-  <h3>11.4 審查委員會簽署欄</h3>
-  <table>
-    <thead><tr><th style="width: 22%">角色</th><th style="width: 22%">姓名</th><th style="width: 18%">簽署日期</th><th>簽名</th></tr></thead>
-    <tbody>
-      <tr><td>主審</td><td><em>（待簽）</em></td><td>2026-05-26</td><td>&nbsp;</td></tr>
-      <tr><td>資訊安全</td><td><em>（待簽）</em></td><td>2026-05-26</td><td>&nbsp;</td></tr>
-      <tr><td>法務 / 法規</td><td><em>（待簽）</em></td><td>2026-05-26</td><td>&nbsp;</td></tr>
-      <tr><td>ISO 42001 內審</td><td><em>（待簽）</em></td><td>2026-05-26</td><td>&nbsp;</td></tr>
-      <tr><td>系統運維</td><td><em>（待簽）</em></td><td>2026-05-26</td><td>&nbsp;</td></tr>
-    </tbody>
-  </table>
-
-  <!-- ════════ 附錄 ════════ -->
-  <h2 class="section">附錄 A：縮寫與術語</h2>
-  <table>
-    <thead><tr><th style="width: 14%">縮寫</th><th style="width: 36%">全稱</th><th>說明</th></tr></thead>
-    <tbody>
-      <tr><td>RAG</td><td>Retrieval-Augmented Generation</td><td>檢索增強生成</td></tr>
-      <tr><td>BM25</td><td>Best Matching 25</td><td>經典詞頻關鍵字檢索演算法</td></tr>
-      <tr><td>MRR</td><td>Mean Reciprocal Rank</td><td>平均倒數排名（IR 指標）</td></tr>
-      <tr><td>TTFT</td><td>Time To First Token</td><td>首個 token 出現延遲</td></tr>
-      <tr><td>SSE</td><td>Server-Sent Events</td><td>伺服器推送事件（HTTP 串流）</td></tr>
-      <tr><td>V&amp;V</td><td>Verification &amp; Validation</td><td>驗證與確認</td></tr>
-      <tr><td>SRS</td><td>Software Requirements Specification</td><td>軟體需求規格書</td></tr>
-      <tr><td>SLA</td><td>Service Level Agreement</td><td>服務水準協議</td></tr>
-      <tr><td>SOP</td><td>Standard Operating Procedure</td><td>標準作業程序</td></tr>
-    </tbody>
-  </table>
-
-  <h2 class="section">附錄 B：相關文件</h2>
-  <table>
-    <thead><tr><th>文件</th><th>關係</th></tr></thead>
-    <tbody>
-      <tr><td><code class="inline">README.md</code></td><td>系統使用與部署說明（與本報告需求應一致）</td></tr>
-      <tr><td><code class="inline">plan.md</code></td><td>ISO 42001 合規實作計畫（Phase 1–5 開發藍圖）</td></tr>
-      <tr><td><code class="inline">CHANGELOG.md</code></td><td>變更紀錄（NFR-M-05 證據鏈）</td></tr>
-      <tr><td><code class="inline">docs/governance/ETHICS_CHECKLIST.md</code></td><td>倫理審查清單（NFR-F-03 證據）</td></tr>
-      <tr><td><code class="inline">AGENT.md</code></td><td>工程設計哲學與 MCP 整合策略</td></tr>
-    </tbody>
-  </table>
-
-  <div class="footer">
-    中文法律 RAG 系統 — 需求規格審查報告 · 2026-05-26 · 採用 IEEE 830 / ISO 42001 框架
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/requirements_review_report.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
   </div>
-
 </div>
 </body>
 </html>

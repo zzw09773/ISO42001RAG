@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ISO 42001 A.5 AI 倫理審查清單</title>
+<style>
+:root{--text:#1a1f2c;--muted:#5b6578;--border:#d9dee6;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;--code:#0f172a;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",-apple-system,"Segoe UI",sans-serif;
+     margin:0;background:var(--soft);color:var(--text);line-height:1.7;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--border);border-right:1px solid var(--border);min-height:100vh;}
+.docbar{background:var(--accent);color:#fff;padding:10px 40px;font-size:12px;letter-spacing:.04em;
+        display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;}
+.docbar a{color:#cfe0ff;text-decoration:none;}
+.docbar a:hover{text-decoration:underline;}
+.content{padding:28px 40px;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:3px solid var(--accent);}
+h2{font-size:20px;font-weight:800;color:var(--accent);margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--border);}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:4px solid var(--accent);
+           background:#f0f4fb;color:#374151;border-radius:0 4px 4px 0;}
+blockquote p{margin:.3em 0;}
+code{font-family:"JetBrains Mono","Consolas","Courier New",monospace;font-size:.88em;
+     background:#eef2f7;color:var(--code);padding:.12em .4em;border-radius:3px;}
+pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{background:var(--accent);color:#fff;text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;}
+td{padding:7px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+tr:nth-child(even) td{background:var(--soft);}
+hr{border:0;border-top:1px solid var(--border);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:1px solid var(--border);
+         font-size:11.5px;color:var(--muted);text-align:center;}
+details{border:1px solid var(--border);border-radius:6px;margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}.docbar{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             th{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+             pre{background:#0f172a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="docbar">
+    <span>ISO 42001 RAG · RAG/docs/governance/ETHICS_CHECKLIST.md</span>
+    <span><a href="javascript:window.print()">🖨 列印 / 存 PDF</a></span>
+  </div>
+  <div class="content">
+<h1 id="iso-42001-a5-ai">ISO 42001 A.5 AI 倫理審查清單</h1>
+<p><strong>系統名稱</strong>：ISO 42001 RAG 法律文件查詢系統<br>
+<strong>審查版本</strong>：v1.1.0<br>
+<strong>審查日期</strong>：（每季填寫）<br>
+<strong>審查負責人</strong>：（填寫）</p>
+<hr>
+<h2 id="a51-ai">A.5.1 AI 影響評估</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>審查項目</th>
+<th>狀態</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>系統決策是否影響個人權益？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>2</td>
+<td>是否識別了所有受影響的利害關係人？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>3</td>
+<td>高風險情境是否已建立人工審核流程？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>4</td>
+<td>系統輸出是否明確標示為「AI 輔助」非「法律建議」？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="a52">A.5.2 偏誤風險評估</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>審查項目</th>
+<th>狀態</th>
+<th>最後測試日期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5</td>
+<td>性別偏誤測試是否通過（一致性 ≥ 70%）？</td>
+<td>☐ 通過 / ☐ 未通過 / ☐ 待測</td>
+<td></td>
+</tr>
+<tr>
+<td>6</td>
+<td>階級偏誤測試是否通過？</td>
+<td>☐ 通過 / ☐ 未通過 / ☐ 待測</td>
+<td></td>
+</tr>
+<tr>
+<td>7</td>
+<td>身心障礙族群偏誤測試是否通過？</td>
+<td>☐ 通過 / ☐ 未通過 / ☐ 待測</td>
+<td></td>
+</tr>
+<tr>
+<td>8</td>
+<td>族群偏誤測試是否通過？</td>
+<td>☐ 通過 / ☐ 未通過 / ☐ 待測</td>
+<td></td>
+</tr>
+<tr>
+<td>9</td>
+<td>拒絕率在不同族群間是否一致（差異 &lt; 10%）？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="a53">A.5.3 透明度與可解釋性</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>審查項目</th>
+<th>狀態</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10</td>
+<td>系統回答是否附有條文引用來源？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>11</td>
+<td>使用者是否被告知系統局限性（僅限特定法律領域）？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>12</td>
+<td>拒絕回答的理由是否向使用者說明？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>13</td>
+<td>系統版本與使用的模型資訊是否可查？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="a54">A.5.4 資料治理</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>審查項目</th>
+<th>狀態</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>14</td>
+<td>訓練/索引資料來源是否有文件記錄？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>15</td>
+<td>資料是否來自合法授權來源？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+<tr>
+<td>16</td>
+<td>個人識別資訊是否已從訓練資料中移除？</td>
+<td>☐ 是 / ☐ 否 / ☐ 不適用</td>
+<td></td>
+</tr>
+<tr>
+<td>17</td>
+<td>資料更新頻率是否有明確規範？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="a55">A.5.5 安全性與隱私</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>審查項目</th>
+<th>狀態</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>18</td>
+<td>Prompt Injection 防禦是否已實作並測試？</td>
+<td>☐ 是 / ☐ 否</td>
+<td>tests/evaluation/test_prompt_security.py</td>
+</tr>
+<tr>
+<td>19</td>
+<td>輸出過濾是否防止敏感資訊洩漏？</td>
+<td>☐ 是 / ☐ 否</td>
+<td>output_filter.py</td>
+</tr>
+<tr>
+<td>20</td>
+<td>API 端點是否有身份驗證保護？</td>
+<td>☐ 是 / ☐ 否</td>
+<td>auth.py</td>
+</tr>
+<tr>
+<td>21</td>
+<td>使用者查詢記錄是否依隱私政策保護？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="a56">A.5.6 人工監督</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>審查項目</th>
+<th>狀態</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>22</td>
+<td>異常偵測機制是否正常運作？</td>
+<td>☐ 是 / ☐ 否</td>
+<td>anomaly_detector.py</td>
+</tr>
+<tr>
+<td>23</td>
+<td>稽核日誌是否定期抽查並保存結果？</td>
+<td>☐ 是 / ☐ 否</td>
+<td>AUDIT_LOG_SCHEMA.md</td>
+</tr>
+<tr>
+<td>24</td>
+<td>V&amp;V 評估是否每季執行？</td>
+<td>☐ 是 / ☐ 否</td>
+<td>scripts/run_vv_evaluation.py</td>
+</tr>
+<tr>
+<td>25</td>
+<td>高風險決策是否有人工複審流程？</td>
+<td>☐ 是 / ☐ 否</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="_1">審查結論</h2>
+<p><strong>本次審查結果</strong>：☐ 通過 / ☐ 有條件通過 / ☐ 未通過</p>
+<p><strong>待改進事項</strong>：</p>
+<p>（填寫未通過項目的改進計畫）</p>
+<p><strong>下次審查日期</strong>：</p>
+<hr>
+<p><em>本清單依據 ISO/IEC 42001:2023 Annex A.5 設計，應每季審查一次。</em></p>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/ETHICS_CHECKLIST.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

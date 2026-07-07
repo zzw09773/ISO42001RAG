@@ -10,12 +10,22 @@ Implements five distinct nodes for the LangGraph workflow:
 """
 import logging
 import re
-from typing import List, Callable
+from typing import List, Callable, Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 
-from ..core.prompts import AGENT_SYSTEM_PROMPT
+from ..core.prompts import (
+    AGENT_SYSTEM_PROMPT,
+    VERIFY_SYSTEM_MSG,
+    VERIFY_PROMPT_TEMPLATE,
+    CLASSIFY_SYSTEM_MSG,
+    CLASSIFY_PROMPT_TEMPLATE,
+    REJECTION_MSG,
+    CAPABILITY_MSG,
+    PRC_BLOCK_MSG,
+    SECURITY_MSG,
+)
 from ..core.config import RAGConfig
 from ..core.input_sanitizer import sanitize
 from ..core.output_filter import filter_output
@@ -26,8 +36,8 @@ from ..services.retrieval import RetrievalService
 
 logger = logging.getLogger(__name__)
 
-# ISO 42001 A.9: Rejection message
-REJECTION_MSG = "本系統僅提供法律文件檢索與解釋服務，無法回答與法律無關的問題。請提出與法律相關的查詢。"
+# REJECTION_MSG / SECURITY_MSG now imported from core.prompts (ISO 42001 A.9)
+# — centralised so both classic & ReAct workflows show the same guided message.
 
 MAX_RETRIES = 2
 
@@ -55,41 +65,123 @@ _CHAT_KEYWORDS = re.compile(
 
 # Pattern to detect legal article citations in generated text
 _CITATION_PATTERN = re.compile(r'第\s*\d+\s*條|article\s*\d+', re.IGNORECASE)
+_ARTICLE_NUM_RE = re.compile(r'第\s*(\d+)\s*條')
+
+
+def _article_nums(text: str) -> set:
+    """Arabic 第N條 numbers found in a string (answer text or a source id)."""
+    return {int(n) for n in _ARTICLE_NUM_RE.findall(text or "")}
+
+
+def _retrieved_article_nums(sources) -> set:
+    """Article numbers present across retrieved_sources (法名.md#第N條)."""
+    nums: set = set()
+    for s in sources or []:
+        nums |= _article_nums(str(s))
+    return nums
+
+
+# Deterministic PRC / 中共 hard-block pattern (中科院要求). SPECIFIC PRC markers
+# only — must NOT match ROC terms (e.g. 陸海空軍, 中華民國) or generic words.
+_PRC_BLOCK_RE = re.compile(
+    "中華人民共和國|中华人民共和国|中共|中國共產黨|中国共产党|共產黨|共产党|"
+    "解放軍|解放军|習近平|习近平|中國大陸|中国大陆|大陸地區|大陆地区|中南海|"
+    "大陸法規|大陆法规|大陸軍事|大陆军事|大陸制度|大陆制度|大陸政府|大陆政府"
+)
 
 
 # ---------------------------------------------------------------------------
 # Node 1: Classify
 # ---------------------------------------------------------------------------
 
-def create_classify_node() -> Callable:
-    """Creates a node that classifies the query as legal, reject, or passthrough."""
+def _parse_classify_verdict(raw: str) -> str:
+    """Best-effort JSON extraction of `scope` field. Defaults to 'legal'."""
+    import json as _json
+    import re as _re
+    text = (raw or "").strip()
+    text = _re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=_re.MULTILINE).strip()
+    m = _re.search(r"\{[^{}]*\}", text, _re.DOTALL)
+    if not m:
+        return "legal"
+    try:
+        verdict = _json.loads(m.group(0))
+        scope = str(verdict.get("scope", "")).lower().strip()
+        if scope in ("legal", "capability", "reject", "passthrough"):
+            return scope
+        return "legal"
+    except Exception:
+        return "legal"
+
+
+def create_classify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
+    """Creates a classifier node. Two modes:
+
+      - llm=None (default fallback):
+            Regex keyword matching against legal vocabulary. Cheap but
+            misroutes some borderline intent-driven queries.
+
+      - llm=ChatOpenAI:
+            LLM reads query intent and routes to legal/reject/passthrough.
+            Adds ~300-500ms per query but handles edge cases better
+            (e.g., "同事每天罵我可以告嗎" → legal even without "告" keyword).
+
+    Security checks (sanitize + Task: prefix detection) always run first
+    regardless of mode, so an LLM hiccup can't bypass security.
+    """
 
     def classify_node(state: GraphState) -> dict:
         question = state.get("question", "")
         logger.info(f"--- CLASSIFY NODE --- question: {question[:80]}")
 
-        # Security check: run input sanitizer before any classification
+        # ── Security always first — never delegated to LLM ────────────────
         san = sanitize(question)
         if san.blocked:
             logger.warning(f"Input blocked by sanitizer: {san.threat_type} — {san.reason}")
-            return {"scope": "security_block", "security_reason": san.reason, "threat_type": san.threat_type}
+            return {
+                "scope": "security_block",
+                "security_reason": san.reason,
+                "threat_type": san.threat_type,
+                "actions": [f"classify=security_block({san.threat_type})"],
+            }
 
-        # Open WebUI system tasks: let them pass through to LLM directly
+        # ── PRC / 中共 hard block — deterministic, BEFORE passthrough/LLM ──
+        # Runs before the "### Task:" passthrough and the LLM so a framed or
+        # LLM-misjudged PRC query can't slip through. Never delegated to the LLM.
+        if _PRC_BLOCK_RE.search(question):
+            logger.warning("Classification: prc_block (PRC/中共 content detected)")
+            return {"scope": "prc_block", "actions": ["classify=prc_block"]}
+
+        # Open WebUI system tasks: deterministic prefix check
         if question.strip().startswith("### Task:"):
             logger.info("Classification: passthrough (Open WebUI system task)")
-            return {"scope": "passthrough"}
+            return {"scope": "passthrough", "actions": ["classify=passthrough(openwebui_task)"]}
 
+        # ── LLM mode ─────────────────────────────────────────────────────
+        if llm is not None:
+            try:
+                response = llm.invoke([
+                    SystemMessage(content=CLASSIFY_SYSTEM_MSG),
+                    HumanMessage(content=CLASSIFY_PROMPT_TEMPLATE.format(question=question)),
+                ])
+                scope = _parse_classify_verdict(response.content)
+                logger.info(f"Classification (LLM): {scope}")
+                return {"scope": scope, "actions": [f"classify=llm:{scope}"]}
+            except Exception as e:
+                logger.warning(f"LLM classify failed, falling back to regex: {e}")
+                # Fall through to regex below
+
+        # ── Regex fallback (or default mode) ──────────────────────────────
         if _LEGAL_KEYWORDS.search(question):
-            logger.info("Classification: legal (keyword match)")
-            return {"scope": "legal"}
+            logger.info("Classification: legal (regex keyword)")
+            return {"scope": "legal", "actions": ["classify=regex:legal"]}
 
         if _CHAT_KEYWORDS.search(question):
-            logger.info("Classification: reject (chat keyword)")
-            return {"scope": "reject"}
+            logger.info("Classification: reject (regex chat keyword)")
+            return {"scope": "reject", "actions": ["classify=regex:reject"]}
 
         # Ambiguous — default to legal
-        logger.info("Classification: legal (ambiguous, default)")
-        return {"scope": "legal"}
+        logger.info("Classification: legal (regex ambiguous default)")
+        return {"scope": "legal", "actions": ["classify=regex:legal(ambiguous)"]}
 
     return classify_node
 
@@ -106,21 +198,56 @@ def create_reject_node() -> Callable:
         return {
             "generation": REJECTION_MSG,
             "messages": [AIMessage(content=REJECTION_MSG)],
+            "actions": ["reject"],
         }
 
     return reject_node
 
 
+def create_capability_node() -> Callable:
+    """Node that answers system-capability / how-to-use questions directly,
+    WITHOUT retrieval (scope == "capability"). Keeps legitimate "what can you
+    do / how do I use you" questions from being rejected as off-topic."""
+
+    def capability_node(state: GraphState) -> dict:
+        logger.info("--- CAPABILITY NODE ---")
+        return {
+            "generation": CAPABILITY_MSG,
+            "messages": [AIMessage(content=CAPABILITY_MSG)],
+            "actions": ["capability"],
+        }
+
+    return capability_node
+
+
+def create_prc_block_node() -> Callable:
+    """Node that HARD-blocks PRC / 中共 content (scope == "prc_block"), returning
+    a fixed refusal with no retrieval and no LLM. (中科院 deterministic control)"""
+
+    def prc_block_node(state: GraphState) -> dict:
+        logger.info("--- PRC BLOCK NODE ---")
+        return {
+            "generation": PRC_BLOCK_MSG,
+            "messages": [AIMessage(content=PRC_BLOCK_MSG)],
+            "actions": ["prc_block"],
+        }
+
+    return prc_block_node
+
+
 def create_security_block_node(audit: AuditLogger = None) -> Callable:
     """Creates a node that returns a security rejection message and writes audit log."""
-    SECURITY_MSG = "本系統偵測到潛在的安全威脅，已拒絕此請求。請重新提出合法的法律查詢。"
 
     def security_block_node(state: GraphState) -> dict:
         threat_type = state.get("threat_type", "unknown")
         reason = state.get("security_reason", "")
         question = state.get("question", "")
         session_id = state.get("session_id", "unknown")
-        logger.warning(f"--- SECURITY BLOCK NODE --- threat={threat_type} reason={reason}")
+        client_ip = state.get("client_ip", "")
+        audit_context = state.get("audit_context", {}) or {}
+        logger.warning(
+            f"--- SECURITY BLOCK NODE --- threat={threat_type} reason={reason} ip={client_ip}"
+        )
         if audit:
             audit.log_security_alert(
                 session_id=session_id,
@@ -128,10 +255,16 @@ def create_security_block_node(audit: AuditLogger = None) -> Callable:
                 threat_type=threat_type,
                 reason=reason,
                 stage="input",
+                action_taken="blocked",
+                user_notified=True,
+                detection_method="input_sanitizer",
+                client_ip=client_ip,
+                **audit_context,
             )
         return {
             "generation": SECURITY_MSG,
             "messages": [AIMessage(content=SECURITY_MSG)],
+            "actions": [f"security_block({threat_type})"],
         }
 
     return security_block_node
@@ -159,12 +292,14 @@ def create_passthrough_node(llm: ChatOpenAI) -> Callable:
             return {
                 "generation": response.content,
                 "messages": [AIMessage(content=response.content)],
+                "actions": ["passthrough"],
             }
         except Exception as e:
             logger.error(f"Passthrough failed: {e}")
             return {
                 "generation": "",
                 "messages": [AIMessage(content="")],
+                "actions": ["passthrough(error)"],
             }
 
     return passthrough_node
@@ -240,15 +375,30 @@ def create_retrieve_node(config: RAGConfig) -> Callable:
 
         if not docs:
             logger.warning("No documents retrieved")
-            return {"retrieved_docs": []}
+            return {
+                "retrieved_docs": [],
+                "retrieved_sources": [],
+                "actions": ["retrieve=empty"],
+            }
 
-        # Format with token budget
-        formatted_parts = []
+        # Format with token budget + collect source identifiers for audit log
+        formatted_parts: list = []
+        retrieved_sources: list = []
         tokens_used = 0
 
         for i, doc in enumerate(docs, 1):
             source = doc.metadata.get("source", "Unknown")
+            article_id = doc.metadata.get("article_id", "")
             content = doc.page_content
+
+            # Build a precise source id (file + article) for ISO 42001 A.7 trace
+            if article_id and article_id not in ("preamble", "whole_document"):
+                src_id = f"{source}#{article_id}"
+            else:
+                src_id = source
+            if src_id not in retrieved_sources:
+                retrieved_sources.append(src_id)
+
             header = f"=== 文件 {i} ===\n來源: {source}\n內容: "
             entry_tokens = (len(header) + len(content)) // chars_per_token
 
@@ -266,9 +416,16 @@ def create_retrieve_node(config: RAGConfig) -> Callable:
             formatted_parts.append(f"{header}{content}")
             tokens_used += (len(header) + len(content)) // chars_per_token
 
-        logger.info(f"Retrieved {len(formatted_parts)} docs, ~{tokens_used} tokens")
+        logger.info(
+            "Retrieved %d docs (%d unique sources), ~%d tokens",
+            len(formatted_parts), len(retrieved_sources), tokens_used,
+        )
 
-        return {"retrieved_docs": formatted_parts}
+        return {
+            "retrieved_docs": formatted_parts,
+            "retrieved_sources": retrieved_sources,
+            "actions": [f"retrieve(docs={len(formatted_parts)},sources={len(retrieved_sources)})"],
+        }
 
     return retrieve_node
 
@@ -357,10 +514,32 @@ def create_generate_node(llm: ChatOpenAI, config: RAGConfig) -> Callable:
             if filtered.redacted:
                 logger.warning(f"Output filter redacted findings: {filtered.findings}")
 
+            # ── ISO 42001 monitoring fields ────────────────────────────────
+            # A.6 — count article references in the answer (proxy for citation quality)
+            citation_count = len(_CITATION_PATTERN.findall(filtered.text))
+            # A.4 — real token usage from LLM response (replaces len/4 estimate)
+            tokens_used = 0
+            usage_meta = getattr(response, "usage_metadata", None) or {}
+            response_meta = getattr(response, "response_metadata", None) or {}
+            if isinstance(usage_meta, dict):
+                tokens_used = int(usage_meta.get("total_tokens") or 0)
+            if not tokens_used and isinstance(response_meta, dict):
+                token_usage = response_meta.get("token_usage", {}) or {}
+                tokens_used = int(token_usage.get("total_tokens") or 0)
+
+            logger.info(
+                "Generation metrics: citations=%d tokens=%d",
+                citation_count, tokens_used,
+            )
+
+            redact_tag = "+redacted" if filtered.redacted else ""
             return {
                 "generation": filtered.text,
                 "messages": [AIMessage(content=filtered.text)],
                 "output_redacted": filtered.redacted,
+                "citation_count": citation_count,
+                "tokens_used": tokens_used,
+                "actions": [f"generate(citations={citation_count},tokens={tokens_used}{redact_tag})"],
             }
         except Exception as e:
             error_msg = f"抱歉，處理問題時發生錯誤: {str(e)}"
@@ -368,61 +547,149 @@ def create_generate_node(llm: ChatOpenAI, config: RAGConfig) -> Callable:
             return {
                 "generation": error_msg,
                 "messages": [AIMessage(content=error_msg)],
+                "citation_count": 0,
+                "tokens_used": 0,
+                "actions": ["generate=error"],
             }
 
     return generate_node
 
 
 # ---------------------------------------------------------------------------
-# Node 4: Verify
+# Node 4: Verify — LLM-based self-reflection
+# ---------------------------------------------------------------------------
+#
+# Replaces the previous regex-based verifier (which only checked "第N條"
+# presence and section headers). The LLM evaluates whether the answer
+# substantively addresses the user's question, not just whether it looks
+# like a formatted legal response.
+#
+# Fast-path safety nets remain to avoid wasting an LLM call:
+#   - Empty / very short answers → auto-PASS (caller already handled)
+#   - "尚未收錄" / "無法提供" honest-rejection → PASS (no retry needed)
+#   - retry_count ≥ MAX_RETRIES → PASS (loop protection)
 # ---------------------------------------------------------------------------
 
-def create_verify_node() -> Callable:
-    """Creates a node that checks if the answer properly cites legal articles."""
+_NO_INFO_PHRASES = ["尚未收錄", "無法提供", "未發現", "未檢索到", "沒有相關"]
+
+
+def _parse_verify_verdict(raw: str) -> dict:
+    """Best-effort JSON extraction from LLM response. Falls back to pass-through."""
+    import json as _json
+    import re as _re
+    text = (raw or "").strip()
+    # Strip common code fences
+    text = _re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=_re.MULTILINE).strip()
+    # Find first JSON-looking object
+    m = _re.search(r"\{[^{}]*\}", text, _re.DOTALL)
+    if not m:
+        return {"needs_retry": False, "reason": "no_json"}
+    try:
+        return _json.loads(m.group(0))
+    except Exception:
+        return {"needs_retry": False, "reason": "parse_error"}
+
+
+def create_verify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
+    """Creates an LLM-based answer-quality verifier.
+
+    Returns a node closure. If `llm` is None, the closure will lazily
+    skip LLM calls and fall back to regex (legacy behaviour) — safe default
+    that lets existing tests / partial setups still work.
+    """
 
     def verify_node(state: GraphState) -> dict:
         generation = state.get("generation", "")
+        question = state.get("question", "")
         retry_count = state.get("retry_count", 0)
-        logger.info(f"--- VERIFY NODE --- retry={retry_count}")
+        logger.info(f"--- VERIFY NODE (LLM) --- retry={retry_count}")
 
-        # Check 1: Does the answer contain legal article citations?
-        has_citations = bool(_CITATION_PATTERN.search(generation))
-
-        # Check 2: Does the answer contain the required sections?
-        has_structure = "具體條文" in generation or "參考資料" in generation
-
-        # Check 3: Is the answer substantive?
-        is_substantive = len(generation) > 100 and REJECTION_MSG not in generation
-
-        # Check 4: Did the model explicitly state no information was found?
-        no_info = any(k in generation for k in ["尚未收錄", "無法提供", "未發現", "未檢索到", "沒有相關"])
-
-        if (has_citations and has_structure) or no_info:
-            logger.info(f"VERIFY: PASSED — criteria met or no info found (no_info={no_info})")
-            return {"scope": "verified", "feedback": ""}
-
-        if not is_substantive:
+        # ── Fast-path 1: empty / non-substantive answer → PASS ──────────────
+        if len(generation) < 50 or REJECTION_MSG in generation:
             logger.info("VERIFY: PASSED (non-substantive, skip retry)")
-            return {"scope": "verified", "feedback": ""}
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(non_substantive)"]}
 
+        # ── Fast-path 2: honest "no info found" → PASS ──────────────────────
+        # Only fast-path when the answer ALSO cites nothing — an answer that
+        # claims "no info" yet still cites an article is contradictory and must
+        # still face the provenance gate below.
+        if any(p in generation for p in _NO_INFO_PHRASES) and not _CITATION_PATTERN.search(generation):
+            logger.info("VERIFY: PASSED (model honestly reports no info)")
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(no_info)"]}
+
+        # ── Fast-path 3: retry budget exhausted → PASS ──────────────────────
         if retry_count >= MAX_RETRIES:
             logger.warning(f"VERIFY: Max retries ({MAX_RETRIES}) reached, accepting answer")
-            return {"scope": "verified", "feedback": ""}
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(retry_limit)"]}
 
-        # Needs improvement — trigger another retrieval attempt
-        feedback_msgs = []
-        if not has_citations:
-            feedback_msgs.append("- 缺乏明確的法條引用 (如第X條)")
-        if not has_structure:
-            feedback_msgs.append("- 未按照規定的格式輸出 (缺少「具體條文」或「參考資料」節點)")
-            
-        feedback_str = "\n".join(feedback_msgs)
-        logger.info(f"VERIFY: NEEDS IMPROVEMENT — {feedback_str}")
-        
+        # ── Evidence-grounded gate: citation provenance (deterministic) ─────
+        # Catch FABRICATED citations — an article number cited in the answer that
+        # was NOT in the retrieved context = ungrounded (hallucinated) citation.
+        # This does NOT second-guess WHICH articles to cite (retrieval's job); it
+        # only requires the answer's citations to trace to retrieved evidence.
+        # Deeper claim-vs-content grounding is covered offline by
+        # monitoring_addon RAGAS faithfulness.
+        retrieved_sources = state.get("retrieved_sources", []) or []
+        if retrieved_sources:
+            ungrounded = sorted(_article_nums(generation) - _retrieved_article_nums(retrieved_sources))
+            if ungrounded:
+                arts = "、第".join(str(n) for n in ungrounded)
+                logger.info("VERIFY: ungrounded citation 第%s條 (retrieved=%s)",
+                            arts, sorted(_retrieved_article_nums(retrieved_sources)))
+                return {
+                    "scope": "needs_retry",
+                    "retry_count": retry_count + 1,
+                    "feedback": (f"答案引用第{arts}條，但檢索結果未含這些條文（疑似無據引用），"
+                                 "請僅依檢索到的條文作答"),
+                    "actions": ["verify=needs_retry(ungrounded_citation)"],
+                }
+
+        # ── LLM verdict (or fallback to regex if llm not provided) ──────────
+        if llm is None:
+            has_citations = bool(_CITATION_PATTERN.search(generation))
+            has_structure = "具體條文" in generation or "參考資料" in generation
+            if has_citations and has_structure:
+                return {"scope": "verified", "feedback": "", "actions": ["verify=passed(regex)"]}
+            return {
+                "scope": "needs_retry",
+                "retry_count": retry_count + 1,
+                "feedback": "缺乏條文引用或結構不完整（regex fallback）",
+                "actions": ["verify=needs_retry(regex)"],
+            }
+
+        try:
+            response = llm.invoke([
+                SystemMessage(content=VERIFY_SYSTEM_MSG),
+                HumanMessage(content=VERIFY_PROMPT_TEMPLATE.format(
+                    question=question,
+                    answer=generation[:2000],   # truncate to keep verify cheap
+                )),
+            ])
+            verdict = _parse_verify_verdict(response.content)
+        except Exception as e:
+            logger.warning(f"Verify LLM call failed: {e}, defaulting to PASS")
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(llm_error)"]}
+
+        needs_retry = bool(verdict.get("needs_retry"))
+        reason = str(verdict.get("reason", ""))[:100]
+
+        if not needs_retry:
+            logger.info(
+                "VERIFY: PASSED — answers_question=%s cites_article=%s reason=%s",
+                verdict.get("answers_question"),
+                verdict.get("cites_article"),
+                reason,
+            )
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(llm)"]}
+
+        # LLM judged retry needed
+        feedback_str = f"審查者判定需重試：{reason}（answers_question={verdict.get('answers_question')}, cites_article={verdict.get('cites_article')}）"
+        logger.info(f"VERIFY: NEEDS RETRY — {feedback_str}")
         return {
             "scope": "needs_retry",
             "retry_count": retry_count + 1,
             "feedback": feedback_str,
+            "actions": ["verify=needs_retry(llm)"],
         }
 
     return verify_node

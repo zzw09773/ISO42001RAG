@@ -110,7 +110,7 @@ _CSRF_PATTERNS = [
 ]
 
 _ROLE_SWITCH_PATTERNS = [
-    re.compile(r'(你現在是|你是一個|假裝你是|扮演|變成).{0,20}(AI|機器人|助手|系統|GPT|Claude)', re.IGNORECASE),
+    re.compile(r'(你現在是|你是一個|假裝你是|扮演|變成).{0,20}(AI|機器人|助手|系統|GPT|LLM|大型語言模型|模型)', re.IGNORECASE),
     re.compile(r'act\s+as\s+(a\s+)?', re.IGNORECASE),
     re.compile(r'pretend\s+(you\s+are|to\s+be)', re.IGNORECASE),
     re.compile(r'roleplay\s+as', re.IGNORECASE),

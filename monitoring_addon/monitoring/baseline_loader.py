@@ -80,3 +80,66 @@ def load_vv_report(path: Optional[Path] = None) -> dict:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
+
+
+def load_ragas_report(path: Optional[Path] = None) -> dict:
+    """Load the latest RAGAS report (ragas_*.json) — answer-grounding metrics.
+
+    Produced by scripts/run_ragas_evaluation.py. Used to populate the drift
+    report's faithfulness field so the dashboard shows a real number instead
+    of "未啟用". Returns {} if no usable report exists yet (fresh deploy).
+
+    Schema gate (P5): only accept reports carrying the current `judge_prompt`
+    marker. Pre-fix reports (which could hold a fake 0.0 from an evaluator
+    outage, or 1.0 from a refusal) lack it and are REJECTED, so a stale legacy
+    report never shows a misleading number — the dashboard falls back to
+    "尚未評估".
+    """
+    if path is None:
+        reports = Path(__file__).resolve().parent.parent / "data" / "reports"
+        candidates = sorted(reports.glob("ragas_*.json"))
+        if not candidates:
+            return {}
+        path = candidates[-1]
+    try:
+        with open(path, encoding="utf-8") as f:
+            report = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    if not isinstance(report, dict) or not report.get("judge_prompt"):
+        return {}                      # legacy / unknown schema → reject
+    return report
+
+
+def ragas_report_meta(report: dict) -> dict:
+    """Freshness / provenance meta for the dashboard (P5).
+
+    Returns {available, generated_at, judge_model, age_days, stale,
+    freshness_days}. `stale` is True when the report is older than
+    config.RAGAS_FRESHNESS_DAYS — faithfulness is a point-in-time snapshot, so
+    its age must be surfaced, not presented as a live value.
+    """
+    from datetime import datetime, timezone
+    from .config import RAGAS_FRESHNESS_DAYS
+    if not report:
+        return {"available": False, "freshness_days": RAGAS_FRESHNESS_DAYS}
+    gen = report.get("generated_at")
+    age_days = None
+    stale = False
+    if gen:
+        try:
+            dt = datetime.fromisoformat(str(gen).replace("Z", "+00:00"))
+            age_days = (datetime.now(timezone.utc) - dt).days
+            stale = age_days > RAGAS_FRESHNESS_DAYS
+        except Exception:
+            stale = True            # unparseable timestamp → flag stale, never "fresh"
+    else:
+        stale = True                # no timestamp → unknown freshness, flag it
+    return {
+        "available": True,
+        "generated_at": gen,
+        "judge_model": report.get("judge_model"),
+        "age_days": age_days,
+        "stale": stale,
+        "freshness_days": RAGAS_FRESHNESS_DAYS,
+    }

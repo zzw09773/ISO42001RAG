@@ -1,0 +1,356 @@
+"""Audit-log search and OpenWebUI correlation helpers."""
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from html import escape
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+from .audit_loader import filter_by_window, list_audit_files
+
+_TPE_TZ = timezone(timedelta(hours=8))
+
+
+def parse_time(value: Any) -> Optional[datetime]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value), _TPE_TZ)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return datetime.fromtimestamp(float(text), _TPE_TZ)
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_TPE_TZ)
+    return dt.astimezone(_TPE_TZ)
+
+
+def danger_level(event: dict) -> str:
+    et = event.get("event_type", "")
+    if et == "security_alert":
+        return "critical"
+    if et == "auth_failure":
+        return "warning"
+    if event.get("anomaly_flags"):
+        flags = " ".join(str(x) for x in event.get("anomaly_flags") or [])
+        if "security_alert_burst" in flags:
+            return "critical"
+        return "warning"
+    if et == "query" and isinstance(event.get("response_time_ms"), int):
+        if event["response_time_ms"] > 60_000:
+            return "warning"
+    return "normal"
+
+
+def danger_reason(event: dict) -> str:
+    et = event.get("event_type", "")
+    if et == "security_alert":
+        return event.get("threat_type") or event.get("reason") or "security alert"
+    if et == "auth_failure":
+        return event.get("reason") or "auth failure"
+    if event.get("anomaly_flags"):
+        return ", ".join(str(x) for x in event.get("anomaly_flags") or [])
+    if et == "query" and isinstance(event.get("response_time_ms"), int) and event["response_time_ms"] > 60_000:
+        return f"latency {event['response_time_ms']} ms"
+    return ""
+
+
+def _iter_audit_records(audit_dir: Path, window_days: int) -> Iterable[dict]:
+    files = filter_by_window(list_audit_files(audit_dir), window_days)
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line_no, line in enumerate(fh, start=1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    rec["_log_file"] = path.name
+                    rec["_line_no"] = line_no
+                    yield rec
+        except FileNotFoundError:
+            continue
+
+
+def _contains_text(event: dict, q: str) -> bool:
+    if not q:
+        return True
+    needle = q.lower()
+    fields = [
+        "event_type", "session_id", "request_id", "openai_response_id",
+        "client_ip", "source_app", "frontend_session_id", "frontend_user_id",
+        "frontend_chat_id", "frontend_message_id", "user_query",
+        "model_response", "reason", "threat_type",
+    ]
+    for field in fields:
+        value = event.get(field)
+        if value is not None and needle in str(value).lower():
+            return True
+    meta = event.get("frontend_metadata")
+    return bool(meta and needle in json.dumps(meta, ensure_ascii=False).lower())
+
+
+def search_audit_events(
+    *,
+    audit_dir: Path,
+    window_days: int = 30,
+    event_type: str = "",
+    danger_only: bool = False,
+    session_id: str = "",
+    request_id: str = "",
+    client_ip: str = "",
+    q: str = "",
+    from_ts: str = "",
+    to_ts: str = "",
+    limit: int = 200,
+) -> dict:
+    start = parse_time(from_ts)
+    end = parse_time(to_ts)
+    events: List[dict] = []
+    total_seen = 0
+    for event in _iter_audit_records(audit_dir, window_days):
+        total_seen += 1
+        ts = parse_time(event.get("timestamp"))
+        if start and (ts is None or ts < start):
+            continue
+        if end and (ts is None or ts > end):
+            continue
+        if event_type and event.get("event_type") != event_type:
+            continue
+        if session_id and session_id not in str(event.get("session_id", "")):
+            continue
+        if request_id and request_id not in str(event.get("request_id", "")):
+            continue
+        if client_ip and client_ip not in str(event.get("client_ip", "")):
+            continue
+        level = danger_level(event)
+        if danger_only and level == "normal":
+            continue
+        if not _contains_text(event, q):
+            continue
+        event["_danger_level"] = level
+        event["_danger_reason"] = danger_reason(event)
+        events.append(event)
+
+    events.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+    out = events[: max(1, min(limit, 1000))]
+    return {
+        "total_seen": total_seen,
+        "matched": len(events),
+        "returned": len(out),
+        "events": out,
+        "summary": {
+            "by_event_type": dict(Counter(e.get("event_type", "unknown") for e in events)),
+            "by_danger_level": dict(Counter(e.get("_danger_level", "normal") for e in events)),
+        },
+    }
+
+
+def _walk_strings(obj: Any) -> Iterable[str]:
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _walk_strings(item)
+    elif isinstance(obj, dict):
+        role = str(obj.get("role", "")).lower()
+        content = obj.get("content")
+        if role in {"user", "assistant"} and isinstance(content, str):
+            yield content
+        for value in obj.values():
+            yield from _walk_strings(value)
+
+
+class OpenWebUICorrelator:
+    def __init__(self, db_path: Optional[Path] = None):
+        raw = db_path or Path(os.environ.get("OPENWEBUI_DB", "/openwebui_data/webui.db"))
+        self.db_path = Path(raw)
+
+    @property
+    def available(self) -> bool:
+        return self.db_path.exists()
+
+    def find_matches(self, event: dict, *, window_seconds: int = 900, max_matches: int = 5) -> List[dict]:
+        query = (event.get("user_query") or "").strip()
+        if not query or not self.available:
+            return []
+        event_ts = parse_time(event.get("timestamp"))
+        matches: List[dict] = []
+        try:
+            con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, timeout=1)
+            con.row_factory = sqlite3.Row
+            rows = con.execute(
+                """
+                select c.id as chat_id, c.user_id, c.title, c.created_at, c.updated_at,
+                       c.chat, u.email, u.name
+                  from chat c
+                  left join user u on u.id = c.user_id
+                 order by c.updated_at desc
+                 limit 500
+                """
+            ).fetchall()
+        except Exception:
+            return []
+        finally:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+        q_lower = query.lower()
+        for row in rows:
+            raw_chat = row["chat"] or ""
+            if q_lower not in raw_chat.lower():
+                continue
+            updated_at = parse_time(row["updated_at"])
+            delta_sec = None
+            if event_ts and updated_at:
+                delta_sec = abs(int((updated_at - event_ts).total_seconds()))
+                if delta_sec > window_seconds and len(query) < 12:
+                    continue
+            matched_text = ""
+            try:
+                parsed = json.loads(raw_chat)
+                for text in _walk_strings(parsed):
+                    if q_lower in text.lower():
+                        matched_text = text
+                        break
+            except Exception:
+                matched_text = raw_chat[:240]
+            matches.append({
+                "chat_id": row["chat_id"],
+                "user_id": row["user_id"],
+                "user_email": row["email"],
+                "user_name": row["name"],
+                "title": row["title"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "delta_seconds": delta_sec,
+                "matched_text": matched_text[:500],
+            })
+            if len(matches) >= max_matches:
+                break
+        return matches
+
+
+def attach_openwebui_matches(events: List[dict], correlator: Optional[OpenWebUICorrelator] = None) -> None:
+    owui = correlator or OpenWebUICorrelator()
+    if not owui.available:
+        return
+    for event in events:
+        event["openwebui_matches"] = owui.find_matches(event)
+
+
+def render_audit_page(result: dict, params: dict, *, openwebui_available: bool) -> str:
+    events = result.get("events") or []
+    summary = result.get("summary") or {}
+
+    def val(name: str) -> str:
+        return escape(str(params.get(name, "") or ""))
+
+    rows = []
+    for event in events:
+        level = event.get("_danger_level", "normal")
+        q = event.get("user_query") or event.get("message") or event.get("reason") or ""
+        ids = "<br>".join(
+            f"<code>{escape(k)}</code>: {escape(str(v))}"
+            for k, v in {
+                "session": event.get("session_id"),
+                "request": event.get("request_id"),
+                "response": event.get("openai_response_id"),
+                "front_chat": event.get("frontend_chat_id"),
+            }.items() if v
+        ) or "—"
+        owui_bits = []
+        for match in event.get("openwebui_matches") or []:
+            delta = match.get("delta_seconds")
+            delta_text = f" · Δ {delta}s" if delta is not None else ""
+            owui_bits.append(
+                f"<div><code>{escape(str(match.get('chat_id')))}</code>"
+                f" · {escape(str(match.get('user_email') or match.get('user_name') or 'unknown'))}"
+                f"{delta_text}<br><span>{escape(str(match.get('title') or ''))}</span></div>"
+            )
+        rows.append(
+            "<tr>"
+            f"<td class='ts'>{escape(str(event.get('timestamp', ''))[:19]).replace('T', ' ')}</td>"
+            f"<td><span class='badge {escape(level)}'>{escape(level)}</span><br>{escape(event.get('_danger_reason', ''))}</td>"
+            f"<td><code>{escape(str(event.get('event_type', '')))}</code><br>{escape(str(event.get('client_ip', '')))}</td>"
+            f"<td>{ids}</td>"
+            f"<td>{escape(str(q))[:600]}</td>"
+            f"<td>{''.join(owui_bits) if owui_bits else '—'}</td>"
+            f"<td><code>{escape(str(event.get('_log_file', '')))}:{event.get('_line_no', '')}</code></td>"
+            "</tr>"
+        )
+
+    by_type = summary.get("by_event_type") or {}
+    by_level = summary.get("by_danger_level") or {}
+    return f"""<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Audit Log Search</title>
+<style>
+body{{margin:0;background:#f6f8fc;color:#1a1f2c;font-family:"Noto Sans TC","Inter",-apple-system,sans-serif}}
+.page{{max-width:1440px;margin:0 auto;padding:28px 34px;background:#fff;min-height:100vh;border-left:1px solid #d9dee6;border-right:1px solid #d9dee6}}
+h1{{font-size:24px;margin:0 0 4px}} .sub{{color:#5b6578;font-size:13px;margin-bottom:18px}}
+form{{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;align-items:end;background:#f6f8fc;border:1px solid #d9dee6;border-radius:8px;padding:14px}}
+label{{font-size:12px;font-weight:700;color:#4b5568}} input,select{{width:100%;padding:8px;border:1px solid #cfd6e2;border-radius:6px;background:#fff}}
+button,.link{{display:inline-block;padding:9px 12px;border:0;border-radius:6px;background:#1e3a8a;color:#fff;text-decoration:none;font-weight:800;cursor:pointer}}
+.quick{{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}} .quick a{{font-size:12px;color:#1e3a8a;background:#eef2ff;border:1px solid #c7d2fe;padding:6px 10px;border-radius:999px;text-decoration:none}}
+.stats{{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;color:#4b5568;font-size:12px}} .stats code{{background:#eef2f7;padding:2px 5px;border-radius:4px}}
+table{{width:100%;border-collapse:collapse;font-size:12.5px}} th{{text-align:left;background:#1e3a8a;color:#fff;padding:8px}} td{{border-bottom:1px solid #e5e7eb;padding:8px;vertical-align:top;line-height:1.5}}
+tr:nth-child(even) td{{background:#fafbfd}} .ts{{white-space:nowrap;font-family:monospace;color:#4b5568}}
+.badge{{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:900;font-size:11px}} .critical{{background:#fee2e2;color:#991b1b}} .warning{{background:#fef3c7;color:#92400e}} .normal{{background:#dcfce7;color:#166534}}
+.note{{font-size:12px;color:#5b6578;margin:12px 0;line-height:1.6}} code{{font-family:"JetBrains Mono",monospace}}
+@media(max-width:980px){{form{{grid-template-columns:1fr 1fr}} table{{font-size:12px}}}}
+</style>
+</head>
+<body><div class="page">
+<h1>Audit Log Search</h1>
+<div class="sub">查詢 RAG audit JSONL；danger 包含 security_alert、auth_failure、anomaly_flags 與 P95/單筆延遲異常。OpenWebUI DB：{"available" if openwebui_available else "not mounted"}</div>
+<form method="get" action="audit">
+<div><label>關鍵字</label><input name="q" value="{val('q')}" placeholder="query/session/request/ip"></div>
+<div><label>事件類型</label><select name="event_type">
+<option value="">全部</option>
+{''.join(f'<option value="{escape(t)}" {"selected" if params.get("event_type")==t else ""}>{escape(t)}</option>' for t in ["query","rejection","security_alert","auth_success","auth_failure","upload","reindex"])}
+</select></div>
+<div><label>只看危險</label><select name="danger_only"><option value="0">否</option><option value="1" {"selected" if str(params.get("danger_only","0"))=="1" else ""}>是</option></select></div>
+<div><label>session_id</label><input name="session_id" value="{val('session_id')}"></div>
+<div><label>request_id</label><input name="request_id" value="{val('request_id')}"></div>
+<div><label>client_ip</label><input name="client_ip" value="{val('client_ip')}"></div>
+<div><label>起始時間</label><input name="from_ts" value="{val('from_ts')}" placeholder="2026-07-07T09:00"></div>
+<div><label>結束時間</label><input name="to_ts" value="{val('to_ts')}" placeholder="2026-07-07T18:00"></div>
+<div><label>天數</label><input name="window_days" value="{val('window_days') or '30'}"></div>
+<div><label>筆數</label><input name="limit" value="{val('limit') or '200'}"></div>
+<div><button type="submit">查詢</button></div>
+</form>
+<div class="quick">
+<a href="audit?danger_only=1">危險事件</a>
+<a href="audit?event_type=security_alert">安全告警</a>
+<a href="audit?event_type=auth_failure">登入/金鑰失敗</a>
+<a href="audit?event_type=query">一般查詢</a>
+<a href="dashboard">回 Service Status</a>
+</div>
+<div class="stats">
+<span>scanned <code>{result.get('total_seen', 0)}</code></span>
+<span>matched <code>{result.get('matched', 0)}</code></span>
+<span>returned <code>{result.get('returned', 0)}</code></span>
+<span>event_type <code>{escape(json.dumps(by_type, ensure_ascii=False))}</code></span>
+<span>danger <code>{escape(json.dumps(by_level, ensure_ascii=False))}</code></span>
+</div>
+<div class="note">OpenWebUI 未傳前端 session header 時，本頁會用 user_query 文字與時間窗嘗試配對 OpenWebUI chat DB；若之後前端能傳 <code>x-session-id</code> / <code>x-openwebui-chat-id</code>，後端 audit log 也會直接記錄。</div>
+<table><thead><tr><th>時間</th><th>危險</th><th>事件/IP</th><th>關聯 ID</th><th>內容</th><th>OpenWebUI 對應</th><th>檔案</th></tr></thead>
+<tbody>{''.join(rows) if rows else '<tr><td colspan="7">無符合資料。</td></tr>'}</tbody></table>
+</div></body></html>"""
