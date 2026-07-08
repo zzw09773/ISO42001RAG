@@ -288,37 +288,56 @@ def _compute_overall(a_status, b_status, c_status) -> tuple:
 
 
 def _render_hero(level: str, worst_dim: str) -> str:
-    """頂部大型「整體健康狀態」卡片。"""
-    bg, fg, label = _DIM_TONE[level]
+    _, fg, label = _DIM_TONE.get(level, _DIM_TONE["ok"])
     return (
-        f'<div class="hero" style="background:{bg};border-left:8px solid {fg};">'
-        f'  <div class="hero-label" style="color:{fg};">整體健康狀態 · OVERALL HEALTH</div>'
-        f'  <div class="hero-value" style="color:{fg};">{label}</div>'
-        f'  <div class="hero-driver">最差子維度：<strong>{escape(worst_dim)}</strong>（取三維度最差值）</div>'
-        f'  <div class="hero-explain">整體狀態採 A/B/C 三維度最差值，不以平均值稀釋異常。</div>'
+        f'<div class="hero verdict">'
+        f'  <div class="verdict-cap">整體健康狀態 · Overall Health</div>'
+        f'  <div class="verdict-value" style="color:{fg};">'
+        f'<i class="dot" style="background:{fg};"></i>{label}</div>'
+        f'  <div class="verdict-note">最差子維度：<strong>{escape(worst_dim)}</strong>'
+        f'（整體＝A/B/C 三維度最差值，不以平均稀釋異常）</div>'
         f'</div>'
     )
 
 
 def _render_dim_strip(a_status, b_status, c_status) -> str:
-    """三維度小卡並排呈現。"""
     def _card(title: str, status: tuple) -> str:
         level, drivers = status
-        bg, fg, label = _DIM_TONE[level]
-        drv_lis = "".join(f"<li>{escape(d)}</li>" for d in drivers[:2])
+        _, fg, label = _DIM_TONE.get(level, _DIM_TONE["ok"])
+        drv_lis = "".join(f"<li>{escape(d)}</li>" for d in drivers)
         return (
-            f'<div class="dim-card" style="background:{bg};border-top:5px solid {fg};">'
+            f'<div class="dim-card">'
             f'  <div class="dim-title">{title}</div>'
-            f'  <div class="dim-status" style="color:{fg};">{label}</div>'
+            f'  <div class="dim-status" style="color:{fg};">'
+            f'<i class="dot" style="background:{fg};"></i>{label}</div>'
             f'  <ul class="dim-drivers">{drv_lis}</ul>'
             f'</div>'
         )
     return (
         '<div class="dim-grid">'
-        + _card("A. 運作健康  Operational Health", a_status)
-        + _card("B. 品質保證  Output Quality", b_status)
-        + _card("C. 服務健康  Service Health", c_status)
+        + _card("A · 運作健康", a_status)
+        + _card("B · 品質保證", b_status)
+        + _card("C · 服務健康", c_status)
         + '</div>'
+    )
+
+
+def _render_chapter_head(question: str, clauses: str, rows: list) -> str:
+    """章頭固定對照表：觀察問題 / 對應條文 / 指標×門檻×實際×判定。
+
+    rows: list of (指標, 門檻, 實際, (mark_level, mark_text))
+    """
+    body = "".join(
+        f'<tr><td>{escape(m)}</td><td>{escape(t)}</td>'
+        f'<td class="num">{escape(a)}</td><td>{_status_mark(lv, txt)}</td></tr>'
+        for m, t, a, (lv, txt) in rows
+    )
+    return (
+        '<table class="ch-head">'
+        f'<tr class="ch-meta"><th>觀察問題</th><td colspan="3">{escape(question)}</td></tr>'
+        f'<tr class="ch-meta"><th>對應條文</th><td colspan="3">{escape(clauses)}</td></tr>'
+        '<tr><th>指標</th><th>門檻</th><th>實際</th><th>判定</th></tr>'
+        + body + '</table>'
     )
 
 
@@ -660,7 +679,7 @@ def _render_safety_controls(sc: dict) -> str:
         )
 
     return f"""
-  <h2>防 · 防護守則觸發（Safety Controls）</h2>
+  <h3 id="appendix-4">附錄四 · 防護守則觸發（Safety Controls）</h3>
   <div class="dim-context">對應 <code>RAG/docs/SAFETY_CONTROLS.md</code> 守則 ③④①。「防線有在運作」的 ISO 42001 A.8 / A.9 證據——數字高代表攻擊或離題提問被擋下，<strong>不影響系統健康燈</strong>。</div>
 
   <div class="kpi-grid">
@@ -761,6 +780,40 @@ def render_dashboard(payload: dict) -> str:
     c_status = _dim_status_C(health)
     overall_level, worst_dim = _compute_overall(a_status, b_status, c_status)
 
+    anom_count = sum(int(a.get("count", 0)) for a in anomalies)
+    ch_a_head = _render_chapter_head(
+        "每筆請求是否被正確處理？",
+        "ISO 42001 A.6.2.4 / A.9.1 · ISO 27001 A.8.15",
+        [
+            ("安全告警", "0 件", f"{kpi.get('security_alerts', 0)} 件",
+             ("ok", "PASS") if kpi.get("security_alerts", 0) == 0 else ("warning", "CHECK")),
+            ("異常旗標", "0 次", f"{anom_count} 次",
+             ("ok", "PASS") if anom_count == 0 else ("watch", "WATCH")),
+            ("綜合判定（含近 24h 運作告警）", "無 warning/critical 告警",
+             a_status[1][0] if a_status[1] else "—",
+             (a_status[0], _DIM_TONE[a_status[0]][2])),
+        ],
+    )
+    ch_b_head = _render_chapter_head(
+        "檢索是否找到對的條文？生成是否引用正確？是否幻覺？",
+        "ISO 42001 A.4 / A.7",
+        [
+            ("Hit Rate（v1.0.0 唯一 gating 指標）", f"≥ {goal_target}", goal_current_text,
+             (b_status[0], _DIM_TONE[b_status[0]][2])),
+        ],
+    )
+    ch_c_head = _render_chapter_head(
+        "服務是否健康、可用，且結果可信？",
+        "ISO 42001 A.6.2.5（變更管理）/ A.8.3（稽核日誌）",
+        [
+            ("健康分數（weakest-link）", "< 25 為正常區", f"{health_overall_score}/100",
+             (c_status[0], _DIM_TONE[c_status[0]][2])),
+            ("audit 鏈完整性", "intact", integrity_status,
+             ({"intact": "ok", "broken": "critical"}.get(integrity_status, "watch"),
+              integrity_status.upper())),
+        ],
+    )
+
     html = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -768,258 +821,312 @@ def render_dashboard(payload: dict) -> str:
 <title>ISO 42001 Service Status — {escape(payload.get('generated_at', '')[:10])}</title>
 <style>
   :root {{
-    --c-text:#1a1f2c; --c-muted:#5b6578; --c-border:#d9dee6;
-    --c-bg:#fff; --c-bg-soft:#f6f8fc; --c-accent:#1e3a8a;
+    --ink:#1a1f2c; --muted:#5b6578; --line:#c9d1dc; --hairline:#e5eaf1;
+    --paper:#fff; --soft:#f6f8fc; --accent:#1e3a8a;
+    --mono:"JetBrains Mono","Consolas","Courier New",monospace;
   }}
   *,*::before,*::after {{ box-sizing:border-box; }}
-  body {{ font-family:"Noto Sans TC","Inter",-apple-system,sans-serif;
-         margin:0; background:var(--c-bg-soft); color:var(--c-text); }}
-  .page {{ max-width:1180px; margin:0 auto; padding:32px 36px; background:var(--c-bg); border-left:1px solid var(--c-border); border-right:1px solid var(--c-border); }}
-  h1 {{ font-size:24px; font-weight:900; margin:0 0 4px; }}
-  .live-dot {{ display:inline-block; width:9px; height:9px; border-radius:50%; background:#16a34a;
+  body {{ font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+         margin:0; background:var(--soft); color:var(--ink); font-size:15px; line-height:1.7; }}
+  .report {{ max-width:1080px; margin:0 auto; padding:40px 48px 56px; background:var(--paper);
+            border-left:1px solid var(--line); border-right:1px solid var(--line); min-height:100vh; }}
+  h1 {{ font-size:24px; font-weight:900; margin:0; letter-spacing:.01em; }}
+  .title-en {{ font-size:13px; font-weight:500; color:var(--muted); margin-left:10px; }}
+  .live-dot {{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a;
               margin-left:10px; vertical-align:middle; animation:livepulse 2s ease-in-out infinite; }}
   @keyframes livepulse {{ 0%,100%{{opacity:1;}} 50%{{opacity:0.25;}} }}
-  .refresh-info {{ font-size:11px; font-weight:500; color:var(--c-muted); margin-left:6px; vertical-align:middle; }}
-  .sub {{ color:var(--c-muted); font-size:13px; margin-bottom:24px; }}
-  h2 {{ font-size:17px; font-weight:800; color:var(--c-accent); margin:28px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--c-accent); }}
-  .kpi-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:8px; }}
-  .kpi {{ background:var(--c-bg-soft); border:1px solid var(--c-border); border-radius:6px; padding:14px 16px; }}
-  .kpi .label {{ font-size:11px; color:var(--c-muted); letter-spacing:0.08em; text-transform:uppercase; }}
-  .kpi .val {{ font-size:26px; font-weight:800; margin-top:4px; }}
-  .kpi.danger .val {{ color:#991b1b; }}
-  .kpi.warn .val {{ color:#92400e; }}
-  .severity-banner {{ display:inline-block; padding:6px 14px; border-radius:4px; font-weight:700; font-size:13px;
-                      background:{bg}; color:{fg}; border:1px solid {fg}33; }}
-  .warmup-banner {{ margin:12px 0; padding:11px 16px; border-radius:6px; font-size:12.5px; line-height:1.7;
-                    background:#eef2ff; border:1px solid #c7d2fe; border-left:5px solid #4f46e5; color:#3730a3; }}
-  .goal-card {{ padding:18px 22px; border-radius:6px; margin:6px 0 4px; }}
-  .goal-card .goal-title {{ font-size:18px; font-weight:800; margin-bottom:6px; }}
-  .goal-card .goal-target,
-  .goal-card .goal-current {{ font-size:14px; margin:2px 0; }}
-  .goal-card .goal-reason {{ font-size:12px; color:#5b6578; margin-top:8px; font-style:italic; }}
-  table {{ width:100%; border-collapse:collapse; font-size:13px; margin:8px 0 16px; }}
-  th {{ background:var(--c-accent); color:#fff; text-align:left; padding:7px 10px; font-size:12px; }}
-  td {{ padding:6px 10px; border-bottom:1px solid var(--c-border); vertical-align:top; }}
-  tr:nth-child(even) td {{ background:var(--c-bg-soft); }}
-  .grid-2 {{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }}
-  .card {{ border:1px solid var(--c-border); border-radius:6px; padding:14px 16px; }}
-  .card h3 {{ margin:0 0 8px; font-size:13px; color:var(--c-muted); letter-spacing:0.06em; text-transform:uppercase; }}
-  .reasons {{ background:#fafbfd; border:1px dashed var(--c-border); padding:10px 14px; margin-top:6px; font-size:13px; color:#3b4252; }}
-  .reasons li {{ margin:2px 0; }}
-  .footer {{ margin-top:32px; padding-top:16px; border-top:1px solid var(--c-border); font-size:11px; color:var(--c-muted); text-align:center; }}
-  /* Hero + dim cards: 1+3 narrative for committee clarity */
-  .hero {{ padding:24px 28px; border-radius:8px; margin:14px 0 16px; }}
-  .hero-label {{ font-size:11px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:6px; font-weight:700; }}
-  .hero-value {{ font-size:38px; font-weight:900; line-height:1; margin-bottom:6px; }}
-  .hero-driver {{ font-size:13.5px; color:#3b4252; margin-top:10px; }}
-  .hero-explain {{ font-size:12px; color:#5b6578; margin-top:4px; }}
-  .dim-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:6px 0 28px; }}
-  .dim-card {{ border-radius:8px; padding:14px 18px; border:1px solid var(--c-border); }}
-  .dim-title {{ font-size:12px; color:#5b6578; font-weight:700; margin-bottom:6px; letter-spacing:0.04em; }}
-  .dim-status {{ font-size:24px; font-weight:900; line-height:1; }}
+  .refresh-info {{ font-size:11px; font-weight:500; color:var(--muted); margin-left:6px; vertical-align:middle; }}
+  .report-rule {{ border:0; border-top:2px solid var(--ink); margin:14px 0 0; }}
+  .report-meta {{ width:100%; border-collapse:collapse; font-size:13px; margin:0 0 8px; }}
+  .report-meta th {{ text-align:left; font-weight:700; color:var(--muted); padding:8px 14px 8px 0;
+                    border-bottom:1px solid var(--hairline); white-space:nowrap; width:1%; }}
+  .report-meta td {{ padding:8px 24px 8px 0; border-bottom:1px solid var(--hairline); }}
+  .num {{ font-family:var(--mono); font-variant-numeric:tabular-nums; }}
+  .toc {{ border:1px solid var(--line); padding:12px 18px; margin:18px 0 8px;
+         font-size:13px; display:flex; flex-wrap:wrap; gap:6px 20px; align-items:baseline; }}
+  .toc-cap {{ font-weight:900; letter-spacing:.08em; color:var(--muted); font-size:11px; }}
+  .toc a {{ color:var(--accent); text-decoration:none; font-weight:700; }}
+  .toc a:hover {{ text-decoration:underline; }}
+  section {{ margin-top:34px; }}
+  h2 {{ font-size:18px; font-weight:900; margin:0 0 4px; padding-bottom:6px;
+       border-bottom:1px solid var(--ink); }}
+  h2 .ch-no {{ color:var(--accent); margin-right:8px; }}
+  h2 .en {{ font-size:12px; font-weight:500; color:var(--muted); margin-left:8px; }}
+  h3 {{ font-size:14px; font-weight:800; margin:20px 0 8px; }}
+  .mark {{ font-weight:800; white-space:nowrap; }}
+  .dot {{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:baseline; }}
+  .verdict-row {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:14px 0; }}
+  .verdict {{ border:1px solid var(--ink); padding:18px 22px; }}
+  .verdict-cap {{ font-size:11px; letter-spacing:.1em; font-weight:700; color:var(--muted); margin-bottom:8px; }}
+  .verdict-value {{ font-size:30px; font-weight:900; line-height:1.15; }}
+  .verdict-value .dot {{ width:13px; height:13px; margin-right:10px; }}
+  .verdict-note {{ font-size:13px; color:#3b4252; margin-top:10px; }}
+  .verdict-reason {{ font-size:12px; color:var(--muted); margin-top:6px; }}
+  .dim-grid {{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:14px 0 6px; }}
+  .dim-card {{ border-top:2px solid var(--ink); padding:10px 2px 0; }}
+  .dim-title {{ font-size:12px; color:var(--muted); font-weight:700; margin-bottom:6px; letter-spacing:.04em; }}
+  .dim-status {{ font-size:20px; font-weight:900; line-height:1; }}
   .dim-drivers {{ margin:10px 0 0; padding-left:18px; font-size:12.5px; color:#3b4252; }}
   .dim-drivers li {{ margin:1px 0; }}
-  .dim-context {{ font-size:12.5px; color:#5b6578; margin:-6px 0 14px; font-style:italic; }}
-  @media (max-width:780px) {{ .dim-grid {{ grid-template-columns:1fr; }} }}
-  /* Alerts panel (v2.7) */
-  .alert-banner {{ display:flex; gap:14px; align-items:center; padding:14px 18px; border-radius:6px;
-                   margin:14px 0 6px; font-size:13.5px; font-weight:600; }}
-  .alert-banner.critical {{ background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-left:6px solid #dc2626; }}
-  .alert-banner.warning {{ background:#fffbeb; color:#92400e; border:1px solid #fde68a; border-left:6px solid #d97706; }}
-  .alert-banner.calm {{ background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; border-left:6px solid #16a34a; }}
-  .alert-banner .pill {{ display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700;
-                          background:rgba(0,0,0,0.08); }}
+  .ch-head {{ width:100%; border-collapse:collapse; font-size:13px; margin:10px 0 18px; }}
+  .ch-head th {{ text-align:left; font-weight:700; padding:7px 12px 7px 0; white-space:nowrap;
+                border-bottom:1px solid var(--hairline); color:var(--muted); }}
+  .ch-head tr:nth-child(3) th {{ color:var(--ink); border-top:2px solid var(--ink);
+                                 border-bottom:1px solid var(--ink); }}
+  .ch-head td {{ padding:7px 12px 7px 0; border-bottom:1px solid var(--hairline); }}
+  .ch-head .ch-meta th {{ width:1%; padding-right:18px; }}
+  .kpi-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:8px; }}
+  .kpi {{ border:1px solid var(--line); padding:12px 16px; background:var(--paper); }}
+  .kpi .label {{ font-size:11px; color:var(--muted); letter-spacing:0.08em; }}
+  .kpi .val {{ font-size:26px; font-weight:800; margin-top:4px; font-family:var(--mono); font-variant-numeric:tabular-nums; }}
+  .kpi.danger .val {{ color:#991b1b; }}
+  .kpi.warn .val {{ color:#92400e; }}
+  .severity-banner {{ display:inline-block; padding:5px 12px; font-weight:800; font-size:13px;
+                      border:1px solid var(--line); background:{bg}; color:{fg}; }}
+  .warmup-banner {{ margin:12px 0; padding:11px 16px; font-size:12.5px; line-height:1.7;
+                    background:var(--soft); border:1px solid var(--line); color:#3b4252; }}
+  .goal-card {{ padding:0; }}
+  table {{ width:100%; border-collapse:collapse; font-size:13px; margin:8px 0 16px; }}
+  th {{ text-align:left; padding:7px 10px; font-size:12px; font-weight:700;
+       border-top:2px solid var(--ink); border-bottom:1px solid var(--ink); }}
+  td {{ padding:6px 10px; border-bottom:1px solid var(--hairline); vertical-align:top; }}
+  tr:nth-child(even) td {{ background:#fafbfd; }}
+  .grid-2 {{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }}
+  .card {{ border:1px solid var(--line); padding:14px 16px; }}
+  .card h3 {{ margin:0 0 8px; font-size:12px; color:var(--muted); letter-spacing:0.06em; }}
+  .reasons {{ background:var(--soft); border:1px solid var(--hairline); padding:10px 14px;
+             margin-top:6px; font-size:13px; color:#3b4252; }}
+  .reasons li {{ margin:2px 0; }}
+  code {{ font-family:var(--mono); font-size:.9em; background:#eef2f7; padding:.1em .35em; }}
+  .footer {{ margin-top:36px; padding-top:14px; border-top:2px solid var(--ink);
+            font-size:11px; color:var(--muted); }}
+  @media (max-width:780px) {{ .verdict-row,.dim-grid,.grid-2 {{ grid-template-columns:1fr; }} }}
+  /* Alerts（JS 契約：class 名與 pill 文字格式不可變） */
+  .alert-banner {{ display:flex; gap:14px; align-items:center; padding:12px 16px;
+                   border:1px solid var(--line); margin:14px 0 6px; font-size:13.5px; font-weight:700; }}
+  .alert-banner.critical {{ color:#991b1b; border-color:#991b1b; }}
+  .alert-banner.warning {{ color:#92400e; border-color:#92400e; }}
+  .alert-banner.calm {{ color:#166534; }}
+  .alert-banner .pill {{ display:inline-block; padding:2px 10px; font-size:11px; font-weight:800;
+                          background:var(--soft); border:1px solid var(--hairline); }}
   .alerts-table td {{ font-size:12.5px; vertical-align:top; }}
   .alerts-table .sev-critical {{ color:#991b1b; font-weight:700; }}
   .alerts-table .sev-warning {{ color:#92400e; font-weight:700; }}
-  .alerts-table .sev-info {{ color:#5b6578; }}
-  .alerts-table .ts {{ font-family:"JetBrains Mono",monospace; font-size:11.5px; color:#5b6578; white-space:nowrap; }}
-  /* Drift score overview: gauge + per-dimension bars */
+  .alerts-table .sev-info {{ color:var(--muted); }}
+  .alerts-table .ts {{ font-family:var(--mono); font-size:11.5px; color:var(--muted); white-space:nowrap; }}
+  /* 健康分數：儀表 + 維度分數帶（zone 色帶為資料語義，保留） */
   .drift-overview {{ display:grid; grid-template-columns:340px 1fr; gap:22px; align-items:center;
-                     margin:14px 0 6px; padding:16px 18px; border:1px solid var(--c-border);
-                     border-radius:8px; background:linear-gradient(180deg,#fbfcfe,#f6f8fc); }}
-  .card-cap {{ font-size:11px; letter-spacing:0.07em; text-transform:uppercase; color:var(--c-muted);
-               font-weight:700; margin-bottom:8px; }}
+                     margin:14px 0 6px; padding:16px 18px; border:1px solid var(--line); }}
+  .card-cap {{ font-size:11px; letter-spacing:0.07em; color:var(--muted); font-weight:700; margin-bottom:8px; }}
   .drift-gauge-box {{ text-align:center; }}
   .score-bars {{ display:flex; flex-direction:column; gap:9px; }}
   .score-row {{ display:grid; grid-template-columns:128px 1fr 34px; align-items:center; gap:10px; }}
   .score-label {{ font-size:12px; color:#3b4252; }}
-  .score-track {{ position:relative; height:14px; border-radius:7px; overflow:hidden;
-                  opacity:0.92; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06); }}
+  .score-track {{ position:relative; height:14px; overflow:hidden;
+                  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06); }}
   .score-fillmask {{ position:absolute; top:0; bottom:0; right:0; background:rgba(255,255,255,0.74); }}
   .score-marker {{ position:absolute; top:-3px; bottom:-3px; width:3px; transform:translateX(-1.5px);
-                   background:#1a1f2c; border-radius:2px; }}
-  .score-num {{ font-size:13px; font-weight:800; text-align:right; font-variant-numeric:tabular-nums; }}
-  .zone-legend {{ display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:11px; color:#5b6578; }}
+                   background:var(--ink); }}
+  .score-num {{ font-size:13px; font-weight:800; text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }}
+  .zone-legend {{ display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:11px; color:var(--muted); }}
   .zone-legend span {{ display:inline-flex; align-items:center; gap:5px; }}
-  .zone-legend i {{ width:11px; height:11px; border-radius:3px; display:inline-block; }}
+  .zone-legend i {{ width:11px; height:11px; display:inline-block; }}
   @media (max-width:780px) {{ .drift-overview {{ grid-template-columns:1fr; }} }}
-  /* Methodology / threshold-rationale collapsible panels */
-  .method-panel {{ border:1px solid var(--c-border); border-radius:8px; margin:12px 0;
-                   background:#fff; overflow:hidden; }}
+  /* 附錄：方法論 / 門檻依據面板 */
+  .method-panel {{ border:1px solid var(--line); margin:12px 0; background:var(--paper); overflow:hidden; }}
   .method-panel > summary {{ cursor:pointer; padding:12px 16px; font-weight:800; font-size:13.5px;
-                             color:var(--c-accent); background:#f6f8fc; list-style:none;
+                             color:var(--ink); background:var(--soft); list-style:none;
                              display:flex; align-items:center; gap:8px; }}
-  .method-panel > summary::before {{ content:"▸"; transition:transform 0.15s; font-size:12px; }}
+  .method-panel > summary::before {{ content:"▸"; transition:transform 0.15s; font-size:12px; color:var(--accent); }}
   .method-panel[open] > summary::before {{ transform:rotate(90deg); }}
   .method-panel > summary::-webkit-details-marker {{ display:none; }}
   .method-table {{ width:100%; border-collapse:collapse; font-size:12.5px; margin:0; }}
-  .method-table th {{ background:#eef2f9; color:#1e3a8a; padding:7px 12px; font-size:11.5px; }}
-  .method-table td {{ padding:7px 12px; border-bottom:1px solid #eef2f7; vertical-align:top; }}
+  .method-table th {{ background:none; color:var(--ink); padding:7px 12px; font-size:11.5px; }}
+  .method-table td {{ padding:7px 12px; border-bottom:1px solid var(--hairline); vertical-align:top; }}
   .method-note {{ font-size:12px; color:#4b5568; padding:10px 16px; line-height:1.6; }}
   .method-list {{ font-size:12.5px; color:#3b4252; margin:6px 0; padding-left:20px; line-height:1.7; }}
   .rationale-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:14px 16px; }}
-  .rationale-box {{ border:1px solid var(--c-border); border-radius:6px; padding:10px 12px; background:#fbfcfe; }}
-  .rationale-box h4 {{ margin:0 0 8px; font-size:12.5px; color:var(--c-accent); }}
+  .rationale-box {{ border:1px solid var(--hairline); padding:10px 12px; }}
+  .rationale-box h4 {{ margin:0 0 8px; font-size:12.5px; color:var(--accent); }}
   .rationale-box .method-table td, .rationale-box .method-table th {{ padding:4px 8px; }}
   .rationale-box .method-note {{ padding:8px 0 0; }}
-  .zone-chip {{ display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }}
+  .zone-chip {{ display:inline-block; width:11px; height:11px; margin-right:6px; vertical-align:-1px; }}
   @media (max-width:780px) {{ .rationale-grid {{ grid-template-columns:1fr; }} }}
-  .status-history {{ border:1px solid var(--c-border); border-radius:8px; padding:14px 16px; margin:14px 0; background:#fff; }}
+  /* 近 24 小時延遲狀態格（使用者指定保留樣式） */
+  .status-history {{ border:1px solid var(--line); padding:14px 16px; margin:14px 0; background:var(--paper); }}
   .status-history-head {{ display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:10px; }}
   .status-current {{ font-size:14px; font-weight:800; }}
   .status-grid {{ display:grid; grid-template-columns:repeat(24,1fr); gap:4px; align-items:center; }}
-  .status-cell {{ display:block; height:26px; border-radius:4px; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08); }}
-  .status-legend {{ display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:#5b6578; justify-content:flex-end; }}
+  .status-cell {{ display:block; height:26px; border-radius:2px; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08); }}
+  .status-legend {{ display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--muted); justify-content:flex-end; }}
   .status-legend span {{ display:inline-flex; align-items:center; gap:5px; }}
-  .status-legend i {{ width:10px; height:10px; border-radius:3px; display:inline-block; }}
-  .status-note {{ margin-top:10px; font-size:12px; color:#5b6578; line-height:1.6; }}
+  .status-legend i {{ width:10px; height:10px; display:inline-block; }}
+  .status-note {{ margin-top:10px; font-size:12px; color:var(--muted); line-height:1.6; }}
   @media (max-width:780px) {{ .status-history-head {{ display:block; }} .status-grid {{ grid-template-columns:repeat(12,1fr); }} .status-legend {{ justify-content:flex-start; margin-top:8px; }} }}
-  @media print {{ body {{ background:#fff; }} .page {{ border:0; padding:14px; }}
-                  .method-panel[open] > summary::before {{ content:""; }}
-                  details {{ }} }}
+  @media print {{
+    body {{ background:#fff; }}
+    .report {{ border:0; padding:14px; max-width:none; }}
+    .live-dot, .refresh-info, #sse-status {{ display:none; }}
+    .dot, .status-cell, .zone-legend i, .status-legend i, .zone-chip, .score-track
+      {{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+    section {{ break-inside:avoid-page; }}
+    .method-panel[open] > summary::before {{ content:""; }}
+  }}
 </style>
 </head>
 <body>
-<div class="page">
-  <h1>ISO 42001 Service Status <span id="live-dot" class="live-dot" title="自動更新中"></span><span id="refresh-info" class="refresh-info"></span></h1>
-  <div class="sub"><a href="audit" style="color:#1e3a8a;font-weight:800;text-decoration:none;">Audit Log Search</a></div>
+<div class="report">
+  <header>
+    <h1>ISO 42001 服務狀態報告<span class="title-en">Service Status Report</span>
+      <span id="live-dot" class="live-dot" title="自動更新中"></span><span id="refresh-info" class="refresh-info"></span></h1>
+    <hr class="report-rule">
+  </header>
+  <nav class="toc"><span class="toc-cap">目錄</span>
+    <a href="#exec">執行摘要</a>
+    <a href="#ch-a">A 運作健康</a>
+    <a href="#ch-b">B 品質保證</a>
+    <a href="#ch-c">C 服務健康</a>
+    <a href="#ch-d">D 告警</a>
+    <a href="#appendix">附錄</a>
+    <a href="audit">稽核日誌搜尋 →</a>
+  </nav>
   <div id="live-content">
-  <div class="sub">產生時間 {escape(payload.get('generated_at', ''))} · 視窗 {payload.get('window_days', 0)} 天 · 載入 {payload.get('files_loaded', 0)} 個稽核日誌檔</div>
-
-  {_render_hero(overall_level, worst_dim)}
-  {_render_dim_strip(a_status, b_status, c_status)}
-
-  <h2>A · 運作健康（Operational Health）</h2>
-  <div class="dim-context">觀察問題：每筆請求是否被正確處理？ — ISO 42001 A.6.2.4 / A.9.1, ISO 27001 A.8.15</div>
-
-  <div class="kpi-grid">
-    <div class="kpi"><div class="label">總查詢數</div><div class="val">{kpi.get('queries', 0)}</div></div>
-    <div class="kpi"><div class="label">拒絕數</div><div class="val">{kpi.get('rejections', 0)}</div></div>
-    <div class="kpi"><div class="label">拒絕率</div><div class="val">{kpi.get('rejection_rate', 0):.2%}</div></div>
-    <div class="kpi{' danger' if kpi.get('security_alerts', 0) > 0 else ''}"><div class="label">安全告警</div><div class="val">{kpi.get('security_alerts', 0)}</div></div>
-    <div class="kpi{' warn' if kpi.get('anomalies', 0) > 0 else ''}"><div class="label">異常事件</div><div class="val">{kpi.get('anomalies', 0)}</div></div>
-    <div class="kpi"><div class="label">P95 延遲 (ms)</div><div class="val">{kpi.get('p95_latency_ms') or '—'}</div></div>
-  </div>
-
-  <div class="grid-2" style="margin-top:14px;">
-    <div class="card">
-      <h3>每日查詢數</h3>
-      {_line_chart(queries_series, dates)}
-    </div>
-    <div class="card">
-      <h3>每日拒絕率</h3>
-      {_line_chart(rej_rate_series, dates, color="#b45309")}
-    </div>
-    <div class="card">
-      <h3>每日平均延遲 (ms)</h3>
-      {_line_chart(latency_series, dates, color="#0891b2")}
-    </div>
-    <div class="card">
-      <h3>異常旗標彙總</h3>
-      {"<table><thead><tr><th>旗標</th><th>次數</th></tr></thead><tbody>" + "".join(f"<tr><td><code>{escape(a['flag'])}</code></td><td>{a['count']}</td></tr>" for a in anomalies) + "</tbody></table>" if anomalies else '<div class="reasons">視窗內無異常旗標。</div>'}
-    </div>
-  </div>
-
-  <h2>B · 品質保證（Output Quality）</h2>
-  <div class="dim-context">觀察問題：檢索是否找到對的條文？生成是否引用正確？是否幻覺？ — ISO 42001 A.4 / A.7</div>
-
-  <div class="goal-card" style="background:{goal_bg}; border:1px solid {goal_fg}33; border-left:6px solid {goal_fg};">
-    <div class="goal-title" style="color:{goal_fg};">{goal_label}</div>
-    <div class="goal-target">目標：<strong>Hit Rate ≥ {goal_target}</strong>（v1.0.0 唯一 gating 指標）</div>
-    <div class="goal-current">當前：<strong style="color:{goal_fg};">Hit Rate = {goal_current_text}</strong></div>
-    <div class="goal-reason">{escape(goal_reason)}</div>
-  </div>
-
-  <h3 style="font-size:14px; margin-top:18px;">V&amp;V 基線快照</h3>
-  {"<table><thead><tr><th>指標</th><th>分數</th></tr></thead><tbody>" + "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in ret_metrics.items()) + "</tbody></table>" if ret_metrics else '<div class="reasons">尚未載入 V&amp;V 報告。請執行 <code>python3 scripts/run_extended_vv.py</code> 或於 <code>../RAG/data/reports/</code> 提供 vv_report_*.json。</div>'}
-
-  <h2>C · 服務健康（Service Health）</h2>
-  <div class="dim-context">觀察問題：服務是否健康、可用，且結果可信？ — ISO 42001 A.6.2.5（變更管理）/ A.8.3（稽核日誌）</div>
-
-  <span class="severity-banner">健康嚴重度：{sev_label}</span>
-
-  {_render_status_bins(status_bins)}
-
-  <div class="drift-overview">
-    <div class="drift-gauge-box">
-      <div class="card-cap">整體健康分數</div>
-      {_render_drift_gauge(health_overall_score, sev)}
-    </div>
-    <div class="drift-bars-box">
-      <div class="card-cap">各維度分數（0–100，取最大值為整體）</div>
-      {_render_dim_score_bars(health_dim_scores)}
-      <div class="zone-legend">
-        <span><i style="background:#16a34a"></i>0–25 正常</span>
-        <span><i style="background:#2563eb"></i>25–50 留意</span>
-        <span><i style="background:#d97706"></i>50–75 警示</span>
-        <span><i style="background:#dc2626"></i>75–100 嚴重</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="grid-2" style="margin-top:14px;">
-    <div class="card">
-      <h3>系統可用率</h3>
-      <div style="font-size:28px;font-weight:900;color:#1e3a8a;margin-bottom:6px;">
-        {f"{recent_ok_pct:.1f}%" if recent_ok_pct is not None else "—"}
-      </div>
-      <div style="font-size:12px;color:#5b6578;margin-bottom:8px;">
-        最近 {recent_probes or 0} 次探針 · 目前 {'OK' if current_ok is True else 'DOWN' if current_ok is False else 'UNKNOWN'}
-        {f" · {escape(str(current_at))[:19].replace('T', ' ')}" if current_at else ""}
-      </div>
-      {availability_table}
-      <div style="font-size:12px;color:#5b6578;margin-top:8px;">
-        24h uptime：{f"{uptime_pct:.1f}%" if uptime_pct is not None else "—"}；歷史故障保留於表格與告警紀錄，不阻塞目前恢復判定。
-      </div>
-    </div>
-    <div class="card">
-      <h3>audit 鏈完整性</h3>
-      <div style="font-size:22px;font-weight:900;margin-bottom:6px;">
-        {_status_mark({'intact': 'ok', 'broken': 'critical'}.get(integrity_status, 'watch'), integrity_status.upper())}
-      </div>
-      <div style="font-size:12px;color:#5b6578;">audit 鏈完整性（hash-chain 驗證，binary）</div>
-    </div>
-  </div>
-
-  <div class="reasons" style="margin-top:10px;">
-    <strong>判定理由：</strong>
-    <ul>{"".join(f"<li>{escape(r)}</li>" for r in health.get('severity_reasons', []))}</ul>
-  </div>
-
-  {_render_health_methodology()}
-  {_render_threshold_rationale()}
-
-  <h3 style="font-size:14px; margin-top:18px;">原始量測值</h3>
-  <table>
-    <thead><tr><th>類別</th><th>指標</th><th>基線</th><th>當期</th><th>變動 / 評估</th></tr></thead>
-    <tbody>
-      <tr><td rowspan="4">Performance</td><td>拒絕率</td><td>{perf.get('rejection_rate_baseline', 0)}</td><td>{perf.get('rejection_rate_current', 0)}</td><td>{perf.get('rejection_rate_delta', 0):+.4f}</td></tr>
-      <tr><td>引用率</td><td>{('尚無 V&amp;V 基線' if not perf.get('citation_rate_baseline') else perf.get('citation_rate_baseline'))}</td><td>{perf.get('citation_rate_current', 0)}</td><td>{('—' if not perf.get('citation_rate_baseline') else f"{perf.get('citation_rate_delta', 0):+.4f}")}</td></tr>
-      <tr><td>平均延遲 (ms)</td><td>{perf.get('avg_latency_baseline_ms') or '—'}</td><td>{perf.get('avg_latency_current_ms') or '—'}</td><td>{(str(perf.get('avg_latency_delta_pct')) + ' pct') if perf.get('avg_latency_delta_pct') is not None else '—'}</td></tr>
-      <tr><td>安全告警率</td><td>—</td><td>{perf.get('security_alert_rate_current', 0)}</td><td>—</td></tr>
-      <tr><td>Faithfulness（忠實度）</td><td>{health.get('faithfulness', {}).get('target', 0.90)}</td><td>{_faith_cell(health)}</td><td>{'執行 run_ragas_evaluation.py 後顯示（已接入儀表板）' if health.get('faithfulness', {}).get('current') is None else '&lt;0.80 嚴重（答案脫離條文）'}</td></tr>
-    </tbody>
+  <table class="report-meta">
+    <tr><th>產生時間</th><td class="num">{escape(payload.get('generated_at', ''))}</td>
+        <th>資料視窗</th><td class="num">{payload.get('window_days', 0)} 天</td></tr>
+    <tr><th>稽核日誌檔</th><td class="num">{payload.get('files_loaded', 0)} 個</td>
+        <th>audit 鏈完整性</th><td>{_status_mark({'intact': 'ok', 'broken': 'critical'}.get(integrity_status, 'watch'), integrity_status.upper())}</td></tr>
   </table>
 
-  {_render_safety_controls(payload.get("safety_controls") or {})}
+  <section id="exec">
+    <h2>執行摘要<span class="en">Executive Summary</span></h2>
+    <div class="verdict-row">
+      {_render_hero(overall_level, worst_dim)}
+      <div class="verdict goal-verdict">
+        <div class="verdict-cap">業務目標 · Business Goal（v1.0.0 唯一 gating 指標）</div>
+        <div class="verdict-value" style="color:{goal_fg};"><i class="dot" style="background:{goal_fg};"></i>{goal_label}</div>
+        <div class="verdict-note">目標 Hit Rate ≥ {goal_target} · 當前 <strong class="num">{goal_current_text}</strong></div>
+        <div class="verdict-reason">{escape(goal_reason)}</div>
+      </div>
+    </div>
+    {_render_dim_strip(a_status, b_status, c_status)}
+  </section>
 
-  <h2>跨維度 · 近 24 小時告警</h2>
-  <div class="dim-context">由 A/B/C 三維度共用之告警渠道（alerts.jsonl + 可選 SMTP）。告警 sink 詳見 <code>monitoring/alerting.py</code>。</div>
+  <section id="ch-a">
+    <h2><span class="ch-no">A</span>運作健康<span class="en">Operational Health</span></h2>
+    {ch_a_head}
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">總查詢數</div><div class="val">{kpi.get('queries', 0)}</div></div>
+      <div class="kpi"><div class="label">拒絕數</div><div class="val">{kpi.get('rejections', 0)}</div></div>
+      <div class="kpi"><div class="label">拒絕率</div><div class="val">{kpi.get('rejection_rate', 0):.2%}</div></div>
+      <div class="kpi{' danger' if kpi.get('security_alerts', 0) > 0 else ''}"><div class="label">安全告警</div><div class="val">{kpi.get('security_alerts', 0)}</div></div>
+      <div class="kpi{' warn' if kpi.get('anomalies', 0) > 0 else ''}"><div class="label">異常事件</div><div class="val">{kpi.get('anomalies', 0)}</div></div>
+      <div class="kpi"><div class="label">P95 延遲 (ms)</div><div class="val">{kpi.get('p95_latency_ms') or '—'}</div></div>
+    </div>
+    <div class="grid-2" style="margin-top:14px;">
+      <div class="card">
+        <h3>每日查詢數</h3>
+        {_line_chart(queries_series, dates)}
+      </div>
+      <div class="card">
+        <h3>每日拒絕率</h3>
+        {_line_chart(rej_rate_series, dates, color="#b45309")}
+      </div>
+      <div class="card">
+        <h3>每日平均延遲 (ms)</h3>
+        {_line_chart(latency_series, dates, color="#0891b2")}
+      </div>
+      <div class="card">
+        <h3>異常旗標彙總</h3>
+        {"<table><thead><tr><th>旗標</th><th>次數</th></tr></thead><tbody>" + "".join(f"<tr><td><code>{escape(a['flag'])}</code></td><td>{a['count']}</td></tr>" for a in anomalies) + "</tbody></table>" if anomalies else '<div class="reasons">視窗內無異常旗標。</div>'}
+      </div>
+    </div>
+  </section>
 
-  {_render_alerts_banner(alerts_critical, alerts_warning, alerts_info, smtp_enabled, current_health=sev)}
+  <section id="ch-b">
+    <h2><span class="ch-no">B</span>品質保證<span class="en">Output Quality</span></h2>
+    {ch_b_head}
+    <div class="verdict-reason" style="margin:-8px 0 14px;">{escape(goal_reason)}</div>
+    <h3>V&amp;V 基線快照</h3>
+    {"<table><thead><tr><th>指標</th><th>分數</th></tr></thead><tbody>" + "".join(f"<tr><td>{k}</td><td class='num'>{v}</td></tr>" for k, v in ret_metrics.items()) + "</tbody></table>" if ret_metrics else '<div class="reasons">尚未載入 V&amp;V 報告。請執行 <code>python3 scripts/run_extended_vv.py</code> 或於 <code>../RAG/data/reports/</code> 提供 vv_report_*.json。</div>'}
+  </section>
 
-  {_render_alerts_table(alerts_recent)}
+  <section id="ch-c">
+    <h2><span class="ch-no">C</span>服務健康<span class="en">Service Health</span></h2>
+    {ch_c_head}
+    <span class="severity-banner">健康嚴重度：{sev_label}</span>
+    {_render_status_bins(status_bins)}
+    <div class="drift-overview">
+      <div class="drift-gauge-box">
+        <div class="card-cap">整體健康分數</div>
+        {_render_drift_gauge(health_overall_score, sev)}
+      </div>
+      <div class="drift-bars-box">
+        <div class="card-cap">各維度分數（0–100，取最大值為整體）</div>
+        {_render_dim_score_bars(health_dim_scores)}
+        <div class="zone-legend">
+          <span><i style="background:#16a34a"></i>0–25 正常</span>
+          <span><i style="background:#2563eb"></i>25–50 留意</span>
+          <span><i style="background:#d97706"></i>50–75 警示</span>
+          <span><i style="background:#dc2626"></i>75–100 嚴重</span>
+        </div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:14px;">
+      <div class="card">
+        <h3>系統可用率</h3>
+        <div class="num" style="font-size:28px;font-weight:900;margin-bottom:6px;">
+          {f"{recent_ok_pct:.1f}%" if recent_ok_pct is not None else "—"}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+          最近 {recent_probes or 0} 次探針 · 目前 {'OK' if current_ok is True else 'DOWN' if current_ok is False else 'UNKNOWN'}
+          {f" · {escape(str(current_at))[:19].replace('T', ' ')}" if current_at else ""}
+        </div>
+        {availability_table}
+        <div style="font-size:12px;color:var(--muted);margin-top:8px;">
+          24h uptime：{f"{uptime_pct:.1f}%" if uptime_pct is not None else "—"}；歷史故障保留於表格與告警紀錄，不阻塞目前恢復判定。
+        </div>
+      </div>
+      <div class="card">
+        <h3>audit 鏈完整性</h3>
+        <div style="font-size:22px;font-weight:900;margin-bottom:6px;">
+          {_status_mark({'intact': 'ok', 'broken': 'critical'}.get(integrity_status, 'watch'), integrity_status.upper())}
+        </div>
+        <div style="font-size:12px;color:var(--muted);">audit 鏈完整性（hash-chain 驗證，binary）</div>
+      </div>
+    </div>
+    <div class="reasons" style="margin-top:10px;">
+      <strong>判定理由：</strong>
+      <ul>{"".join(f"<li>{escape(r)}</li>" for r in health.get('severity_reasons', []))}</ul>
+    </div>
+  </section>
+
+  <section id="ch-d">
+    <h2><span class="ch-no">D</span>告警（近 24 小時）<span class="en">Alerts</span></h2>
+    <div style="font-size:12.5px;color:var(--muted);margin:4px 0 10px;">由 A/B/C 三維度共用之告警渠道（alerts.jsonl + 可選 SMTP）。告警 sink 詳見 <code>monitoring/alerting.py</code>。</div>
+    {_render_alerts_banner(alerts_critical, alerts_warning, alerts_info, smtp_enabled, current_health=sev)}
+    {_render_alerts_table(alerts_recent)}
+  </section>
+
+  <section id="appendix">
+    <h2>附錄<span class="en">Appendix — 方法論、門檻依據、原始量測、防護守則</span></h2>
+    <h3 id="appendix-1">附錄一 · 健康指標計算方法</h3>
+    {_render_health_methodology()}
+    <h3 id="appendix-2">附錄二 · 門檻設計依據</h3>
+    {_render_threshold_rationale()}
+    <h3 id="appendix-3">附錄三 · 原始量測值</h3>
+    <table>
+      <thead><tr><th>類別</th><th>指標</th><th>基線</th><th>當期</th><th>變動 / 評估</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="4">Performance</td><td>拒絕率</td><td class="num">{perf.get('rejection_rate_baseline', 0)}</td><td class="num">{perf.get('rejection_rate_current', 0)}</td><td class="num">{perf.get('rejection_rate_delta', 0):+.4f}</td></tr>
+        <tr><td>引用率</td><td class="num">{('尚無 V&amp;V 基線' if not perf.get('citation_rate_baseline') else perf.get('citation_rate_baseline'))}</td><td class="num">{perf.get('citation_rate_current', 0)}</td><td class="num">{('—' if not perf.get('citation_rate_baseline') else f"{perf.get('citation_rate_delta', 0):+.4f}")}</td></tr>
+        <tr><td>平均延遲 (ms)</td><td class="num">{perf.get('avg_latency_baseline_ms') or '—'}</td><td class="num">{perf.get('avg_latency_current_ms') or '—'}</td><td class="num">{(str(perf.get('avg_latency_delta_pct')) + ' pct') if perf.get('avg_latency_delta_pct') is not None else '—'}</td></tr>
+        <tr><td>安全告警率</td><td class="num">—</td><td class="num">{perf.get('security_alert_rate_current', 0)}</td><td class="num">—</td></tr>
+        <tr><td>Faithfulness（忠實度）</td><td class="num">{health.get('faithfulness', {}).get('target', 0.90)}</td><td>{_faith_cell(health)}</td><td>{'執行 run_ragas_evaluation.py 後顯示（已接入儀表板）' if health.get('faithfulness', {}).get('current') is None else '&lt;0.80 嚴重（答案脫離條文）'}</td></tr>
+      </tbody>
+    </table>
+    {_render_safety_controls(payload.get("safety_controls") or {})}
+  </section>
   </div><!-- /live-content：自動更新時整段重抓替換 -->
 
   <div class="footer">

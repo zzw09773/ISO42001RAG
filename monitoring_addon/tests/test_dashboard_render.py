@@ -70,3 +70,25 @@ def test_render_no_emoji():
     html = render_dashboard(copy.deepcopy(_PAYLOAD))
     m = _EMOJI_RE.search(html)
     assert not m, f"emoji found in render output: {m.group(0)!r}"
+
+
+def test_render_report_structure():
+    html = render_dashboard(copy.deepcopy(_PAYLOAD))
+    for frag in (
+        'id="exec"', 'id="ch-a"', 'id="ch-b"', 'id="ch-c"',
+        'id="ch-d"', 'id="appendix"',
+        'href="#exec"', 'href="#ch-a"', 'href="#ch-b"', 'href="#ch-c"',
+        'href="#ch-d"', 'href="#appendix"',
+        '執行摘要', '附錄',
+    ):
+        assert frag in html, f"missing report fragment: {frag}"
+
+
+def test_render_js_contract_selectors():
+    html = render_dashboard(copy.deepcopy(_PAYLOAD))
+    for frag in (
+        'id="live-content"', 'id="refresh-info"', 'id="sse-status"',
+        'id="live-dot"', 'class="hero', 'alert-banner', 'pill',
+        "EventSource('/v1/alerts/stream')",
+    ):
+        assert frag in html, f"missing JS contract selector: {frag}"
