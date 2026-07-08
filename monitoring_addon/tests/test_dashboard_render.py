@@ -98,3 +98,12 @@ def test_render_integrity_status_none_safe():
     p["integrity"] = {"status": None}
     html = render_dashboard(p)   # must not raise
     assert "UNKNOWN" in html
+
+
+def test_render_no_data_charts_are_responsive():
+    p = copy.deepcopy(_PAYLOAD)
+    p["daily_series"] = []          # no-data 分支
+    html = render_dashboard(p)
+    assert 'no data' in html
+    # 固定 width 的 no-data SVG 會撐爆 grid（破版迴歸防護）
+    assert '<svg width="' not in html

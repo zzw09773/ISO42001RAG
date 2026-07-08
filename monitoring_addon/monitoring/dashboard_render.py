@@ -51,7 +51,12 @@ def _line_chart(
 ) -> str:
     """Draw a single-series line chart as inline SVG. None values create gaps."""
     if not points or all(p is None for p in points):
-        return f'<svg width="{width}" height="{height}"><text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
+        # 與有資料分支相同的響應式屬性；固定 width 會把 grid 欄撐爆（no-data 時破版）
+        return (
+            f'<svg viewBox="0 0 {width} {height}" width="100%" preserveAspectRatio="xMidYMid meet" '
+            f'xmlns="http://www.w3.org/2000/svg" style="background:#fff">'
+            f'<text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
+        )
 
     pad_l, pad_r, pad_t, pad_b = 44, 16, 14, 28
     plot_w = width - pad_l - pad_r
@@ -134,7 +139,11 @@ def _bar_chart(
     value_key: str = "count",
 ) -> str:
     if not items:
-        return f'<svg width="{width}" height="{height}"><text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
+        return (
+            f'<svg viewBox="0 0 {width} {height}" width="100%" preserveAspectRatio="xMidYMid meet" '
+            f'xmlns="http://www.w3.org/2000/svg" style="background:#fff">'
+            f'<text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
+        )
 
     pad_l, pad_r, pad_t, pad_b = 100, 16, 14, 20
     plot_w = width - pad_l - pad_r
@@ -892,7 +901,8 @@ def render_dashboard(payload: dict) -> str:
   td {{ padding:6px 10px; border-bottom:1px solid var(--hairline); vertical-align:top; }}
   tr:nth-child(even) td {{ background:#fafbfd; }}
   .grid-2 {{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }}
-  .card {{ border:1px solid var(--line); padding:14px 16px; }}
+  .card {{ border:1px solid var(--line); padding:14px 16px; min-width:0; }}
+  .card svg {{ max-width:100%; }}
   .card h3 {{ margin:0 0 8px; font-size:12px; color:var(--muted); letter-spacing:0.06em; }}
   .reasons {{ background:var(--soft); border:1px solid var(--hairline); padding:10px 14px;
              margin-top:6px; font-size:13px; color:#3b4252; }}
