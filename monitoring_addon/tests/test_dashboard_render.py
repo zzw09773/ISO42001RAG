@@ -1,4 +1,5 @@
 import copy
+import re
 
 from monitoring.dashboard_render import render_dashboard
 
@@ -59,8 +60,6 @@ def test_render_safety_controls_block():
     assert "SAFETY_CONTROLS.md" in html
 
 
-import re
-
 _EMOJI_RE = re.compile(
     "[\U0001F300-\U0001FAFF☀-➿⬀-⯿️]"
 )
@@ -92,3 +91,10 @@ def test_render_js_contract_selectors():
         "EventSource('/v1/alerts/stream')",
     ):
         assert frag in html, f"missing JS contract selector: {frag}"
+
+
+def test_render_integrity_status_none_safe():
+    p = copy.deepcopy(_PAYLOAD)
+    p["integrity"] = {"status": None}
+    html = render_dashboard(p)   # must not raise
+    assert "UNKNOWN" in html

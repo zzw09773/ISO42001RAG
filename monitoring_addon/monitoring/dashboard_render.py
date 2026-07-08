@@ -755,7 +755,7 @@ def render_dashboard(payload: dict) -> str:
     per_dep_uptime = avail_block.get("per_dep_uptime") or {}
     current_per_dep = avail_block.get("current_per_dep") or {}
     integrity_block = payload.get("integrity") or {}
-    integrity_status = integrity_block.get("status", "unknown")
+    integrity_status = integrity_block.get("status") or "unknown"
 
     availability_rows = []
     for dep, pct in per_dep_uptime.items():
