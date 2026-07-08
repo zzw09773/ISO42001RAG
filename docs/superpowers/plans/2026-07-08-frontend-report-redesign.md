@@ -719,6 +719,17 @@ git commit -m "refactor(monitoring): audit 搜尋頁套用報告書視覺系統"
 **Interfaces:**
 - 不變：`convert()`/`collect()`/`rewrite_md_links()`、CLI 用法、輸出路徑規則。
 
+- [ ] **Step 0: EXCLUDE_DIRS 排除內部開發文件（使用者 2026-07-08 決議）**
+
+`scripts_md2html.py` 的 `EXCLUDE_DIRS` 加入 `"superpowers"`：
+
+```python
+EXCLUDE_DIRS = {".pytest_cache", "__pycache__", "_dev_archive", "node_modules",
+                "converted_md", ".venv", "venv", "superpowers"}
+```
+
+（`docs/superpowers/` 為內部開發文件，不得混入稽核文件集；用目錄名 `superpowers` 而非 `docs`，因為 `RAG/docs/` 必須繼續轉換。）
+
 - [ ] **Step 1: 取代 `CSS` 常數**
 
 ```python
