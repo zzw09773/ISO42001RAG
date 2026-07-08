@@ -305,7 +305,7 @@ def _reports_table(reports: list[dict]) -> str:
     rows = "".join(
         f'<tr><td><code>{escape(r["file"])}</code></td><td>{escape(r["kind"])}</td>'
         f'<td class="num">{escape(str(r["generated_at"]))}</td>'
-        f'<td class="num">{r["hit_rate"] if r["hit_rate"] is not None else "—"}</td>'
+        f'<td class="num">{escape(str(r["hit_rate"])) if r["hit_rate"] is not None else "—"}</td>'
         f'<td class="num">{r["n"] if r["n"] is not None else "—"}</td></tr>'
         for r in reports)
     return ('<table><thead><tr><th>檔名</th><th>類型</th><th>產生時間</th>'
@@ -368,7 +368,7 @@ def render_admin_page(ctx: dict) -> str:
     <span>rag-api：<b>{escape(ctx.get("rag_state", "?"))}</b></span>
     <span>monitoring：<b>{escape(ctx.get("monitoring_state", "?"))}</b></span>
     <span>SMTP：<b>{"啟用" if ctx.get("smtp_enabled") is True else "關閉" if ctx.get("smtp_enabled") is False else "未知"}</b></span>
-    <span>入口未設認證——內網開發者/管理員專用，值域治理依 ISO 稽核表單</span>
+    <span>登入：中科院憑證卡（員編白名單）＋break-glass 帳密；值域治理依 ISO 稽核表單</span>
   </div>
   {saved}{error}
 

@@ -7,9 +7,10 @@ from pathlib import Path
 
 def _load(path: Path) -> dict | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    return data if isinstance(data, dict) else None
 
 
 def _kind(name: str) -> str:

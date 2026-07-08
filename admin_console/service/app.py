@@ -40,7 +40,7 @@ JOB_CATALOG: dict[str, dict] = {
 def _default_http_post(url: str, **kw):
     import httpx
     try:
-        r = httpx.post(url, timeout=5, **kw)
+        r = httpx.post(url, timeout=2, **kw)
         try:
             body = r.json()
         except ValueError:

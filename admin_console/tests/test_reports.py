@@ -25,6 +25,14 @@ def test_list_reports_sorted_and_tolerant(tmp_path):
     assert rows[0]["kind"] == "vv" and rows[0]["n"] == 1 and rows[0]["hit_rate"] == 0.9
 
 
+def test_list_reports_skips_non_dict_json(tmp_path):
+    (tmp_path / "arr.json").write_text("[1, 2, 3]", encoding="utf-8")
+    (tmp_path / "vv_report_ok.json").write_text(
+        '{"generated_at": "2026-07-08", "hit_rate": 0.9, "per_query": []}', encoding="utf-8")
+    rows = list_reports(tmp_path)   # must not raise
+    assert [r["file"] for r in rows] == ["vv_report_ok.json"]
+
+
 def test_flip_compare(tmp_path):
     _write(tmp_path, "base.json", [_pq("q1", True), _pq("q2", True), _pq("q3", False)])
     _write(tmp_path, "cur.json", [_pq("q1", True), _pq("q2", False), _pq("q3", False), _pq("q4", True)])
