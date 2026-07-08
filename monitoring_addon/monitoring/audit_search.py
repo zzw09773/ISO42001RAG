@@ -302,23 +302,37 @@ def render_audit_page(result: dict, params: dict, *, openwebui_available: bool) 
 <meta charset="utf-8">
 <title>Audit Log Search</title>
 <style>
-body{{margin:0;background:#f6f8fc;color:#1a1f2c;font-family:"Noto Sans TC","Inter",-apple-system,sans-serif}}
-.page{{max-width:1440px;margin:0 auto;padding:28px 34px;background:#fff;min-height:100vh;border-left:1px solid #d9dee6;border-right:1px solid #d9dee6}}
-h1{{font-size:24px;margin:0 0 4px}} .sub{{color:#5b6578;font-size:13px;margin-bottom:18px}}
-form{{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;align-items:end;background:#f6f8fc;border:1px solid #d9dee6;border-radius:8px;padding:14px}}
-label{{font-size:12px;font-weight:700;color:#4b5568}} input,select{{width:100%;padding:8px;border:1px solid #cfd6e2;border-radius:6px;background:#fff}}
-button,.link{{display:inline-block;padding:9px 12px;border:0;border-radius:6px;background:#1e3a8a;color:#fff;text-decoration:none;font-weight:800;cursor:pointer}}
-.quick{{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}} .quick a{{font-size:12px;color:#1e3a8a;background:#eef2ff;border:1px solid #c7d2fe;padding:6px 10px;border-radius:999px;text-decoration:none}}
-.stats{{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;color:#4b5568;font-size:12px}} .stats code{{background:#eef2f7;padding:2px 5px;border-radius:4px}}
-table{{width:100%;border-collapse:collapse;font-size:12.5px}} th{{text-align:left;background:#1e3a8a;color:#fff;padding:8px}} td{{border-bottom:1px solid #e5e7eb;padding:8px;vertical-align:top;line-height:1.5}}
-tr:nth-child(even) td{{background:#fafbfd}} .ts{{white-space:nowrap;font-family:monospace;color:#4b5568}}
-.badge{{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:900;font-size:11px}} .critical{{background:#fee2e2;color:#991b1b}} .warning{{background:#fef3c7;color:#92400e}} .normal{{background:#dcfce7;color:#166534}}
-.note{{font-size:12px;color:#5b6578;margin:12px 0;line-height:1.6}} code{{font-family:"JetBrains Mono",monospace}}
-@media(max-width:980px){{form{{grid-template-columns:1fr 1fr}} table{{font-size:12px}}}}
+body{{margin:0;background:#f6f8fc;color:#1a1f2c;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;font-size:15px;line-height:1.7}}
+.page{{max-width:1440px;margin:0 auto;padding:40px 48px 56px;background:#fff;min-height:100vh;border-left:1px solid #c9d1dc;border-right:1px solid #c9d1dc}}
+h1{{font-size:24px;font-weight:900;margin:0}}
+.title-en{{font-size:13px;font-weight:500;color:#5b6578;margin-left:10px}}
+.report-rule{{border:0;border-top:2px solid #1a1f2c;margin:14px 0 10px}}
+.sub{{color:#5b6578;font-size:13px;margin-bottom:18px}}
+form{{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;align-items:end;border:1px solid #c9d1dc;padding:14px}}
+label{{font-size:12px;font-weight:700;color:#4b5568}}
+input,select{{width:100%;padding:8px;border:1px solid #c9d1dc;background:#fff;font-family:inherit;font-size:13px}}
+button,.link{{display:inline-block;padding:9px 14px;border:1px solid #1e3a8a;background:#1e3a8a;color:#fff;text-decoration:none;font-weight:800;cursor:pointer;font-size:13px}}
+.quick{{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}}
+.quick a{{font-size:12px;color:#1e3a8a;border:1px solid #c9d1dc;padding:5px 10px;text-decoration:none;font-weight:700}}
+.quick a:hover{{border-color:#1e3a8a}}
+.stats{{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;color:#4b5568;font-size:12px}}
+.stats code{{background:#eef2f7;padding:2px 5px}}
+table{{width:100%;border-collapse:collapse;font-size:12.5px}}
+th{{text-align:left;padding:8px;font-weight:700;border-top:2px solid #1a1f2c;border-bottom:1px solid #1a1f2c}}
+td{{border-bottom:1px solid #e5eaf1;padding:8px;vertical-align:top;line-height:1.5}}
+tr:nth-child(even) td{{background:#fafbfd}}
+.ts{{white-space:nowrap;font-family:"JetBrains Mono","Consolas",monospace;color:#4b5568}}
+.badge{{display:inline-block;padding:1px 8px;font-weight:900;font-size:11px;border:1px solid currentColor}}
+.critical{{color:#991b1b}}.warning{{color:#92400e}}.normal{{color:#166534}}
+.note{{font-size:12px;color:#5b6578;margin:12px 0;line-height:1.6}}
+code{{font-family:"JetBrains Mono","Consolas",monospace}}
+@media(max-width:980px){{form{{grid-template-columns:1fr 1fr}}table{{font-size:12px}}}}
+@media print{{body{{background:#fff}}.page{{border:0;padding:14px;max-width:none}}form,.quick{{display:none}}}}
 </style>
 </head>
 <body><div class="page">
-<h1>Audit Log Search</h1>
+<h1>稽核日誌搜尋<span class="title-en">Audit Log Search</span></h1>
+<hr class="report-rule">
 <div class="sub">查詢 RAG audit JSONL；danger 包含 security_alert、auth_failure、anomaly_flags 與 P95/單筆延遲異常。OpenWebUI DB：{"available" if openwebui_available else "not mounted"}</div>
 <form method="get" action="audit">
 <div><label>關鍵字</label><input name="q" value="{val('q')}" placeholder="query/session/request/ip"></div>
@@ -341,7 +355,7 @@ tr:nth-child(even) td{{background:#fafbfd}} .ts{{white-space:nowrap;font-family:
 <a href="audit?event_type=security_alert">安全告警</a>
 <a href="audit?event_type=auth_failure">登入/金鑰失敗</a>
 <a href="audit?event_type=query">一般查詢</a>
-<a href="dashboard">回 Service Status</a>
+<a href="dashboard">回服務狀態報告</a>
 </div>
 <div class="stats">
 <span>scanned <code>{result.get('total_seen', 0)}</code></span>

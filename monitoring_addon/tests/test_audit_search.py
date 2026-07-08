@@ -1,4 +1,5 @@
 import json
+import re as _re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -6,8 +7,11 @@ from monitoring.audit_search import (
     OpenWebUICorrelator,
     attach_openwebui_matches,
     danger_level,
+    render_audit_page,
     search_audit_events,
 )
+
+_EMOJI_RE = _re.compile("[\U0001F300-\U0001FAFF☀-➿⬀-⯿️]")
 
 
 def _write_audit(path, records):
@@ -92,3 +96,14 @@ def test_attach_openwebui_matches_no_db_is_safe(tmp_path):
 
 def test_danger_level_latency_warning():
     assert danger_level({"event_type": "query", "response_time_ms": 65000}) == "warning"
+
+
+def test_render_audit_page_report_style():
+    html = render_audit_page(
+        {"events": [], "summary": {}, "total_seen": 0, "matched": 0, "returned": 0},
+        {"window_days": 30, "limit": 200},
+        openwebui_available=False,
+    )
+    assert "稽核日誌搜尋" in html          # 新報告書式頁首
+    assert 'class="report-rule"' in html   # 與儀表板同語彙的頂部粗線
+    assert not _EMOJI_RE.search(html)
