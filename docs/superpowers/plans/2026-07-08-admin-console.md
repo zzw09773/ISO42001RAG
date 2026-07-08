@@ -1869,6 +1869,7 @@ fastapi==0.115.*
 uvicorn[standard]==0.32.*
 docker==7.*
 httpx==0.27.*
+python-multipart==0.0.*
 cryptography==43.*
 asn1crypto==1.5.1
 ```
