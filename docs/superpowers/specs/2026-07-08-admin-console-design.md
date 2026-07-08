@@ -3,7 +3,14 @@
 - 日期：2026-07-08
 - 狀態：已核准（使用者於本日核准）
 - 前置決策：RAG/ 凍結已解除（2026-07-08）；不做 Keycloak 角色限制（值域治理走 ISO 稽核 Excel 表單，管理台定位如 Jupyter——內網開發者/管理員入口，不對一般使用者宣傳）
-- 補充決策（2026-07-08 稍晚）：**需要簡易帳密登入頁**，避免誤觸 port 即進入。單組帳密存於 gitignored `.env`（`ADMIN_USERNAME`/`ADMIN_PASSWORD`），程式以環境變數讀取、`secrets.compare_digest` 比對、session cookie（記憶體 token，重啟即全登出）；帳密**絕不硬編碼進源碼、測試或 commit**
+- 補充決策（2026-07-08 稍晚）：需要登入保護，避免誤觸 port 即進入。
+- 補充決策（2026-07-08 再晚）：**登入主通道改為中科院憑證卡（HiPKI/PKCS#7）**，精簡移植 ANILA 平台的 prod 驗證程式（參考包：`~/anila-card-login-export-20260708`，其 MANIFEST 明示供他專案重用）：
+  - 移植範圍：`card_auth.py` CMS 驗簽＋憑證鏈＋nonce binding 核心、challenge/verify 端點、HiPKI popup 前端流程（`caAuth.js` 協議）、`cht/` 本機元件 mock（開發用）、`cspki_ca_bundle.pem`（公開 CA bundle）。
+  - **不移植**：DB user model、migrations、pending registration/approval——授權改為 `.env` 員編白名單 `ADMIN_CARD_SERIALS`（憑證 serialNumber ∈ 白名單才放行）；challenge 改記憶體 nonce store（不用 JWT，省 python-jose 依賴）。
+  - 首刷引導：卡片驗簽成功但員編不在白名單時，錯誤頁顯示讀到的員編（操作者本人資訊，無洩漏疑慮），管理員自行加進 `.env`——不自動加入。
+  - **break-glass 後備**：保留帳密登入（`ADMIN_USERNAME`/`ADMIN_PASSWORD`），由 `ENABLE_PASSWORD_FALLBACK`（預設 `false`）控制；僅讀卡環境故障時開啟。
+  - 安全紅線照舊：帳密/白名單只存 gitignored `.env`；`secrets.compare_digest`；session cookie（記憶體 token，重啟全登出）；**不得**弱化 CMS 驗簽/憑證鏈/nonce binding（參考包安全注意事項）；`CARD_DEV_SKIP_NONCE_BINDING` 之類開發旁路不得進 production 設定。
+  - 登入事件（含員編）寫 `changes.jsonl`——操作可歸責到人，接 HUMAN_OVERSIGHT。
 
 ## 目標
 
@@ -16,7 +23,7 @@
 | 設定生效方式 | 表單寫入 `.env` + 頁面一鍵重啟 rag-api（不改 rag-api 啟動時讀 env 的邏輯） |
 | 功能範圍 | 評估類（V&V/online V&V/RAGAS/regression gate/歸因）＋報告檢視與基線比對＋索引維護（reindex/版本快照）＋告警維運（測試告警/SMTP 檢查）＋ model 設定 |
 | 部署與暴露 | 獨立 `admin` 容器、宿主 port :8300、不進 nginx |
-| 認證/值域 | 簡易帳密登入頁（單組帳密走 .env，非 Keycloak）；白名單鍵 + 表單型別/選項約束值域；治理走 ISO Excel 表單 |
+| 認證/值域 | 憑證卡登入為主（HiPKI/PKCS#7，員編白名單走 .env）＋帳密 break-glass（預設關）；白名單鍵 + 表單型別/選項約束值域；治理走 ISO Excel 表單 |
 | 同捆改動 | monitoring 告警訊息拆層次（來源標籤＋主訊息＋輔助說明）；手風琴不做 |
 
 ## 1. 架構
