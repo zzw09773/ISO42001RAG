@@ -72,6 +72,12 @@
 
 認證/角色、多人並發鎖（單管理員假設）、值域治理流程、告警手風琴、rag-api 熱套用設定、nginx 路由變更。
 
+## 7.5 已知安全取捨（2026-07-08 自動安全審查提示，經評估後接受並記錄）
+
+1. **docker.sock 掛載＝宿主 root 等效權限**（privilege-escalation）：這是本設計的核心決策（§1，使用者核准）——admin 需要重啟 rag-api 與 docker exec 跑評估腳本。緩解：憑證卡登入把關、不經 nginx 對外、內網單管理員工具、所有操作寫 changes.jsonl 留痕。替代方案（docker API proxy 白名單）記為未來強化選項。
+2. **容器以 root 執行**（least-privilege）：docker.sock 存取與 .env 單檔寫入在非 root 下需要宿主 gid 對映，增加部署脆弱性；且 sock 掛載本身已等效 root，USER 降權的實質收益有限。記為未來強化選項（`--group-add` docker gid + 非 root USER）。
+3. **帳密經 compose environment 傳遞**（secret-exposure，`docker inspect` 可見）：與既有堆疊（Keycloak/PG 密碼）同模式；且 admin 容器本就掛載整份 `.env`（設定功能所需），能 `docker inspect` 者即能 `docker exec`——env 傳遞未增加新的暴露面。值本身只存 gitignored `.env`，不在 compose 硬編碼。
+
 ## 8. compose 變更
 
 `docker-compose.yaml` 新增 `admin` 服務：build `./admin_console`、`ports: "8300:8300"`、上述掛載、`restart: unless-stopped`、depends_on 無硬依賴（monitoring/rag-api 不在時對應操作報錯即可）。
