@@ -8,6 +8,13 @@
 
 **Tech Stack:** Python f-string HTML 模板、內嵌 CSS（無 CDN）、pytest、Playwright MCP（目視驗證）。
 
+> **實作偏離記錄（2026-07-08 執行完畢，最終審查 Ready to merge）：**
+> 1. `_render_hero` 輸出 `class="hero verdict"`（計畫片段為 `verdict hero`）——計畫自身的 JS 契約測試斷言 `'class="hero'`，此順序同時滿足測試與 flashHero 選擇器。
+> 2. `EXCLUDE_DIRS` 除計畫的 `"superpowers"` 外另加 `".superpowers"`（SDD 工作目錄含 .md，會被誤轉）。
+> 3. 計畫 CSS 註解「資料語意」與既有禁字測試衝突，實作改用「資料視覺編碼」。
+> 4. 計畫 CSS 漏列 `_render_safety_controls` 依賴的 `.dim-context` 規則，實作補回（非斜體版）；移除無元素引用的 `.goal-card` 規則。
+> 5. 最終審查後加固：`integrity_status` None 防護（`or "unknown"`）＋迴歸測試。
+
 ## Global Constraints
 
 - 工作目錄：`/home/c1147259/桌面/ISO42001/ISO42001RAG`（下稱 repo 根）。
