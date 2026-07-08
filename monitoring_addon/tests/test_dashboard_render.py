@@ -150,3 +150,17 @@ def test_render_generated_at_local_time():
     html = render_dashboard(copy.deepcopy(_PAYLOAD))
     # 2026-06-26T00:00:00Z → UTC+8 顯示 08:00:00 並標註時區
     assert "2026-06-26 08:00:00（UTC+8）" in html
+
+
+def test_render_alert_rows_layered():
+    p = copy.deepcopy(_PAYLOAD)
+    p["alerts"]["recent"] = [{
+        "timestamp": "2026-07-08T13:20:32+08:00", "severity": "critical",
+        "source": "availability", "title": "system availability down",
+        "message": "關鍵依賴連續 3 次探測失敗：['embed-proxy']（/ready 失敗可能為 Triton 後端掛掉）",
+    }]
+    html = render_dashboard(p)
+    assert 'class="src-pill"' in html          # 來源標籤
+    assert 'class="alert-main"' in html        # 主訊息
+    assert 'class="alert-aux"' in html         # 輔助說明
+    assert "system availability down" in html

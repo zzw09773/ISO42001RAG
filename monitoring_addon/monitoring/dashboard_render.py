@@ -413,10 +413,11 @@ def _render_alerts_table(alerts: list) -> str:
         ts = (a.get("timestamp") or "")[:19].replace("T", " ")
         rows.append(
             f"<tr>"
-            f"<td class='ts'>{escape(ts)}</td>"
-            f"<td class='sev-{escape(sev)}'>{escape(sev.upper())}</td>"
-            f"<td><code>{escape(a.get('source', '?'))}</code></td>"
-            f"<td><strong>{escape(_strip_emoji(a.get('title', '')))}</strong><br>{escape(_strip_emoji(a.get('message', ''))[:200])}</td>"
+            f'<td class="ts">{escape(ts)}</td>'
+            f'<td class="sev-{escape(sev)}">{escape(sev.upper())}</td>'
+            f'<td><span class="src-pill">{escape(_strip_emoji(a.get("source", "?")))}</span></td>'
+            f'<td><div class="alert-main">{escape(_strip_emoji(a.get("title", "")))}</div>'
+            f'<div class="alert-aux">{escape(_strip_emoji(a.get("message", ""))[:200])}</div></td>'
             f"</tr>"
         )
     return (
@@ -971,6 +972,10 @@ def render_dashboard(payload: dict) -> str:
   .alerts-table .sev-warning {{ color:#92400e; font-weight:700; }}
   .alerts-table .sev-info {{ color:var(--muted); }}
   .alerts-table .ts {{ font-family:var(--mono); font-size:11.5px; color:var(--muted); white-space:nowrap; }}
+  .alerts-table .src-pill {{ display:inline-block; padding:1px 8px; font-size:11px; font-weight:800;
+                              border:1px solid var(--line); font-family:var(--mono); white-space:nowrap; }}
+  .alerts-table .alert-main {{ font-weight:800; }}
+  .alerts-table .alert-aux {{ font-size:12px; color:var(--muted); margin-top:2px; }}
   /* 風險分數：儀表 + 維度分數帶（zone 色帶為資料視覺編碼，保留） */
   .drift-overview {{ display:grid; grid-template-columns:340px 1fr; gap:22px; align-items:center;
                      margin:14px 0 6px; padding:16px 18px; border:1px solid var(--line); }}
@@ -1287,12 +1292,12 @@ function updateLiveDot() {{
     tr.appendChild(el('td', {{ cls: 'ts', text: ts }}));
     tr.appendChild(el('td', {{ cls: 'sev-' + sev, text: sev.toUpperCase() }}));
     const tdSrc = el('td');
-    tdSrc.appendChild(el('code', {{ text: alert.source || '?' }}));
+    const pill = el('span', {{ cls: 'src-pill', text: (alert.source || '?').replace(EMOJI_RE, '') }});
+    tdSrc.appendChild(pill);
     tr.appendChild(tdSrc);
     const tdMsg = el('td');
-    tdMsg.appendChild(el('strong', {{ text: (alert.title || '').replace(EMOJI_RE, '') }}));
-    tdMsg.appendChild(document.createElement('br'));
-    tdMsg.appendChild(document.createTextNode(msg));
+    tdMsg.appendChild(el('div', {{ cls: 'alert-main', text: (alert.title || '').replace(EMOJI_RE, '') }}));
+    tdMsg.appendChild(el('div', {{ cls: 'alert-aux', text: msg }}));
     tr.appendChild(tdMsg);
     return tr;
   }}
