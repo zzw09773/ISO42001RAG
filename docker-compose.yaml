@@ -271,6 +271,36 @@ services:
       # monitoring 自己的輸出（dashboard / drift / online_vv 報告）
       - ./monitoring_addon/data:/app/data
 
+  # ---------- 9. Admin console（維運管理台；內網開發者/管理員入口，無認證，不進 nginx） ----------
+  admin:
+    build:
+      context: ./admin_console
+    container_name: ISO42001_admin
+    restart: unless-stopped
+    ports:
+      - "8300:8300"
+    environment:
+      MONITORING_URL: "http://monitoring:8200"
+      RAG_API_URL: "http://rag-api:8000"
+      ENV_FILE: /host_env/.env
+      REPORTS_DIR: /mon_data/reports
+      ADMIN_DATA_DIR: /app/data
+      # 憑證卡白名單與 break-glass：值只存在 gitignored .env，不寫死在此。
+      # 注意：CARD_DEV_SKIP_NONCE_BINDING 嚴禁出現在這裡（僅限 E2E 臨時 override）。
+      ADMIN_CARD_SERIALS: ${ADMIN_CARD_SERIALS}
+      ENABLE_PASSWORD_FALLBACK: ${ENABLE_PASSWORD_FALLBACK:-false}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      # docker sock：重啟 rag-api 與 docker exec 跑評估/索引腳本
+      - /var/run/docker.sock:/var/run/docker.sock
+      # .env 單檔掛載（envstore 原地覆寫、不 rename，容器才看得到新值）
+      - ./.env:/host_env/.env
+      # monitoring 報告（唯讀）
+      - ./monitoring_addon/data:/mon_data:ro
+      # admin 自己的留痕與設定備份
+      - ./admin_console/data:/app/data
+
 volumes:
   pgdata:
   openwebui_data:
