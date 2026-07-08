@@ -57,3 +57,16 @@ def test_render_safety_controls_block():
     assert "防護守則觸發" in html
     assert "prompt_injection" in html
     assert "SAFETY_CONTROLS.md" in html
+
+
+import re
+
+_EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001FAFF☀-➿⬀-⯿️]"
+)
+
+
+def test_render_no_emoji():
+    html = render_dashboard(copy.deepcopy(_PAYLOAD))
+    m = _EMOJI_RE.search(html)
+    assert not m, f"emoji found in render output: {m.group(0)!r}"

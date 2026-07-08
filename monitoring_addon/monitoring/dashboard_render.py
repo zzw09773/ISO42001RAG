@@ -179,15 +179,15 @@ def _fmt(v: float) -> str:
 
 
 _SEVERITY_TONE = {
-    "normal": ("#dcfce7", "#166534", "✅ NORMAL"),
-    "warning": ("#fef3c7", "#92400e", "⚠️ WARNING"),
-    "critical": ("#fee2e2", "#991b1b", "❌ CRITICAL"),
+    "normal": ("#ffffff", "#166534", "NORMAL 正常"),
+    "warning": ("#ffffff", "#92400e", "WARNING 警示"),
+    "critical": ("#ffffff", "#991b1b", "CRITICAL 嚴重"),
 }
 
 _GOAL_TONE = {
-    "met":          ("#dcfce7", "#166534", "✅ 目標達成"),
-    "not_met":      ("#fee2e2", "#991b1b", "❌ 目標未達"),
-    "inconclusive": ("#fef3c7", "#92400e", "⚠️ 尚未驗證"),
+    "met":          ("#ffffff", "#166534", "目標達成 MET"),
+    "not_met":      ("#ffffff", "#991b1b", "目標未達 NOT MET"),
+    "inconclusive": ("#ffffff", "#92400e", "尚未驗證 INCONCLUSIVE"),
 }
 
 # 「一個整體狀態 + 三個維度」呈現所需色階
@@ -206,6 +206,20 @@ _STATUS_BIN_TONE = {
     "critical": ("#dc2626", "嚴重"),
     "no_data": ("#d1d5db", "無資料"),
 }
+
+_MARK_TONE = {
+    "ok": "#16a34a", "watch": "#2563eb", "warning": "#d97706",
+    "critical": "#dc2626", "none": "#9aa3b2",
+}
+
+
+def _status_mark(level: str, text: str) -> str:
+    """報告書式狀態標記：RGB 色點 + 文字（黑白列印時語意由文字承載）。"""
+    color = _MARK_TONE.get(level, _MARK_TONE["none"])
+    return (
+        f'<span class="mark" style="color:{color};">'
+        f'<i class="dot" style="background:{color};"></i>{escape(text)}</span>'
+    )
 
 
 def _dim_status_A(kpi: dict, anomalies: list, alerts_recent: list) -> tuple:
@@ -621,7 +635,7 @@ def _faith_cell(health: dict) -> str:
     if meta.get("stale"):
         age = meta.get("age_days")
         suffix = f"（{age} 天）" if age is not None else ""
-        bits.append(f"<span style='color:#dc2626'>⚠ 已過期{suffix}，請重跑 RAGAS</span>")
+        bits.append(f"<span style='color:#dc2626'>已過期{suffix}，請重跑 RAGAS</span>")
     return " · ".join(bits)
 
 
@@ -971,8 +985,8 @@ def render_dashboard(payload: dict) -> str:
     </div>
     <div class="card">
       <h3>audit 鏈完整性</h3>
-      <div style="font-size:28px;font-weight:900;margin-bottom:6px;color:{'#166534' if integrity_status == 'intact' else '#991b1b' if integrity_status == 'broken' else '#92400e'};">
-        {'🟢 intact' if integrity_status == 'intact' else '🔴 broken' if integrity_status == 'broken' else '⚪ unknown'}
+      <div style="font-size:22px;font-weight:900;margin-bottom:6px;">
+        {_status_mark({'intact': 'ok', 'broken': 'critical'}.get(integrity_status, 'watch'), integrity_status.upper())}
       </div>
       <div style="font-size:12px;color:#5b6578;">audit 鏈完整性（hash-chain 驗證，binary）</div>
     </div>
