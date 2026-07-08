@@ -19,6 +19,7 @@
 - job 全域互斥：同時只允許一個 running job；重複觸發回 409。
 - 容器名固定：`ISO42001_monitoring`、`ISO42001_rag_api`；容器內報告路徑 `/app/data/reports`（monitoring 的 bind mount `./monitoring_addon/data:/app/data` 已存在於 compose）。
 - 測試命令：`cd admin_console && python3 -m pytest tests/ -q`（Task 7 為 `cd monitoring_addon && python3 -m pytest tests/ -q`）。全綠才可 commit。
+- **登入保護與帳密紅線**：整站（含 `/api/*`）需登入才可用；單組帳密由環境變數 `ADMIN_USERNAME`/`ADMIN_PASSWORD` 提供（控制者已寫入 gitignored `.env`，執行者**不得**印出、記錄或提交其值）；源碼與測試一律用假帳密（如 `u`/`p`）；比對用 `secrets.compare_digest`；session 為記憶體 token + httponly cookie。
 - 每個 task 結束 commit；訊息結尾加 `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`。
 - monitoring 端只動 Task 7 指定範圍；不動判定函式與既有 JS 契約選擇器（`.alerts-table tbody`、td class `ts`/`sev-*`、pill 文字格式 `CRITICAL {n}` 等）。
 
@@ -780,8 +781,10 @@ git commit -m "feat(admin): 報告列表摘要與 per-query flip 比對"
 **Interfaces:**
 - Consumes: Task 1 `SETTINGS/EnvStore/SettingError`、Task 2 `JobManager/JobBusy`、Task 3 `DockerOps`、Task 4 `list_reports/flip_compare`。
 - Produces:
-  - `render.render_admin_page(ctx: dict) -> str`。`ctx` 鍵：`settings_rows: list[dict]`（每項 `{spec, env_value, effective_value, dirty}`）、`job: dict|None`、`reports: list[dict]`、`rag_state: str`、`monitoring_state: str`、`saved: bool`、`error: str|None`。
-  - `app.create_app(env_store, job_manager, dockerops, reports_dir: Path, monitoring_url: str, rag_api_url: str, http_post=None, http_get=None) -> FastAPI`；模組層 `app = create_app_from_env()`（從環境變數組裝，供 uvicorn 啟動）。
+  - `render.render_admin_page(ctx: dict) -> str`。`ctx` 鍵：`settings_rows: list[dict]`（每項 `{spec, env_value, effective_value, dirty}`）、`job: dict|None`、`reports: list[dict]`、`rag_state: str`、`monitoring_state: str`、`smtp_enabled: bool|None`、`saved: bool`、`error: str|None`。
+  - `render.render_login_page(error: str | None = None) -> str`：登入頁（帳號/密碼欄、POST `login`、同視覺 token、錯誤訊息「帳號或密碼錯誤」）。
+  - `app.create_app(env_store, job_manager, dockerops, reports_dir: Path, monitoring_url: str, rag_api_url: str, admin_user: str, admin_password: str, http_post=None, http_get=None) -> FastAPI`；模組層 `app = create_app_from_env()`（從環境變數組裝，供 uvicorn 啟動；`ADMIN_USERNAME`/`ADMIN_PASSWORD` 缺任一即 raise RuntimeError——設定錯誤要大聲）。
+  - **登入保護（middleware）**：除 `GET/POST /login` 外一律需已登入 session cookie（`admin_session`）；未登入時 `/api/*` 回 401 JSON、頁面路徑 303 導向 `/login`。`POST /login`（form `username`/`password`）以 `secrets.compare_digest` 逐一比對（兩者都比，不短路），成功→`secrets.token_urlsafe(32)` 存入記憶體 session set、set_cookie（httponly、samesite=lax）、303 `/`；失敗→`time.sleep(0.5)` 後回登入頁帶錯誤。`POST /logout` 清 session + cookie、303 `/login`。
   - JOB 目錄（app.py 內常數）：
 
 ```python
@@ -858,6 +861,14 @@ def test_running_job_rendered():
 def test_error_banner():
     html = render_admin_page(_ctx(error="TOP_K 需為整數"))
     assert "TOP_K 需為整數" in html
+
+
+def test_login_page():
+    from admincore.render import render_login_page
+    html = render_login_page()
+    assert 'action="login"' in html and 'name="username"' in html and 'name="password"' in html
+    assert not _EMOJI_RE.search(html)
+    assert "帳號或密碼錯誤" in render_login_page("帳號或密碼錯誤")
 ```
 
 - [ ] **Step 2: 寫失敗測試（app）**
@@ -903,10 +914,35 @@ def client(tmp_path):
         return {"status_code": 200, "ok": True, "json": {"smtp_enabled": False}}
 
     app = create_app(store, jm, ops, reports, "http://monitoring:8200",
-                     "http://rag-api:8000", http_post=fake_post, http_get=fake_get)
+                     "http://rag-api:8000", admin_user="u", admin_password="p",
+                     http_post=fake_post, http_get=fake_get)
     c = TestClient(app, follow_redirects=False)
     c._jm, c._env, c._calls, c._tmp = jm, env, calls, tmp_path
+    # 預設以測試假帳密登入（帳密紅線：真帳密只存在 .env，絕不進測試碼）
+    r = c.post("/login", data={"username": "u", "password": "p"})
+    assert r.status_code == 303
     return c
+
+
+def test_login_required(client):
+    fresh = TestClient(client.app, follow_redirects=False)
+    assert fresh.get("/").status_code == 303
+    assert fresh.get("/").headers["location"] == "/login"
+    assert fresh.get("/api/jobs/current").status_code == 401
+    assert fresh.get("/login").status_code == 200
+
+
+def test_login_wrong_password(client):
+    fresh = TestClient(client.app, follow_redirects=False)
+    r = fresh.post("/login", data={"username": "u", "password": "wrong"})
+    assert r.status_code == 200 and "帳號或密碼錯誤" in r.text
+    assert fresh.get("/api/jobs/current").status_code == 401
+
+
+def test_logout(client):
+    r = client.post("/logout")
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+    assert client.get("/api/jobs/current").status_code == 401
 
 
 def test_index_page(client):
@@ -1159,6 +1195,30 @@ def _reports_table(reports: list[dict]) -> str:
             '<th>Hit Rate</th><th>題數</th></tr></thead><tbody>' + rows + '</tbody></table>')
 
 
+def render_login_page(error: str | None = None) -> str:
+    err = f'<div class="banner err">{escape(error)}</div>' if error else ""
+    return f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head><meta charset="UTF-8"><title>ISO 42001 維運管理台 — 登入</title><style>{_CSS}
+.login-box {{ max-width:360px; margin:12vh auto 0; border:1px solid var(--ink); padding:26px 30px; background:var(--paper); }}
+.login-box label {{ font-size:12px; font-weight:700; color:var(--muted); display:block; margin-top:12px; }}
+.login-box input {{ width:100%; }}
+.login-box button {{ margin-top:16px; width:100%; }}
+</style></head>
+<body>
+<div class="login-box">
+  <h1 style="font-size:18px;">維運管理台<span class="title-en">Operations Console</span></h1>
+  <hr class="report-rule">
+  {err}
+  <form method="post" action="login">
+    <label>帳號</label><input name="username" autocomplete="username">
+    <label>密碼</label><input name="password" type="password" autocomplete="current-password">
+    <button type="submit">登入</button>
+  </form>
+</div>
+</body></html>"""
+
+
 def render_admin_page(ctx: dict) -> str:
     saved = '<div class="banner ok">設定已寫入 .env——按「重啟 rag-api 套用」後生效。</div>' if ctx.get("saved") else ""
     error = f'<div class="banner err">{escape(ctx["error"])}</div>' if ctx.get("error") else ""
@@ -1247,7 +1307,8 @@ def render_admin_page(ctx: dict) -> str:
     <div class="note">測試告警會走完整管線（alerts.jsonl → SSE → SMTP 若有設）；到儀表板告警區確認收到。</div>
   </section>
 
-  <div class="footer">操作留痕：admin_console/data/changes.jsonl · 作業紀錄：jobs.jsonl · 設定備份：env-backups/</div>
+  <div class="footer">操作留痕：admin_console/data/changes.jsonl · 作業紀錄：jobs.jsonl · 設定備份：env-backups/
+    <form method="post" action="logout" style="display:inline;margin-left:14px;"><button class="ghost" style="padding:2px 10px;font-size:11px;">登出</button></form></div>
 </div>
 <script>{_JS}</script>
 </body>
@@ -1257,10 +1318,16 @@ def render_admin_page(ctx: dict) -> str:
 - [ ] **Step 5: 實作 `service/app.py`**
 
 ```python
-"""維運管理台 FastAPI 服務。依賴全部可注入，宿主測試不需 docker/httpx 實體。"""
+"""維運管理台 FastAPI 服務。依賴全部可注入，宿主測試不需 docker/httpx 實體。
+
+帳密紅線：ADMIN_USERNAME/ADMIN_PASSWORD 只從環境變數讀（來源為 gitignored .env），
+絕不硬編碼；比對用 secrets.compare_digest。
+"""
 from __future__ import annotations
 
 import os
+import secrets
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -1270,7 +1337,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from admincore.dockerops import DockerOps
 from admincore.envstore import EnvStore, SettingError, SETTINGS, WHITELIST
 from admincore.jobs import JobBusy, JobManager
-from admincore.render import render_admin_page
+from admincore.render import render_admin_page, render_login_page
 from admincore.reports import flip_compare, list_reports
 
 CONTAINER_REPORTS = "/app/data/reports"
@@ -1343,11 +1410,46 @@ def _build_cmd(name: str, form: dict, reports_dir: Path) -> list[str] | None:
 
 def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOps,
                reports_dir: Path, monitoring_url: str, rag_api_url: str,
+               admin_user: str, admin_password: str,
                http_post=None, http_get=None) -> FastAPI:
     app = FastAPI(title="ISO 42001 admin console", docs_url=None, redoc_url=None)
     post = http_post or _default_http_post
     get = http_get or _default_http_get
     reports_dir = Path(reports_dir)
+    sessions: set[str] = set()   # 記憶體 session：容器重啟即全登出（可接受）
+
+    @app.middleware("http")
+    async def _guard(request: Request, call_next):
+        if request.url.path == "/login" or request.cookies.get("admin_session") in sessions:
+            return await call_next(request)
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"error": "未登入"}, status_code=401)
+        return RedirectResponse("/login", status_code=303)
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page():
+        return HTMLResponse(render_login_page())
+
+    @app.post("/login")
+    async def login(request: Request):
+        form = dict(await request.form())
+        user_ok = secrets.compare_digest(str(form.get("username", "")), admin_user)
+        pass_ok = secrets.compare_digest(str(form.get("password", "")), admin_password)
+        if not (user_ok and pass_ok):   # 兩者都比完才判定，不短路
+            time.sleep(0.5)
+            return HTMLResponse(render_login_page("帳號或密碼錯誤"))
+        token = secrets.token_urlsafe(32)
+        sessions.add(token)
+        resp = RedirectResponse("/", status_code=303)
+        resp.set_cookie("admin_session", token, httponly=True, samesite="lax")
+        return resp
+
+    @app.post("/logout")
+    async def logout(request: Request):
+        sessions.discard(request.cookies.get("admin_session", ""))
+        resp = RedirectResponse("/login", status_code=303)
+        resp.delete_cookie("admin_session")
+        return resp
 
     @app.get("/", response_class=HTMLResponse)
     async def index(saved: int = 0, error: str = ""):
@@ -1441,6 +1543,10 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
 def create_app_from_env() -> FastAPI:
     env_file = Path(os.environ.get("ENV_FILE", "/host_env/.env"))
     data_dir = Path(os.environ.get("ADMIN_DATA_DIR", "/app/data"))
+    admin_user = os.environ.get("ADMIN_USERNAME", "")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    if not admin_user or not admin_password:
+        raise RuntimeError("ADMIN_USERNAME/ADMIN_PASSWORD 未設定——請於 .env 提供（設定錯誤要大聲）")
     ops = DockerOps()
     return create_app(
         EnvStore(env_file, data_dir / "env-backups"),
@@ -1449,6 +1555,8 @@ def create_app_from_env() -> FastAPI:
         Path(os.environ.get("REPORTS_DIR", "/mon_data/reports")),
         os.environ.get("MONITORING_URL", "http://monitoring:8200"),
         os.environ.get("RAG_API_URL", "http://rag-api:8000"),
+        admin_user=admin_user,
+        admin_password=admin_password,
     )
 
 
@@ -1534,6 +1642,9 @@ data/*
       ENV_FILE: /host_env/.env
       REPORTS_DIR: /mon_data/reports
       ADMIN_DATA_DIR: /app/data
+      # 登入帳密：值只存在 gitignored .env，不寫死在此
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     volumes:
       # docker sock：重啟 rag-api 與 docker exec 跑評估/索引腳本
       - /var/run/docker.sock:/var/run/docker.sock
@@ -1552,15 +1663,23 @@ Expected: `Container ISO42001_admin  Started`
 
 - [ ] **Step 4: 煙霧測試**
 
-Run:
+Run（帳密自 .env 讀取，過程不得 echo 其值）:
 ```bash
 sleep 4
-curl -s -o /dev/null -w 'admin page: %{http_code}\n' http://localhost:8300/
-curl -s http://localhost:8300/api/jobs/current
-curl -s http://localhost:8300/ | grep -c '容器內生效值'
-curl -s -X POST 'http://localhost:8300/api/alert-test?severity=info'
+curl -s -o /dev/null -w '未登入首頁: %{http_code}\n' http://localhost:8300/            # 期望 303
+curl -s -o /dev/null -w '未登入 API: %{http_code}\n' http://localhost:8300/api/jobs/current  # 期望 401
+set -a; . ./.env >/dev/null 2>&1; set +a
+JAR=$(mktemp)
+curl -s -c "$JAR" -o /dev/null -w 'login: %{http_code}\n' \
+  --data-urlencode "username=$ADMIN_USERNAME" --data-urlencode "password=$ADMIN_PASSWORD" \
+  http://localhost:8300/login                                                          # 期望 303
+curl -s -b "$JAR" -o /dev/null -w '登入後首頁: %{http_code}\n' http://localhost:8300/   # 期望 200
+curl -s -b "$JAR" http://localhost:8300/api/jobs/current                                # {"state":"idle"}
+curl -s -b "$JAR" http://localhost:8300/ | grep -c '容器內生效值'                        # 1
+curl -s -b "$JAR" -X POST 'http://localhost:8300/api/alert-test?severity=info'          # {"ok":true}
+rm -f "$JAR"
 ```
-Expected: `admin page: 200`、`{"state":"idle"}`、`1`、`{"ok":true}`（並可在儀表板告警區看到 info 測試告警）
+Expected: 如各行註解（並可在儀表板告警區看到 info 測試告警）
 
 - [ ] **Step 5: Commit**
 
@@ -1670,6 +1789,7 @@ git commit -m "feat(monitoring): 告警訊息拆層次（來源標籤+主訊息+
 - [ ] **Step 1: 設定回路驗證**
 
 以 Playwright 開 `http://localhost:8300/`：
+0. 應被導向登入頁；以 `.env` 中的 ADMIN_USERNAME/ADMIN_PASSWORD 登入（讀取自 .env，不寫進任何腳本或訊息）；錯誤密碼應顯示「帳號或密碼錯誤」。
 1. 截圖確認四區塊齊全、視覺與報告書系統一致、無 emoji。
 2. 把 `TOP_K` 改為不同值（如 5→6）→ 儲存 → 顯示「設定已寫入」、該列變「已寫入，待重啟」。
 3. 按「重啟 rag-api 套用」→ 等狀態顯示恢復 → 重新整理 → `TOP_K` 生效值 = 新值、狀態「一致」。

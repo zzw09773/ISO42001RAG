@@ -3,6 +3,7 @@
 - 日期：2026-07-08
 - 狀態：已核准（使用者於本日核准）
 - 前置決策：RAG/ 凍結已解除（2026-07-08）；不做 Keycloak 角色限制（值域治理走 ISO 稽核 Excel 表單，管理台定位如 Jupyter——內網開發者/管理員入口，不對一般使用者宣傳）
+- 補充決策（2026-07-08 稍晚）：**需要簡易帳密登入頁**，避免誤觸 port 即進入。單組帳密存於 gitignored `.env`（`ADMIN_USERNAME`/`ADMIN_PASSWORD`），程式以環境變數讀取、`secrets.compare_digest` 比對、session cookie（記憶體 token，重啟即全登出）；帳密**絕不硬編碼進源碼、測試或 commit**
 
 ## 目標
 
@@ -14,8 +15,8 @@
 |---|---|
 | 設定生效方式 | 表單寫入 `.env` + 頁面一鍵重啟 rag-api（不改 rag-api 啟動時讀 env 的邏輯） |
 | 功能範圍 | 評估類（V&V/online V&V/RAGAS/regression gate/歸因）＋報告檢視與基線比對＋索引維護（reindex/版本快照）＋告警維運（測試告警/SMTP 檢查）＋ model 設定 |
-| 部署與暴露 | 獨立 `admin` 容器、宿主 port :8300、不進 nginx、無認證 |
-| 認證/值域 | 無 Keycloak；白名單鍵 + 表單型別/選項約束值域；治理走 ISO Excel 表單 |
+| 部署與暴露 | 獨立 `admin` 容器、宿主 port :8300、不進 nginx |
+| 認證/值域 | 簡易帳密登入頁（單組帳密走 .env，非 Keycloak）；白名單鍵 + 表單型別/選項約束值域；治理走 ISO Excel 表單 |
 | 同捆改動 | monitoring 告警訊息拆層次（來源標籤＋主訊息＋輔助說明）；手風琴不做 |
 
 ## 1. 架構
