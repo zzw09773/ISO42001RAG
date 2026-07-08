@@ -136,7 +136,7 @@ def classify_health(report) -> Tuple[str, List[str]]:
     if faith_score is not None:
         dim["faithfulness"] = faith_score
         if faith_score >= 25:
-            reasons.append(f"⚠️ 幻覺風險上升 score={faith_score:.0f} (Faithfulness={report.faithfulness_current})")
+            reasons.append(f"幻覺風險上升 score={faith_score:.0f} (Faithfulness={report.faithfulness_current})")
 
     # ── Availability — not sample-gated (from the probe loop) ─────────
     avail = getattr(report, "availability", None) or {}
@@ -172,10 +172,10 @@ def classify_health(report) -> Tuple[str, List[str]]:
     severity = _score_to_level(overall)
     if hard_down:
         severity = "critical"
-        reasons.append("🔴 可用率 hard-down（關鍵依賴連續探測失敗）→ critical")
+        reasons.append("可用率 hard-down（關鍵依賴連續探測失敗）→ critical")
     if chain_broken:
         severity = "critical"
-        reasons.append("🔴 audit 鏈損毀 → critical")
+        reasons.append("audit 鏈損毀 → critical")
 
     try:
         report.dimension_scores = dim
@@ -185,5 +185,5 @@ def classify_health(report) -> Tuple[str, List[str]]:
 
     if not any("score=" in r for r in reasons):
         reasons.append("已評估維度在正常波動內（score < 25）。")
-    reasons.insert(0, f"整體健康分數 = {overall:.0f}/100 → {severity}")
+    reasons.insert(0, f"整體風險分數 = {overall:.0f}/100 → {severity}（0 低風險，100 嚴重）")
     return severity, reasons

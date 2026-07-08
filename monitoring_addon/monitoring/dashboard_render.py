@@ -19,6 +19,8 @@ inline so the resulting HTML can be:
 from __future__ import annotations
 
 import math
+import re
+from datetime import datetime, timedelta, timezone
 from html import escape
 from typing import Dict, List, Optional
 
@@ -222,6 +224,23 @@ _MARK_TONE = {
 }
 
 
+_EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF☀-➿⬀-⯿️]")
+
+
+def _strip_emoji(text) -> str:
+    """資料層字串（severity_reasons、歷史 alerts.jsonl）可能殘留 emoji；渲染前一律清除。"""
+    return _EMOJI_RE.sub("", str(text)).strip()
+
+
+def _fmt_ts_local(iso_str) -> str:
+    """UTC ISO 時戳 → 台灣時間顯示；報告內時間統一 UTC+8，與告警時戳、瀏覽器本地時間一致。"""
+    try:
+        dt = datetime.fromisoformat(str(iso_str))
+        return dt.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return str(iso_str)
+
+
 def _status_mark(level: str, text: str) -> str:
     """報告書式狀態標記：RGB 色點 + 文字（黑白列印時語意由文字承載）。"""
     color = _MARK_TONE.get(level, _MARK_TONE["none"])
@@ -282,7 +301,7 @@ def _dim_status_C(health: dict) -> tuple:
     if sev == "insufficient_data":
         drivers = ["樣本不足，無健康判定"]
     else:
-        drivers = [f"健康分數 {health.get('overall_score', 0)}/100"]
+        drivers = [f"風險分數 {health.get('overall_score', 0)}/100（越高越差）"]
     reasons = health.get("severity_reasons") or []
     if reasons:
         drivers.append(reasons[0])
@@ -313,7 +332,7 @@ def _render_dim_strip(a_status, b_status, c_status) -> str:
     def _card(title: str, status: tuple) -> str:
         level, drivers = status
         _, fg, label = _DIM_TONE.get(level, _DIM_TONE["ok"])
-        drv_lis = "".join(f"<li>{escape(d)}</li>" for d in drivers)
+        drv_lis = "".join(f"<li>{escape(_strip_emoji(d))}</li>" for d in drivers)
         return (
             f'<div class="dim-card">'
             f'  <div class="dim-title">{title}</div>'
@@ -338,7 +357,7 @@ def _render_chapter_head(question: str, clauses: str, rows: list) -> str:
     """
     body = "".join(
         f'<tr><td>{escape(m)}</td><td>{escape(t)}</td>'
-        f'<td class="num">{escape(a)}</td><td>{_status_mark(lv, txt)}</td></tr>'
+        f'<td class="num">{escape(_strip_emoji(a))}</td><td>{_status_mark(lv, txt)}</td></tr>'
         for m, t, a, (lv, txt) in rows
     )
     return (
@@ -397,7 +416,7 @@ def _render_alerts_table(alerts: list) -> str:
             f"<td class='ts'>{escape(ts)}</td>"
             f"<td class='sev-{escape(sev)}'>{escape(sev.upper())}</td>"
             f"<td><code>{escape(a.get('source', '?'))}</code></td>"
-            f"<td><strong>{escape(a.get('title', ''))}</strong><br>{escape(a.get('message', ''))[:200]}</td>"
+            f"<td><strong>{escape(_strip_emoji(a.get('title', '')))}</strong><br>{escape(_strip_emoji(a.get('message', ''))[:200])}</td>"
             f"</tr>"
         )
     return (
@@ -505,7 +524,7 @@ def _render_drift_gauge(overall_score: float, severity: str) -> str:
             f'<circle cx="{cx}" cy="{cy}" r="6" fill="#1a1f2c"/>'
         )
         center_val = f"{overall_score:.0f}"
-        center_sub = "/ 100 健康分數"
+        center_sub = "/ 100 風險分數（越高越嚴重）"
     return (
         f'<svg viewBox="0 0 {w} {h}" width="100%" style="max-width:340px" '
         f'xmlns="http://www.w3.org/2000/svg">'
@@ -593,7 +612,7 @@ def _render_health_methodology() -> str:
         '<th>維度</th><th>方法</th><th>計算方式</th><th>量什麼 / 為何這樣選</th>'
         '</tr></thead><tbody>' + body + '</tbody></table>'
         '<div class="method-note">每個維度各自映射為 0–100 分數（見下方「門檻為何這樣定義」），'
-        '整體健康分數取所有維度的<strong>最大值（weakest-link，最弱環節）</strong>——'
+        '整體風險分數取所有維度的<strong>最大值（weakest-link，最弱環節）</strong>——'
         '只要任一面向異常，整體即升級，寧可誤報不可漏報。</div>'
         '</details>'
     )
@@ -637,7 +656,7 @@ def _render_threshold_rationale() -> str:
         '可用率與 audit 鏈完整性亦不受此限制（有探測即有判定）。</p></div>'
 
         '<div class="rationale-box"><h4>④ 整體 = 最弱環節</h4>'
-        '<p class="method-note">整體健康分數取各維度<strong>最大值</strong>而非平均——'
+        '<p class="method-note">整體風險分數取各維度<strong>最大值</strong>而非平均——'
         '任一面向異常即整體升級，避免被其他正常維度稀釋。</p></div>'
 
         '</div>'
@@ -815,13 +834,40 @@ def render_dashboard(payload: dict) -> str:
         "服務是否健康、可用，且結果可信？",
         "ISO 42001 A.6.2.5（變更管理）/ A.8.3（稽核日誌）",
         [
-            ("健康分數（weakest-link）", "< 25 為正常區", f"{health_overall_score}/100",
+            ("風險分數（weakest-link，越高越差）", "< 25 為正常區", f"{health_overall_score}/100",
              (c_status[0], _DIM_TONE[c_status[0]][2])),
             ("audit 鏈完整性", "intact", integrity_status,
              ({"intact": "ok", "broken": "critical"}.get(integrity_status, "watch"),
               integrity_status.upper())),
         ],
     )
+
+    # 空狀態收合：視窗內完全無資料時，四張趨勢卡收合為一行說明，不讓空框架佔版
+    if dates:
+        ch_a_charts = f"""<div class="grid-2" style="margin-top:14px;">
+      <div class="card">
+        <h3>每日查詢數</h3>
+        {_line_chart(queries_series, dates)}
+      </div>
+      <div class="card">
+        <h3>每日拒絕率</h3>
+        {_line_chart(rej_rate_series, dates, color="#b45309")}
+      </div>
+      <div class="card">
+        <h3>每日平均延遲 (ms)</h3>
+        {_line_chart(latency_series, dates, color="#0891b2")}
+      </div>
+      <div class="card">
+        <h3>異常旗標彙總</h3>
+        {"<table><thead><tr><th>旗標</th><th>次數</th></tr></thead><tbody>" + "".join(f"<tr><td><code>{escape(a['flag'])}</code></td><td>{a['count']}</td></tr>" for a in anomalies) + "</tbody></table>" if anomalies else '<div class="reasons">視窗內無異常旗標。</div>'}
+      </div>
+    </div>"""
+    else:
+        ch_a_charts = (
+            '<div class="reasons" style="margin-top:14px;">'
+            '視窗內尚無查詢資料——每日查詢數／拒絕率／延遲趨勢圖與異常旗標彙總，'
+            '將於稽核日誌開始累積後顯示。</div>'
+        )
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -884,6 +930,7 @@ def render_dashboard(payload: dict) -> str:
   .ch-head tr:nth-child(3) th {{ color:var(--ink); border-top:2px solid var(--ink);
                                  border-bottom:1px solid var(--ink); }}
   .ch-head td {{ padding:7px 12px 7px 0; border-bottom:1px solid var(--hairline); }}
+  .ch-head td:first-child {{ min-width:14em; }}
   .ch-head .ch-meta th {{ width:1%; padding-right:18px; }}
   .kpi-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:8px; }}
   .kpi {{ border:1px solid var(--line); padding:12px 16px; background:var(--paper); }}
@@ -924,7 +971,7 @@ def render_dashboard(payload: dict) -> str:
   .alerts-table .sev-warning {{ color:#92400e; font-weight:700; }}
   .alerts-table .sev-info {{ color:var(--muted); }}
   .alerts-table .ts {{ font-family:var(--mono); font-size:11.5px; color:var(--muted); white-space:nowrap; }}
-  /* 健康分數：儀表 + 維度分數帶（zone 色帶為資料視覺編碼，保留） */
+  /* 風險分數：儀表 + 維度分數帶（zone 色帶為資料視覺編碼，保留） */
   .drift-overview {{ display:grid; grid-template-columns:340px 1fr; gap:22px; align-items:center;
                      margin:14px 0 6px; padding:16px 18px; border:1px solid var(--line); }}
   .card-cap {{ font-size:11px; letter-spacing:0.07em; color:var(--muted); font-weight:700; margin-bottom:8px; }}
@@ -1002,7 +1049,7 @@ def render_dashboard(payload: dict) -> str:
   </nav>
   <div id="live-content">
   <table class="report-meta">
-    <tr><th>產生時間</th><td class="num">{escape(payload.get('generated_at', ''))}</td>
+    <tr><th>產生時間</th><td class="num" title="{escape(payload.get('generated_at', ''))}">{escape(_fmt_ts_local(payload.get('generated_at', '')))}（UTC+8）</td>
         <th>資料視窗</th><td class="num">{payload.get('window_days', 0)} 天</td></tr>
     <tr><th>稽核日誌檔</th><td class="num">{payload.get('files_loaded', 0)} 個</td>
         <th>audit 鏈完整性</th><td>{_status_mark({'intact': 'ok', 'broken': 'critical'}.get(integrity_status, 'watch'), integrity_status.upper())}</td></tr>
@@ -1033,24 +1080,7 @@ def render_dashboard(payload: dict) -> str:
       <div class="kpi{' warn' if kpi.get('anomalies', 0) > 0 else ''}"><div class="label">異常事件</div><div class="val">{kpi.get('anomalies', 0)}</div></div>
       <div class="kpi"><div class="label">P95 延遲 (ms)</div><div class="val">{kpi.get('p95_latency_ms') or '—'}</div></div>
     </div>
-    <div class="grid-2" style="margin-top:14px;">
-      <div class="card">
-        <h3>每日查詢數</h3>
-        {_line_chart(queries_series, dates)}
-      </div>
-      <div class="card">
-        <h3>每日拒絕率</h3>
-        {_line_chart(rej_rate_series, dates, color="#b45309")}
-      </div>
-      <div class="card">
-        <h3>每日平均延遲 (ms)</h3>
-        {_line_chart(latency_series, dates, color="#0891b2")}
-      </div>
-      <div class="card">
-        <h3>異常旗標彙總</h3>
-        {"<table><thead><tr><th>旗標</th><th>次數</th></tr></thead><tbody>" + "".join(f"<tr><td><code>{escape(a['flag'])}</code></td><td>{a['count']}</td></tr>" for a in anomalies) + "</tbody></table>" if anomalies else '<div class="reasons">視窗內無異常旗標。</div>'}
-      </div>
-    </div>
+    {ch_a_charts}
   </section>
 
   <section id="ch-b">
@@ -1068,11 +1098,11 @@ def render_dashboard(payload: dict) -> str:
     {_render_status_bins(status_bins)}
     <div class="drift-overview">
       <div class="drift-gauge-box">
-        <div class="card-cap">整體健康分數</div>
+        <div class="card-cap">整體風險分數（0 低風險 · 100 嚴重）</div>
         {_render_drift_gauge(health_overall_score, sev)}
       </div>
       <div class="drift-bars-box">
-        <div class="card-cap">各維度分數（0–100，取最大值為整體）</div>
+        <div class="card-cap">各維度風險分數（0–100，取最大值為整體）</div>
         {_render_dim_score_bars(health_dim_scores)}
         <div class="zone-legend">
           <span><i style="background:#16a34a"></i>0–25 正常</span>
@@ -1107,7 +1137,7 @@ def render_dashboard(payload: dict) -> str:
     </div>
     <div class="reasons" style="margin-top:10px;">
       <strong>判定理由：</strong>
-      <ul>{"".join(f"<li>{escape(r)}</li>" for r in health.get('severity_reasons', []))}</ul>
+      <ul>{"".join(f"<li>{escape(_strip_emoji(r))}</li>" for r in health.get('severity_reasons', []))}</ul>
     </div>
   </section>
 
@@ -1146,10 +1176,22 @@ def render_dashboard(payload: dict) -> str:
 </div>
 
 <script>
-/* v3.1 — 資料區自動更新（dynamic dashboard）。
-   每 REFRESH_MS 重抓 /dashboard，原地替換 #live-content（重用伺服器渲染，
-   不重寫前端 SVG/圖表邏輯）。分頁隱藏時暫停以省伺服器負載。
-   告警仍由下方 SSE 即時推送，兩者獨立。 */
+/* v3.2 — 資料區自動更新（dynamic dashboard）。
+   每 REFRESH_MS 重抓 dashboard（相對路徑：反代前綴 /monitoring/ 下也正確），
+   原地替換 #live-content（重用伺服器渲染，不重寫前端 SVG/圖表邏輯）。
+   分頁隱藏時暫停以省伺服器負載。告警仍由下方 SSE 即時推送，兩者獨立。
+   標頭綠點反映兩條通道的真實狀態：綠=皆正常、琥珀=SSE 斷、紅=自動更新失敗。 */
+var LIVE_STATE = {{ refresh: true, sse: true }};
+function updateLiveDot() {{
+  var dot = document.getElementById('live-dot');
+  if (!dot) return;
+  var ok = LIVE_STATE.refresh && LIVE_STATE.sse;
+  dot.style.background = ok ? '#16a34a' : (LIVE_STATE.refresh ? '#d97706' : '#dc2626');
+  dot.style.animation = ok ? '' : 'none';
+  dot.title = ok ? '自動更新與即時告警連線正常'
+            : (LIVE_STATE.refresh ? '即時告警（SSE）中斷，資料仍每 30 秒更新'
+                                  : '自動更新失敗，畫面可能非最新');
+}}
 (function() {{
   var REFRESH_MS = 30000;
   var info = document.getElementById('refresh-info');
@@ -1158,10 +1200,12 @@ def render_dashboard(payload: dict) -> str:
     var t = new Date().toTimeString().slice(0, 8);
     info.textContent = ok ? ('每30秒自動更新 · ' + t) : ('更新失敗，重試中 · ' + t);
     info.style.color = ok ? '' : '#991b1b';
+    LIVE_STATE.refresh = ok;
+    updateLiveDot();
   }}
   function refresh() {{
     if (document.hidden) return;
-    fetch('/dashboard', {{ cache: 'no-store' }})
+    fetch('dashboard', {{ cache: 'no-store' }})
       .then(function(r) {{ return r.text(); }})
       .then(function(html) {{
         // DOMParser 文件為惰性：不執行 script、不載入資源。以 importNode + 節點搬移
@@ -1172,8 +1216,12 @@ def render_dashboard(payload: dict) -> str:
         if (fresh && cur) {{
           var imported = document.importNode(fresh, true);
           cur.replaceChildren.apply(cur, Array.prototype.slice.call(imported.childNodes));
+          stamp(true);
+        }} else {{
+          // 抓回的頁面沒有 live-content（例如被反代導去別的服務）＝更新失敗，
+          // 不得蓋「成功」時間戳造成假安心。
+          stamp(false);
         }}
-        stamp(true);
       }})
       .catch(function() {{ stamp(false); }});
   }}
@@ -1228,10 +1276,13 @@ def render_dashboard(payload: dict) -> str:
     setTimeout(() => {{ hero.style.boxShadow = ''; }}, 1800);
   }}
 
+  // 與伺服器端 _strip_emoji 對齊：歷史/即時告警文字都不得出現 emoji
+  const EMOJI_RE = /[\\u{{1F300}}-\\u{{1FAFF}}\\u{{2600}}-\\u{{27BF}}\\u{{2B00}}-\\u{{2BFF}}\\u{{FE0F}}]/gu;
+
   function buildRow(alert) {{
     const sev = alert.severity || 'info';
     const ts = (alert.timestamp || '').slice(0, 19).replace('T', ' ');
-    const msg = (alert.message || '').slice(0, 200);
+    const msg = (alert.message || '').replace(EMOJI_RE, '').slice(0, 200);
     const tr = el('tr', {{ style: {{ background: SEV_BG[sev] || '' }} }});
     tr.appendChild(el('td', {{ cls: 'ts', text: ts }}));
     tr.appendChild(el('td', {{ cls: 'sev-' + sev, text: sev.toUpperCase() }}));
@@ -1239,7 +1290,7 @@ def render_dashboard(payload: dict) -> str:
     tdSrc.appendChild(el('code', {{ text: alert.source || '?' }}));
     tr.appendChild(tdSrc);
     const tdMsg = el('td');
-    tdMsg.appendChild(el('strong', {{ text: alert.title || '' }}));
+    tdMsg.appendChild(el('strong', {{ text: (alert.title || '').replace(EMOJI_RE, '') }}));
     tdMsg.appendChild(document.createElement('br'));
     tdMsg.appendChild(document.createTextNode(msg));
     tr.appendChild(tdMsg);
@@ -1262,10 +1313,13 @@ def render_dashboard(payload: dict) -> str:
 
   function connect() {{
     try {{ if (es) es.close(); }} catch(e) {{}}
-    es = new EventSource('/v1/alerts/stream');
+    // 相對路徑：直連（/v1/...）與反代前綴（/monitoring/v1/...）下都正確
+    es = new EventSource('v1/alerts/stream');
 
     es.addEventListener('hello', (e) => {{
       setStatus('SSE 即時連線', true);
+      LIVE_STATE.sse = true;
+      updateLiveDot();
       retryMs = 1000;
     }});
 
@@ -1282,6 +1336,8 @@ def render_dashboard(payload: dict) -> str:
 
     es.onerror = () => {{
       setStatus('SSE 中斷，重連中...', false);
+      LIVE_STATE.sse = false;
+      updateLiveDot();
       try {{ es.close(); }} catch(e) {{}}
       setTimeout(connect, retryMs);
       retryMs = Math.min(retryMs * 2, 15000);

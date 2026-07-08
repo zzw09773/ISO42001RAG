@@ -220,7 +220,7 @@ class HealthChecker:
                         source="health",
                         title=f"health degraded → {current}",
                         message=(
-                            f"服務健康分數升至 {current}（overall_score={score}），"
+                            f"服務風險等級升至 {current}（risk_score={score}），"
                             f"連續 {pend_cnt} 窗確認（門檻 {DRIFT_CONFIRM_WINDOWS}）。"
                             f" 觸發理由：{'；'.join(report.get('severity_reasons') or [])}"
                         ),

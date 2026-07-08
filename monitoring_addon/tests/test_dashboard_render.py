@@ -88,9 +88,13 @@ def test_render_js_contract_selectors():
     for frag in (
         'id="live-content"', 'id="refresh-info"', 'id="sse-status"',
         'id="live-dot"', 'class="hero', 'alert-banner', 'pill',
-        "EventSource('/v1/alerts/stream')",
+        "EventSource('v1/alerts/stream')",
+        "fetch('dashboard'",
     ):
         assert frag in html, f"missing JS contract selector: {frag}"
+    # 絕對路徑在反代前綴 /monitoring/ 下會打到別的服務（v3.2 修正，禁止回歸）
+    assert "EventSource('/v1" not in html
+    assert "fetch('/dashboard'" not in html
 
 
 def test_render_integrity_status_none_safe():
@@ -102,8 +106,47 @@ def test_render_integrity_status_none_safe():
 
 def test_render_no_data_charts_are_responsive():
     p = copy.deepcopy(_PAYLOAD)
-    p["daily_series"] = []          # no-data 分支
+    # 有日期但單一序列全為 None → 該圖走 no-data 分支
+    p["daily_series"] = [
+        {"date": "07/01", "queries": 3, "rejection_rate": 0.0, "avg_latency_ms": None},
+        {"date": "07/02", "queries": 5, "rejection_rate": 0.0, "avg_latency_ms": None},
+    ]
     html = render_dashboard(p)
     assert 'no data' in html
     # 固定 width 的 no-data SVG 會撐爆 grid（破版迴歸防護）
     assert '<svg width="' not in html
+
+
+def test_render_empty_window_collapses_charts():
+    p = copy.deepcopy(_PAYLOAD)
+    p["daily_series"] = []          # 視窗完全無資料 → 四張趨勢卡收合為一行
+    html = render_dashboard(p)
+    assert "視窗內尚無查詢資料" in html
+    assert "<h3>每日查詢數</h3>" not in html   # 空卡不再渲染
+
+
+def test_render_risk_score_naming():
+    # 分數語意為 severity（越高越差），顯示名稱不得再叫「健康分數」造成反向誤讀
+    html = render_dashboard(copy.deepcopy(_PAYLOAD))
+    assert "健康分數" not in html
+    assert "風險分數" in html
+
+
+def test_render_strips_emoji_from_data_strings():
+    # severity_reasons 與歷史 alerts.jsonl 可能殘留 emoji，渲染端必須清除
+    p = copy.deepcopy(_PAYLOAD)
+    p["health"]["severity_reasons"] = ["🔴 可用率 hard-down → critical"]
+    p["alerts"]["recent"] = [{
+        "timestamp": "2026-07-08T13:20:32+08:00", "severity": "critical",
+        "source": "availability", "title": "⚠️ system availability down",
+        "message": "🔴 關鍵依賴連續 3 次探測失敗",
+    }]
+    html = render_dashboard(p)
+    assert not _EMOJI_RE.search(html)
+    assert "可用率 hard-down" in html and "system availability down" in html
+
+
+def test_render_generated_at_local_time():
+    html = render_dashboard(copy.deepcopy(_PAYLOAD))
+    # 2026-06-26T00:00:00Z → UTC+8 顯示 08:00:00 並標註時區
+    assert "2026-06-26 08:00:00（UTC+8）" in html
