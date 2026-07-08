@@ -20,9 +20,21 @@ def store(tmp_path):
     return EnvStore(env, tmp_path / "backups"), env
 
 
-def test_whitelist_has_exactly_ten_keys():
-    assert len(SETTINGS) == 10 and len(WHITELIST) == 10
-    assert "LLM_API_KEY" not in WHITELIST and "EMBED_API_KEY" not in WHITELIST
+def test_whitelist_has_exactly_thirteen_keys():
+    assert len(SETTINGS) == 13 and len(WHITELIST) == 13
+    for secret in ("LLM_API_KEY", "EMBED_API_KEY", "API_KEYS"):
+        assert secret not in WHITELIST
+    for added in ("LLM_API_BASE", "EMBED_API_BASE", "EMBED_MODEL_NAME"):
+        assert added in WHITELIST
+
+
+def test_validate_url_type():
+    assert validate("LLM_API_BASE", " http://gw:7000/v1 ") == "http://gw:7000/v1"
+    assert validate("EMBED_API_BASE", "https://embed:7100/v1") == "https://embed:7100/v1"
+    with pytest.raises(SettingError):
+        validate("LLM_API_BASE", "gw:7000/v1")     # 無 scheme
+    with pytest.raises(SettingError):
+        validate("EMBED_API_BASE", "")             # 空值
 
 
 def test_read_returns_only_whitelist(store):

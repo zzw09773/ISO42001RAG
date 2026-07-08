@@ -27,6 +27,9 @@ SETTINGS: list[dict] = [
      "label": "日誌等級", "restart": True},
     {"key": "RAG_LOG_VERBOSE", "type": "enum", "options": ["0", "1"],
      "label": "詳細日誌", "restart": True},
+    {"key": "LLM_API_BASE", "type": "url", "label": "LLM API Base（推論 gateway）", "restart": True},
+    {"key": "EMBED_API_BASE", "type": "url", "label": "Embedding API Base", "restart": True},
+    {"key": "EMBED_MODEL_NAME", "type": "str", "label": "嵌入模型名稱", "restart": True},
 ]
 WHITELIST: set[str] = {s["key"] for s in SETTINGS}
 _BY_KEY = {s["key"]: s for s in SETTINGS}
@@ -51,6 +54,10 @@ def validate(key: str, value: str) -> str:
     if spec["type"] == "enum":
         if v not in spec["options"]:
             raise SettingError(f"{key} 只能是 {spec['options']}，收到 {value!r}")
+        return v
+    if spec["type"] == "url":
+        if not re.fullmatch(r"https?://\S+", v):
+            raise SettingError(f"{key} 需為 http(s):// 開頭的網址，收到 {value!r}")
         return v
     if not v:
         raise SettingError(f"{key} 不可為空")
