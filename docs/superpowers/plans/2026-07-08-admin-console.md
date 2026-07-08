@@ -266,7 +266,7 @@ class EnvStore:
 - [ ] **Step 4: 跑測試確認通過**
 
 Run: `cd admin_console && python3 -m pytest tests/test_envstore.py -q`
-Expected: 8 passed
+Expected: 7 passed
 
 - [ ] **Step 5: Commit**
 
