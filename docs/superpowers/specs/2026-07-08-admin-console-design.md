@@ -40,7 +40,7 @@
 
 ## 2. 頁面結構（單頁四區塊）
 
-1. **Model 設定**：白名單 10 鍵表單——`CHAT_MODEL_NAME`、`TOP_K`、`RERANK_TOP_N`、`REASONING_EFFORT`、`REACT_MODE`、`CHUNK_SIZE`、`MAX_RETRIEVAL_TOKENS`、`RATE_LIMIT_PER_MINUTE`、`RAG_LOG_LEVEL`、`RAG_LOG_VERBOSE`。每鍵依型別渲染（數字/布林/枚舉/字串），並列「`.env` 值 vs 容器內生效值」（`docker inspect` 取得），不一致標「已寫入，待重啟」。`CHUNK_SIZE` 變更附「需 reindex」警示並連到索引區塊。儲存→寫 .env→〔重啟 rag-api 套用〕→輪詢 rag-api `/health` 顯示恢復。金鑰與連線 URL 類**不進 UI**。
+1. **Model 設定**：白名單 13 鍵表單——`CHAT_MODEL_NAME`、`TOP_K`、`RERANK_TOP_N`、`REASONING_EFFORT`、`REACT_MODE`、`CHUNK_SIZE`、`MAX_RETRIEVAL_TOKENS`、`RATE_LIMIT_PER_MINUTE`、`RAG_LOG_LEVEL`、`RAG_LOG_VERBOSE`，以及**推論後端連線**（2026-07-08 使用者追加，因 Triton 端點異動需可自 UI 改）`LLM_API_BASE`、`EMBED_API_BASE`（type=url，`^https?://` 防呆）、`EMBED_MODEL_NAME`（type=str，補齊與 `CHAT_MODEL_NAME` 的對稱）。每鍵依型別渲染（數字/布林/枚舉/字串/URL），並列「`.env` 值 vs 容器內生效值」（`docker inspect` 取得），不一致標「已寫入，待重啟」。`CHUNK_SIZE` 變更附「需 reindex」警示並連到索引區塊。儲存→寫 .env→〔重啟 rag-api 套用〕→輪詢 rag-api `/health` 顯示恢復。**金鑰類（`LLM_API_KEY`/`EMBED_API_KEY`/`API_KEYS`）仍不進 UI**——連線 URL 可管理但祕密不可（安全紅線）。
 2. **評估操作**：五個一鍵按鈕（extended V&V、online V&V、RAGAS、regression gate、歸因分析），背景 job、全域互斥（同時僅一個），顯示執行狀態與 stdout 尾段。
 3. **報告檢視**：列出 `RAG/data/reports/` 歷次 vv/ragas 報告（時間、Hit Rate、樣本數摘要）；任兩份報告 per-query flip 比對（對應既有的版本比較方法）。
 4. **索引與告警**：reindex＋版本快照觸發（同 job 模型）；測試告警（呼叫 monitoring `/v1/alerts/test`）、SMTP 啟用狀態顯示。

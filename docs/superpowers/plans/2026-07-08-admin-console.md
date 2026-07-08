@@ -2109,3 +2109,84 @@ curl -s -o /dev/null -w 'fallback 仍關閉: %{http_code}\n' \
 docker inspect ISO42001_admin --format '{{.Config.Env}}' | grep -c SKIP_NONCE  # 0（旁路已移除）
 ```
 Expected: 如各行註解——`CARD_DEV_SKIP_NONCE_BINDING` 不得殘留在常駐容器。
+
+---
+
+### Task 10: 設定白名單擴充 — 推論後端連線（API base + 嵌入模型名）
+
+> 2026-07-08 使用者追加：Triton/推論後端端點異動時需可自 UI 改，不必手動編 .env。**必須在 Task 9 完全結束後才執行**（兩者都重建 admin 容器，序列化避免衝突）。
+
+**Files:**
+- Modify: `admin_console/admincore/envstore.py`（`SETTINGS` 增 3 鍵、`validate()` 增 `url` 型別）
+- Test: `admin_console/tests/test_envstore.py`（白名單數 10→13、url 驗證）
+
+**Interfaces:**
+- 不變：`SETTINGS`/`WHITELIST`/`validate`/`EnvStore` 對外形狀；render 端 `_settings_rows_html` 依型別渲染，`url` 走既有字串輸入框即可（無需改 render）。
+
+- [ ] **Step 1: 更新失敗測試**
+
+在 `admin_console/tests/test_envstore.py`：把 `test_whitelist_has_exactly_ten_keys` 改名並更新為 13，且斷言金鑰仍不在白名單；新增 url 驗證測試：
+
+```python
+def test_whitelist_has_exactly_thirteen_keys():
+    assert len(SETTINGS) == 13 and len(WHITELIST) == 13
+    for secret in ("LLM_API_KEY", "EMBED_API_KEY", "API_KEYS"):
+        assert secret not in WHITELIST
+    for added in ("LLM_API_BASE", "EMBED_API_BASE", "EMBED_MODEL_NAME"):
+        assert added in WHITELIST
+
+
+def test_validate_url_type():
+    assert validate("LLM_API_BASE", " http://gw:7000/v1 ") == "http://gw:7000/v1"
+    assert validate("EMBED_API_BASE", "https://embed:7100/v1") == "https://embed:7100/v1"
+    with pytest.raises(SettingError):
+        validate("LLM_API_BASE", "gw:7000/v1")     # 無 scheme
+    with pytest.raises(SettingError):
+        validate("EMBED_API_BASE", "")             # 空值
+```
+
+- [ ] **Step 2: 跑測試確認失敗**
+
+Run: `cd admin_console && python3 -m pytest tests/test_envstore.py -q`
+Expected: FAIL（白名單仍為 10；`url` 型別未處理，走 str 分支不會擋無 scheme）
+
+- [ ] **Step 3: 實作**
+
+(a) `envstore.py` 的 `SETTINGS` 尾端（`RAG_LOG_VERBOSE` 那項之後）追加三項：
+
+```python
+    {"key": "LLM_API_BASE", "type": "url", "label": "LLM API Base（推論 gateway）", "restart": True},
+    {"key": "EMBED_API_BASE", "type": "url", "label": "Embedding API Base", "restart": True},
+    {"key": "EMBED_MODEL_NAME", "type": "str", "label": "嵌入模型名稱", "restart": True},
+```
+
+(b) `validate()` 在 `enum` 分支之後、最後的 str fallback 之前，加入 `url` 分支：
+
+```python
+    if spec["type"] == "url":
+        if not re.fullmatch(r"https?://\S+", v):
+            raise SettingError(f"{key} 需為 http(s):// 開頭的網址，收到 {value!r}")
+        return v
+```
+
+- [ ] **Step 4: 跑測試確認通過**
+
+Run: `cd admin_console && python3 -m pytest tests/ -q`
+Expected: 全部 PASS（含既有 render/app 測試——它們遍歷 SETTINGS，多 3 列自動出現，不需改）
+
+- [ ] **Step 5: 重建 admin 並確認新設定出現**
+
+Run:
+```bash
+docker compose build admin && docker compose up -d admin && sleep 4
+# 以 .env 帳密登入取得 session（過程不 echo 值）；或用卡片流程。此處僅驗白名單鍵出現於頁面原始碼：
+docker exec ISO42001_admin python3 -c "from admincore.envstore import WHITELIST; print(len(WHITELIST)); print('LLM_API_BASE' in WHITELIST, 'EMBED_API_BASE' in WHITELIST, 'EMBED_MODEL_NAME' in WHITELIST, 'LLM_API_KEY' not in WHITELIST)"
+```
+Expected: `13` 與 `True True True True`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add admin_console/admincore/envstore.py admin_console/tests/test_envstore.py
+git commit -m "feat(admin): 設定白名單增推論後端連線（LLM/EMBED_API_BASE + EMBED_MODEL_NAME）"
+```
