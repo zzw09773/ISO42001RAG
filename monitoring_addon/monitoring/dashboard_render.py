@@ -868,6 +868,7 @@ def render_dashboard(payload: dict) -> str:
   .dim-status {{ font-size:20px; font-weight:900; line-height:1; }}
   .dim-drivers {{ margin:10px 0 0; padding-left:18px; font-size:12.5px; color:#3b4252; }}
   .dim-drivers li {{ margin:1px 0; }}
+  .dim-context {{ font-size:12.5px; color:var(--muted); margin:4px 0 14px; }}
   .ch-head {{ width:100%; border-collapse:collapse; font-size:13px; margin:10px 0 18px; }}
   .ch-head th {{ text-align:left; font-weight:700; padding:7px 12px 7px 0; white-space:nowrap;
                 border-bottom:1px solid var(--hairline); color:var(--muted); }}
@@ -885,7 +886,6 @@ def render_dashboard(payload: dict) -> str:
                       border:1px solid var(--line); background:{bg}; color:{fg}; }}
   .warmup-banner {{ margin:12px 0; padding:11px 16px; font-size:12.5px; line-height:1.7;
                     background:var(--soft); border:1px solid var(--line); color:#3b4252; }}
-  .goal-card {{ padding:0; }}
   table {{ width:100%; border-collapse:collapse; font-size:13px; margin:8px 0 16px; }}
   th {{ text-align:left; padding:7px 10px; font-size:12px; font-weight:700;
        border-top:2px solid var(--ink); border-bottom:1px solid var(--ink); }}
@@ -914,7 +914,7 @@ def render_dashboard(payload: dict) -> str:
   .alerts-table .sev-warning {{ color:#92400e; font-weight:700; }}
   .alerts-table .sev-info {{ color:var(--muted); }}
   .alerts-table .ts {{ font-family:var(--mono); font-size:11.5px; color:var(--muted); white-space:nowrap; }}
-  /* 健康分數：儀表 + 維度分數帶（zone 色帶為資料語義，保留） */
+  /* 健康分數：儀表 + 維度分數帶（zone 色帶為資料視覺編碼，保留） */
   .drift-overview {{ display:grid; grid-template-columns:340px 1fr; gap:22px; align-items:center;
                      margin:14px 0 6px; padding:16px 18px; border:1px solid var(--line); }}
   .card-cap {{ font-size:11px; letter-spacing:0.07em; color:var(--muted); font-weight:700; margin-bottom:8px; }}
