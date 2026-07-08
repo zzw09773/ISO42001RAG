@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent
 
 # 排除：pytest 快取（雜物）、法規語料（RAG 知識庫資料，非文件）、虛擬環境
 EXCLUDE_DIRS = {".pytest_cache", "__pycache__", "_dev_archive", "node_modules",
-                "converted_md", ".venv", "venv", "superpowers"}
+                "converted_md", ".venv", "venv", "superpowers", ".superpowers"}
 
 CSS = """
 :root{--ink:#1a1f2c;--muted:#5b6578;--line:#c9d1dc;--hairline:#e5eaf1;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;
