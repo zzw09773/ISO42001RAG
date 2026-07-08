@@ -1900,7 +1900,7 @@ data/*
 在 `docker-compose.yaml` 頂層 `volumes:` 區塊之前插入：
 
 ```yaml
-  # ---------- 9. Admin console（維運管理台；內網開發者/管理員入口，無認證，不進 nginx） ----------
+  # ---------- 10. Admin console（維運管理台；內網開發者/管理員入口，憑證卡登入，不進 nginx） ----------
   admin:
     build:
       context: ./admin_console
@@ -1915,7 +1915,7 @@ data/*
       REPORTS_DIR: /mon_data/reports
       ADMIN_DATA_DIR: /app/data
       # 憑證卡白名單與 break-glass：值只存在 gitignored .env，不寫死在此。
-      # 注意：CARD_DEV_SKIP_NONCE_BINDING 嚴禁出現在這裡（僅限 E2E 臨時 override）。
+      # 注意：dev-only 的 nonce 驗證旁路變數嚴禁在此設定（僅限 E2E 臨時 override）。
       ADMIN_CARD_SERIALS: ${ADMIN_CARD_SERIALS}
       ENABLE_PASSWORD_FALLBACK: ${ENABLE_PASSWORD_FALLBACK:-false}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
