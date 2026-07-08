@@ -1800,7 +1800,7 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
         return {"ok": r["ok"]}
 
     return app
-
+```
 
 ```python
 def create_app_from_env() -> FastAPI:
