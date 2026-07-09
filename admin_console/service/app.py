@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from admincore import cardauth
 from admincore.challenge_store import ChallengeStore
 from admincore.dockerops import DockerOps
-from admincore.envstore import EnvStore, SettingError, SETTINGS, WHITELIST
+from admincore.envstore import EnvStore, SettingError, SETTINGS, WHITELIST, validate
 from admincore.jobs import JobBusy, JobManager
 from admincore.render import render_admin_page, render_login_page
 from admincore.reports import flip_compare, list_reports
@@ -63,6 +63,17 @@ def _default_http_get(url: str, **kw):
         return {"status_code": 502, "ok": False, "json": None, "error": str(e)}
 
 
+def _default_http_probe(url: str) -> dict:
+    """連線探測：任何 HTTP 回應＝可連線（rag-api 重啟後也能連）；
+    連線層錯誤（打錯 host/port）＝不可連線。timeout 稍長給慢啟動的後端。"""
+    import httpx
+    try:
+        r = httpx.get(url, timeout=4)
+        return {"reachable": True, "status": r.status_code, "error": None}
+    except Exception as e:
+        return {"reachable": False, "status": None, "error": type(e).__name__}
+
+
 def _safe_report_name(reports_dir: Path, name: str) -> bool:
     return bool(name) and "/" not in name and "\\" not in name and (reports_dir / name).is_file()
 
@@ -99,10 +110,11 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
                reports_dir: Path, monitoring_url: str, rag_api_url: str,
                card_serials: set[str], admin_user: str, admin_password: str,
                password_fallback: bool, verify_card=None,
-               http_post=None, http_get=None) -> FastAPI:
+               http_post=None, http_get=None, http_probe=None) -> FastAPI:
     app = FastAPI(title="ISO 42001 admin console", docs_url=None, redoc_url=None)
     post = http_post or _default_http_post
     get = http_get or _default_http_get
+    probe = http_probe or _default_http_probe
     verify = verify_card or _default_verify_card
     reports_dir = Path(reports_dir)
     sessions: set[str] = set()   # 記憶體 session：容器重啟即全登出（可接受）
@@ -217,6 +229,34 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
     @app.get("/api/rag-health")
     async def rag_health():
         return {"ok": get(f"{rag_api_url}/health")["ok"]}
+
+    @app.post("/api/test-connection")
+    async def test_connection(request: Request):
+        """重啟前先驗證推論後端端點通不通——測表單當前值（尚未存 .env），
+        避免把打不通的位址寫進 .env 後重啟導致 rag-api 連不上模型。"""
+        form = dict(await request.form())
+        results: dict[str, dict] = {}
+        for field, key in (("llm_base", "LLM_API_BASE"), ("embed_base", "EMBED_API_BASE")):
+            raw = str(form.get(field, "")).strip()
+            if not raw:
+                continue
+            try:
+                base = validate(key, raw)
+            except SettingError as e:
+                results[key] = {"ok": False, "detail": f"格式錯誤：{e}"}
+                continue
+            res = probe(f"{base.rstrip('/')}/models")
+            if not res["reachable"]:
+                results[key] = {"ok": False,
+                                "detail": f"連線失敗（{res['error']}）——重啟 rag-api 會連不上此端點"}
+            elif res["status"] is not None and res["status"] >= 500:
+                results[key] = {"ok": False, "detail": f"端點回應但異常（HTTP {res['status']}）"}
+            else:
+                results[key] = {"ok": True, "detail": f"可連線（HTTP {res['status']}）"}
+        if not results:
+            return {"ok": False, "results": {},
+                    "message": "沒有可測試的端點：LLM_API_BASE / EMBED_API_BASE 皆為空"}
+        return {"ok": all(v["ok"] for v in results.values()), "results": results}
 
     @app.post("/api/jobs/{name}")
     async def start_job(name: str, request: Request):

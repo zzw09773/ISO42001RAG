@@ -74,6 +74,27 @@ function poll() {
     if (j.state === 'running') setTimeout(poll, 2000);
   }).catch(function(){ setTimeout(poll, 4000); });
 }
+function testConnection() {
+  var f = document.querySelector('form[action="api/settings"]');
+  var out = document.getElementById('conn-test-result');
+  out.style.color = '';
+  out.textContent = '測試中…';
+  var body = new URLSearchParams();
+  var llm = f.querySelector('[name="LLM_API_BASE"]');
+  var emb = f.querySelector('[name="EMBED_API_BASE"]');
+  if (llm) body.append('llm_base', llm.value);
+  if (emb) body.append('embed_base', emb.value);
+  fetch('api/test-connection', {method:'POST', body:body})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.message) { out.textContent = d.message; out.style.color = '#92400e'; return; }
+      var lines = [];
+      for (var k in d.results) { lines.push(k + '：' + d.results[k].detail); }
+      out.textContent = lines.join('　｜　');
+      out.style.color = d.ok ? '#166534' : '#991b1b';
+    })
+    .catch(function(){ out.textContent = '測試請求失敗'; out.style.color = '#991b1b'; });
+}
 function restartRag() {
   if (!confirm('確定重啟 rag-api 套用設定？服務將中斷約半分鐘。')) return;
   var st = document.getElementById('rag-restart-state');
@@ -380,8 +401,11 @@ def render_admin_page(ctx: dict) -> str:
         <tbody>{_settings_rows_html(ctx["settings_rows"])}</tbody>
       </table>
       <button type="submit">儲存到 .env</button>
+      <button type="button" class="ghost" onclick="testConnection()">測試連線</button>
       <button type="button" class="ghost" onclick="restartRag()">重啟 rag-api 套用</button>
       <span id="rag-restart-state" class="note"></span>
+      <div id="conn-test-result" class="note" style="margin-top:8px;"></div>
+      <div class="note">建議順序：改端點 → <strong>測試連線</strong>（測表單當前值，先確認通）→ 儲存到 .env → 重啟 rag-api 套用。</div>
     </form>
   </section>
 

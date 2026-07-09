@@ -35,6 +35,14 @@ def client(tmp_path):
         calls["get"].append((url, kw))
         return {"status_code": 200, "ok": True, "json": {"smtp_enabled": False}}
 
+    def fake_probe(url):
+        calls.setdefault("probe", []).append(url)
+        if ":9999" in url or "unreach" in url:
+            return {"reachable": False, "status": None, "error": "ConnectError"}
+        if "err500" in url:
+            return {"reachable": True, "status": 503, "error": None}
+        return {"reachable": True, "status": 200, "error": None}
+
     class FakeClaims:
         employee_id = "1090868"
         display_name = "測試卡"
@@ -55,7 +63,7 @@ def client(tmp_path):
                      card_serials={"1090868"},
                      admin_user="u", admin_password="p", password_fallback=True,
                      verify_card=fake_verify,
-                     http_post=fake_post, http_get=fake_get)
+                     http_post=fake_post, http_get=fake_get, http_probe=fake_probe)
     c = TestClient(app, follow_redirects=False)
     c._jm, c._env, c._calls, c._tmp = jm, env, calls, tmp_path
     # 預設以測試假帳密登入（fallback 開啟；真帳密只存在 .env，絕不進測試碼）
@@ -198,3 +206,41 @@ def test_restart_and_alert_test(client):
     assert client.post("/api/restart").json()["ok"] is True
     assert client.post("/api/alert-test", params={"severity": "warning"}).json()["ok"] is True
     assert any("alerts/test" in u for u, _ in client._calls["post"])
+
+
+def test_test_connection_reachable(client):
+    r = client.post("/api/test-connection",
+                    data={"llm_base": "http://gw:7000/v1", "embed_base": "http://embed:7100/v1"})
+    j = r.json()
+    assert j["ok"] is True
+    assert j["results"]["LLM_API_BASE"]["ok"] and "可連線" in j["results"]["LLM_API_BASE"]["detail"]
+    # 探測打的是 {base}/models
+    assert any(u.endswith("/models") for u in client._calls["probe"])
+
+
+def test_test_connection_unreachable(client):
+    r = client.post("/api/test-connection", data={"llm_base": "http://gw:9999/v1"})
+    j = r.json()
+    assert j["ok"] is False
+    assert "連線失敗" in j["results"]["LLM_API_BASE"]["detail"]
+
+
+def test_test_connection_5xx_is_not_ok(client):
+    r = client.post("/api/test-connection", data={"llm_base": "http://err500:7000/v1"})
+    assert r.json()["results"]["LLM_API_BASE"]["ok"] is False
+
+
+def test_test_connection_bad_format(client):
+    r = client.post("/api/test-connection", data={"llm_base": "gw:7000/v1"})  # 無 scheme
+    j = r.json()
+    assert j["ok"] is False and "格式錯誤" in j["results"]["LLM_API_BASE"]["detail"]
+
+
+def test_test_connection_empty(client):
+    j = client.post("/api/test-connection", data={}).json()
+    assert j["results"] == {} and j["ok"] is False
+
+
+def test_test_connection_requires_auth(client):
+    fresh = TestClient(client.app, follow_redirects=False)
+    assert fresh.post("/api/test-connection", data={"llm_base": "http://x/v1"}).status_code == 401

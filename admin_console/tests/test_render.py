@@ -52,3 +52,11 @@ def test_login_page_with_fallback_and_error():
     html = render_login_page(password_fallback=True, error="帳號或密碼錯誤")
     assert 'name="username"' in html and 'name="password"' in html
     assert "帳號或密碼錯誤" in html
+
+
+def test_settings_has_test_connection_button():
+    from admincore.render import render_admin_page
+    html = render_admin_page(_ctx())
+    assert "測試連線" in html
+    assert "api/test-connection" in html
+    assert 'id="conn-test-result"' in html
