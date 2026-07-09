@@ -107,3 +107,29 @@ def test_render_audit_page_report_style():
     assert "稽核日誌搜尋" in html          # 新報告書式頁首
     assert 'class="report-rule"' in html   # 與儀表板同語彙的頂部粗線
     assert not _EMOJI_RE.search(html)
+
+
+def test_correlator_matches_cjk_query_stored_ascii_escaped(tmp_path):
+    """OpenWebUI 以 ensure_ascii 存 chat JSON，中文為 \\uXXXX 跳脫；
+    配對須先解碼再比對，否則中文查詢永遠配不到（迴歸防護）。"""
+    import sqlite3
+    from monitoring.audit_search import OpenWebUICorrelator
+
+    db = tmp_path / "webui.db"
+    con = sqlite3.connect(db)
+    con.execute("create table chat (id text, user_id text, title text, created_at int, updated_at int, chat text)")
+    con.execute("create table user (id text, email text, name text)")
+    # ensure_ascii=True → 中文變 \uXXXX
+    chat_json = json.dumps({"messages": [{"role": "user", "content": "軍人申訴的程序為何？"}]}, ensure_ascii=True)
+    assert "\\u" in chat_json and "軍人" not in chat_json   # 確認素材確實跳脫
+    con.execute("insert into chat values (?,?,?,?,?,?)",
+                ("c1", "u1", "軍事查詢", 1783567736, 1783567736, chat_json))
+    con.execute("insert into user values ('u1','a@b.c','tester')")
+    con.commit(); con.close()
+
+    corr = OpenWebUICorrelator(db)
+    ev = {"user_query": "軍人申訴的程序為何？", "timestamp": "2026-07-09T11:28:56+08:00"}
+    matches = corr.find_matches(ev)
+    assert len(matches) == 1
+    assert matches[0]["chat_id"] == "c1" and matches[0]["user_email"] == "a@b.c"
+    assert matches[0]["delta_seconds"] == 0

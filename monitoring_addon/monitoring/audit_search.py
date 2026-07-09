@@ -212,7 +212,22 @@ class OpenWebUICorrelator:
         q_lower = query.lower()
         for row in rows:
             raw_chat = row["chat"] or ""
-            if q_lower not in raw_chat.lower():
+            # OpenWebUI 以 ensure_ascii 儲存 chat JSON，CJK 在原始字串是 \uXXXX
+            # 跳脫碼；直接對原始字串做子字串比對，中文查詢永遠配不到。先解碼 JSON、
+            # 走訪各字串再比對（英文/數字查詢同樣可配）。
+            decoded_strings: List[str]
+            try:
+                parsed = json.loads(raw_chat)
+                decoded_strings = list(_walk_strings(parsed))
+            except Exception:
+                parsed = None
+                decoded_strings = [raw_chat]
+            matched_text = ""
+            for text in decoded_strings:
+                if q_lower in text.lower():
+                    matched_text = text
+                    break
+            if not matched_text:
                 continue
             updated_at = parse_time(row["updated_at"])
             delta_sec = None
@@ -220,15 +235,6 @@ class OpenWebUICorrelator:
                 delta_sec = abs(int((updated_at - event_ts).total_seconds()))
                 if delta_sec > window_seconds and len(query) < 12:
                     continue
-            matched_text = ""
-            try:
-                parsed = json.loads(raw_chat)
-                for text in _walk_strings(parsed):
-                    if q_lower in text.lower():
-                        matched_text = text
-                        break
-            except Exception:
-                matched_text = raw_chat[:240]
             matches.append({
                 "chat_id": row["chat_id"],
                 "user_id": row["user_id"],
