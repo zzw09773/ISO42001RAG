@@ -27,7 +27,6 @@ RAG_CONTAINER = "ISO42001_rag_api"
 MON_CONTAINER = "ISO42001_monitoring"
 
 JOB_CATALOG: dict[str, dict] = {
-    "extended_vv":  {"container": MON_CONTAINER, "cmd": ["python3", "scripts/run_extended_vv.py"]},
     "online_vv":    {"container": MON_CONTAINER, "cmd": ["python3", "scripts/run_online_vv.py"]},
     "ragas":        {"container": MON_CONTAINER, "cmd": ["python3", "scripts/run_ragas_evaluation.py"]},
     "regression_gate": {"container": MON_CONTAINER, "params": ["baseline", "current", "tag"]},

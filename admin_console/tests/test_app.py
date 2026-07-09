@@ -173,7 +173,7 @@ def test_settings_invalid_redirects_with_error(client):
 
 
 def test_job_start_and_busy(client):
-    r = client.post("/api/jobs/extended_vv")
+    r = client.post("/api/jobs/online_vv")
     assert r.status_code == 200 and r.json()["state"] == "running"
     client._jm.wait()
     assert client.get("/api/jobs/current").json()["state"] == "done"

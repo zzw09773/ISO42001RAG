@@ -270,7 +270,7 @@ def build_payload(
     hit_rate_current = ret_metrics.get("hit_rate")
     if not vv_report or hit_rate_current is None:
         bg_status = "inconclusive"
-        bg_reason = "No V&V report available — run scripts/run_extended_vv.py first."
+        bg_reason = "No V&V report available — run scripts/run_online_vv.py first."
     elif evaluated == 0:
         bg_status = "inconclusive"
         bg_reason = "Golden dataset has no `expected_docs`; Hit Rate not computable."

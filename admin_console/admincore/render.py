@@ -412,7 +412,6 @@ def render_admin_page(ctx: dict) -> str:
   <section id="ops">
     <h2>評估操作<span class="en">Evaluations — docker exec 至 monitoring 容器</span></h2>
     <div class="oprow">
-      <form method="post" data-ajax="1" action="api/jobs/extended_vv"><button>Extended V&amp;V</button></form>
       <form method="post" data-ajax="1" action="api/jobs/online_vv"><button>Online V&amp;V</button></form>
       <form method="post" data-ajax="1" action="api/jobs/ragas"><button>RAGAS 評估</button></form>
     </div>

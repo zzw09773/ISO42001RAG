@@ -1093,7 +1093,7 @@ def render_dashboard(payload: dict) -> str:
     {ch_b_head}
     <div class="verdict-reason" style="margin:-8px 0 14px;">{escape(goal_reason)}</div>
     <h3>V&amp;V 基線快照</h3>
-    {"<table><thead><tr><th>指標</th><th>分數</th></tr></thead><tbody>" + "".join(f"<tr><td>{k}</td><td class='num'>{v}</td></tr>" for k, v in ret_metrics.items()) + "</tbody></table>" if ret_metrics else '<div class="reasons">尚未載入 V&amp;V 報告。請執行 <code>python3 scripts/run_extended_vv.py</code> 或於 <code>../RAG/data/reports/</code> 提供 vv_report_*.json。</div>'}
+    {"<table><thead><tr><th>指標</th><th>分數</th></tr></thead><tbody>" + "".join(f"<tr><td>{k}</td><td class='num'>{v}</td></tr>" for k, v in ret_metrics.items()) + "</tbody></table>" if ret_metrics else '<div class="reasons">尚未載入 V&amp;V 報告。請執行 <code>python3 scripts/run_online_vv.py</code> 或於 <code>../RAG/data/reports/</code> 提供 vv_report_*.json。</div>'}
   </section>
 
   <section id="ch-c">
