@@ -14,7 +14,7 @@ ISO42001 RAG 外部稽核準備變更紀錄。
 - **raw/clean 分流**：raw 原始字串只進 audit（雜湊鏈稽核看到攻擊者真正送的內容）；clean（僅去隱形字元）進 graph/LLM 與入對話庫。正常查詢可見語意不變。
 - **不涉及 prompt 變更**：`SYSTEM_PROMPT_BASELINE` 未動，`prompt_version_hash` 不變——本次為偵測層/流程強化，非模型行為變更。
 - **配套文件**：`RAG/docs/SAFETY_CONTROLS.md` 守則③補述上述七點；`docker-compose.yaml` rag-api 加 `WRAPPER_TRUSTED_PEERS`（預設空）。
-- **驗證**：實機重跑 8 種規避變形全數擋下、合法查詢無誤擋；online V&V + regression gate 對照變更前基線（hit_rate 0.9677）確認檢索指標不退步。
+- **驗證**：實機重跑規避變形全數擋下、合法查詢無誤擋；online V&V 之 gating 業務目標 Hit Rate ≥ 0.90 仍達標（0.9355）。與變更前基線 0.9677 的一題之差經逐題 flip 分析證為檢索層非確定性噪音（兩題 eval_m07/eval_cr04 均為純中文合法查詢，`clean_text_for_downstream` 為 no-op、sanitize 未擋，graph 輸入與變更前逐位元組相同），與 sanitizer 清洗無關。
 
 ## 2026-07-09 — 回覆使用聲明改為程式保證（v1.1.0 維持）
 
