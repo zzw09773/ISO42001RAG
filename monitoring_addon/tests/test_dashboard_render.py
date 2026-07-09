@@ -164,3 +164,16 @@ def test_render_alert_rows_layered():
     assert 'class="alert-main"' in html        # 主訊息
     assert 'class="alert-aux"' in html         # 輔助說明
     assert "system availability down" in html
+
+
+def test_faith_eval_reflects_value():
+    from monitoring.dashboard_render import _faith_eval
+    assert "良好" in _faith_eval({"faithfulness": {"current": 0.96}})
+    assert "留意" in _faith_eval({"faithfulness": {"current": 0.85}})
+    assert "嚴重" in _faith_eval({"faithfulness": {"current": 0.7}})
+    assert "尚未評估" in _faith_eval({"faithfulness": {"current": None}})
+    # 高分不得再出現「<0.80 嚴重」誤導字樣
+    p = copy.deepcopy(_PAYLOAD)
+    p["health"]["faithfulness"] = {"current": 0.9611, "target": 0.9}
+    html = render_dashboard(p)
+    assert "0.80 嚴重" not in html

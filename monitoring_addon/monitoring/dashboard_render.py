@@ -687,6 +687,18 @@ def _faith_cell(health: dict) -> str:
     return " · ".join(bits)
 
 
+def _faith_eval(health: dict) -> str:
+    """Faithfulness 評估欄：依當期值落在哪個門檻帶，而非寫死一句。"""
+    cur = (health.get("faithfulness", {}) or {}).get("current")
+    if cur is None:
+        return "尚未評估（跑 RAGAS）"
+    if cur >= 0.90:
+        return "&ge;0.90 良好"
+    if cur >= 0.80:
+        return "0.80–0.90 留意"
+    return "&lt;0.80 嚴重（答案脫離條文）"
+
+
 def _render_safety_controls(sc: dict) -> str:
     """防護守則觸發統計（對應 RAG/docs/SAFETY_CONTROLS.md 守則 ③④①）。
 
@@ -1167,7 +1179,7 @@ def render_dashboard(payload: dict) -> str:
         <tr><td>引用率</td><td class="num">{('尚無 V&amp;V 基線' if not perf.get('citation_rate_baseline') else perf.get('citation_rate_baseline'))}</td><td class="num">{perf.get('citation_rate_current', 0)}</td><td class="num">{('—' if not perf.get('citation_rate_baseline') else f"{perf.get('citation_rate_delta', 0):+.4f}")}</td></tr>
         <tr><td>平均延遲 (ms)</td><td class="num">{perf.get('avg_latency_baseline_ms') or '—'}</td><td class="num">{perf.get('avg_latency_current_ms') or '—'}</td><td class="num">{(str(perf.get('avg_latency_delta_pct')) + ' pct') if perf.get('avg_latency_delta_pct') is not None else '—'}</td></tr>
         <tr><td>安全告警率</td><td class="num">—</td><td class="num">{perf.get('security_alert_rate_current', 0)}</td><td class="num">—</td></tr>
-        <tr><td>Faithfulness（忠實度）</td><td class="num">{health.get('faithfulness', {}).get('target', 0.90)}</td><td>{_faith_cell(health)}</td><td>{'執行 run_ragas_evaluation.py 後顯示（已接入儀表板）' if health.get('faithfulness', {}).get('current') is None else '&lt;0.80 嚴重（答案脫離條文）'}</td></tr>
+        <tr><td>Faithfulness（忠實度）</td><td class="num">{health.get('faithfulness', {}).get('target', 0.90)}</td><td>{_faith_cell(health)}</td><td>{_faith_eval(health)}</td></tr>
       </tbody>
     </table>
     {_render_safety_controls(payload.get("safety_controls") or {})}
