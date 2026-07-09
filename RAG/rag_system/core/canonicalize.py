@@ -70,9 +70,10 @@ def _normalize(text: str, max_url_decode: int) -> str:
 def _strip_sql_comments(text: str) -> str:
     # 區塊註解：non-greedy + DOTALL，一律移除（空字串替換），使 UN/**/ION -> UNION
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    # 行註解：-- 到行尾、# 到行尾（一併吃掉換行，使 UN--x\nION -> UNION 可偵測）
-    text = re.sub(r"--[^\n]*\n?", "", text)
-    text = re.sub(r"#[^\n]*\n?", "", text)
+    # 行註解：只把標記本身（-- / #）換成空白，保留其後文字，避免
+    # "# UNION SELECT password" 整行被吃掉而讓 SQL 偵測被繞過（單行 SQL 亦然）。
+    # 不再承諾 UN--x\nION -> UNION 重組（罕見，且與單行 SQL 偵測衝突）。
+    text = re.sub(r"(--|#)", " ", text)
     return text
 
 

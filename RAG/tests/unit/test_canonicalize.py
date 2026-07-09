@@ -22,10 +22,14 @@ def test_collapsed_defeats_spacing():
 
 
 def test_sql_view_strips_block_and_line_comments():
+    # 區塊註解整段移除 → UN/**/ION SEL/**/ECT 重組為 UNION SELECT
     v = canonicalize("UN/**/ION SEL/**/ECT")
     assert "union" in v.sql_view.lower() and "select" in v.sql_view.lower()
-    v2 = canonicalize("UN--x\nION SELECT")
-    assert "union" in v2.sql_view.lower().replace(" ", "")
+    # 行註解只移除標記本身、保留其後關鍵詞（修 # 繞過）
+    v2 = canonicalize("# UNION SELECT password")
+    assert "union" in v2.sql_view.lower() and "select" in v2.sql_view.lower()
+    v3 = canonicalize("-- UNION SELECT")
+    assert "union" in v3.sql_view.lower()
 
 
 def test_url_decode_bounded():

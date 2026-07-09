@@ -72,19 +72,26 @@ _SQL_INJECTION_PATTERNS = [
     re.compile(r";\s*(select|insert|update|delete|drop)\b", re.IGNORECASE),
 ]
 
-_LDAP_INJECTION_PATTERNS = [
-    # Filter manipulation — closing paren followed by new condition
-    re.compile(r'\)\s*(\(|\||\&|!)', re.IGNORECASE),
+# LDAP 拆兩組：
+#  - 風險/屬性型跑 norm（不會誤中中文合法文字）
+#  - 結構型過濾器語法跑 RAW text，且必須帶相鄰運算子（| & !），避免全形/半形
+#    相鄰括號（如「（債編）（第二版）」NFKC 折成 )(）誤擋合法法律文字。
+_LDAP_RISK_PATTERNS = [
     # Wildcard authentication bypass: uid=* or cn=*
     re.compile(r'\b(uid|cn|dn|sn|mail|ou|dc|objectclass)\s*=\s*\*', re.IGNORECASE),
-    # Classic LDAP bypass: admin)(&) or *)(uid=*))(|(uid=*
-    re.compile(r'\*\s*\)\s*\(', re.IGNORECASE),
-    # LDAP filter operators injected in query
-    re.compile(r'\(\s*(\||&|!)\s*\(', re.IGNORECASE),
-    # Null byte injection
-    re.compile(r'\\00|%00|\x00', re.IGNORECASE),
     # Probing common LDAP attributes
     re.compile(r'\b(userPassword|sambaNTPassword|unicodePwd)\b', re.IGNORECASE),
+    # Null byte injection
+    re.compile(r'\\00|%00|\x00', re.IGNORECASE),
+]
+
+_LDAP_STRUCT_PATTERNS = [
+    # closing paren + new condition with operator: )(|  )(&  )(!
+    re.compile(r'\)\s*\(\s*[|&!]', re.IGNORECASE),
+    # Classic LDAP bypass: *)(  （如 *)(uid=*）
+    re.compile(r'\*\s*\)\s*\(', re.IGNORECASE),
+    # LDAP filter operators injected: (|(  (&(  (!(
+    re.compile(r'\(\s*[|&!]\s*\(', re.IGNORECASE),
 ]
 
 _SSRF_PATTERNS = [
@@ -163,8 +170,13 @@ def sanitize(text: str, is_wrapper: bool = False) -> SanitizeResult:
             return SanitizeResult(blocked=True, reason="偵測到 SQL Injection 攻擊模式",
                                   threat_type="sql_injection")
 
-    for pattern in _LDAP_INJECTION_PATTERNS:
+    # LDAP：風險/屬性型跑 norm；結構型跑 RAW text（需相鄰運算子，免誤擋全形括號）
+    for pattern in _LDAP_RISK_PATTERNS:
         if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到 LDAP Injection 攻擊模式",
+                                  threat_type="ldap_injection")
+    for pattern in _LDAP_STRUCT_PATTERNS:
+        if pattern.search(text):
             return SanitizeResult(blocked=True, reason="偵測到 LDAP Injection 攻擊模式",
                                   threat_type="ldap_injection")
 
