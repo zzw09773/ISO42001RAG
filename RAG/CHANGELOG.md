@@ -9,12 +9,13 @@ ISO42001 RAG 外部稽核準備變更紀錄。
 **變更者**：龔修潁
 
 - **Canonicalization 偵測層**（`RAG/rag_system/core/canonicalize.py`）：sanitizer 改對正規化視圖比對，不改寫送 LLM 的文字。含 NFKC（全形→半形）、去零寬/隱形字元、有界 URL-decode（≤2 次）、SQL 註解移除（`/* */` 整段、`--`/`#` 標記換空白）、IP parser（整數/十六進位/短式/IPv6 皆解析分類 loopback/private/link_local/metadata）。破解全形偽裝、零寬拆字、URL 編碼、`UN/**/ION`、非點分內網位址等規避手法。
+- **偵測覆蓋補強**：（a）零寬「取代空白」的邊界規避——新增 `spaced` 視圖（隱形字元代換為空白以還原詞界，無隱形字元時逐字等同 normalized），使 `act[ZWSP]as a hacker`、URL 編碼的 `act%E2%80%8Bas` 等 role_switch 邊界零寬變形被擋；downstream 仍僅去隱形字元、不代換空白，送 LLM 文字不受影響。（b）injection 填充詞由僅 `all` 擴充為 `all|the|these|those|my|any`（`ignore/disregard/forget` 三家族一致），並補對應拆字/黏字 collapsed 錨點（含 `disregard`/`forget` 對稱）。（c）順帶修正既有 `act\s+as` 未加詞界錨點造成的誤擋（例：「please contact as soon as possible」「the contractor acts as an agent」不再誤判）。golden dataset 30 題經 `sanitize()` 全數不擋，由 FP guard 測試守住。
 - **掃描範圍擴及 DB 歷史**（`RAG/api.py` pre-graph）：graph/LLM 呼叫前逐則掃描所有進 graph 的「非系統產生」訊息，含 DB 取回的歷史 user 訊息，避免注入語句藏在早前對話輪；系統內部 prompt 與系統產生的 assistant（已過 Output Filter）豁免。
 - **wrapper 不可偽造豁免**：OpenWebUI 背景任務（`### Task:`）豁免採「`WRAPPER_TRUSTED_PEERS` peer IP ∧ 任務簽章 ∧ role∈{user,system}」三條件 AND；信任邊界為 TCP peer IP（非可偽造的 header/source_app），env 預設空＝無人豁免，不硬編碼 IP。豁免僅放行 injection/system_probe/role_switch，長度/SSRF/SQL/LDAP/CSRF 仍強制。
 - **raw/clean 分流**：raw 原始字串只進 audit（雜湊鏈稽核看到攻擊者真正送的內容）；clean（僅去隱形字元）進 graph/LLM 與入對話庫。正常查詢可見語意不變。
 - **不涉及 prompt 變更**：`SYSTEM_PROMPT_BASELINE` 未動，`prompt_version_hash` 不變——本次為偵測層/流程強化，非模型行為變更。
 - **配套文件**：`RAG/docs/SAFETY_CONTROLS.md` 守則③補述上述七點；`docker-compose.yaml` rag-api 加 `WRAPPER_TRUSTED_PEERS`（預設空）。
-- **驗證**：實機重跑規避變形全數擋下、合法查詢無誤擋；online V&V 之 gating 業務目標 Hit Rate ≥ 0.90 仍達標（0.9355）。與變更前基線 0.9677 的一題之差經逐題 flip 分析證為檢索層非確定性噪音（兩題 eval_m07/eval_cr04 均為純中文合法查詢，`clean_text_for_downstream` 為 no-op、sanitize 未擋，graph 輸入與變更前逐位元組相同），與 sanitizer 清洗無關。
+- **驗證**：實機重跑規避變形全數擋下（含上述邊界零寬、填充詞變體）、合法查詢無誤擋；online V&V 之 gating 業務目標 Hit Rate ≥ 0.90 仍達標（0.9355）。與變更前基線 0.9677 的一題之差經逐題 flip 分析證為檢索層非確定性噪音（eval_m07/eval_cr04 均為純中文合法查詢，`clean_text_for_downstream` 為 no-op、sanitize 未擋，graph 輸入與變更前逐位元組相同），與 sanitizer 清洗無關；補強部署後重跑仍為 0.9355（MET），該次 eval_m07 未命中為 60 秒 LLM 逾時（執行環境延遲）、非檢索退步。
 
 ## 2026-07-09 — 回覆使用聲明改為程式保證（v1.1.0 維持）
 
