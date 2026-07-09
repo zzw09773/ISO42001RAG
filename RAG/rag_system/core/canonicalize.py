@@ -20,6 +20,9 @@ _INVISIBLE_RE = re.compile(
 # collapsed 視圖比對的 injection 關鍵詞白名單（去空白/標點後的相鄰形式）
 INJECTION_COLLAPSED_KEYWORDS = frozenset({
     "ignoreprevious", "ignoreallprevious", "ignoreaboveinstructions",
+    # 填充詞變體（the/these/those/my/any）— 與 regex 填充詞擴充對應的拆字/黏字錨點
+    "ignoretheprevious", "ignoretheseprevious", "ignorethoseprevious",
+    "ignoremyprevious", "ignoreanyprevious",
     "disregardprevious", "forgetprevious", "forgetall",
     "doanythingnow", "jailbreak",
     "systemprompt", "newsystemprompt",
@@ -43,6 +46,10 @@ class CanonicalViews:
     collapsed: str
     sql_view: str
     hosts: list
+    # 隱形字元「以空白代換」（而非移除）的視圖：邊界零寬（ZWSP 取代空白，
+    # 如 act[ZWSP]as）在 normalized 會黏字（actas）繞過 \s+ regex；spaced
+    # 還原詞界供既有 word-boundary regex 比對。無隱形字元時與 normalized 相同。
+    spaced: str = ""
 
 
 def clean_text_for_downstream(text: str) -> str:
@@ -60,9 +67,11 @@ def _bounded_url_decode(text: str, max_times: int) -> str:
     return prev
 
 
-def _normalize(text: str, max_url_decode: int) -> str:
+def _normalize(text: str, max_url_decode: int, invisible_replacement: str = "") -> str:
     t = unicodedata.normalize("NFKC", text)   # 全形→半形、相容字元
-    t = _INVISIBLE_RE.sub("", t)              # 去零寬（破 act[ZWSP]as）
+    # 隱形字元處理：normalized 視圖移除（還原詞內零寬 a[ZWSP]ct→act）；
+    # spaced 視圖以空白代換（還原邊界零寬 act[ZWSP]as→act as）
+    t = _INVISIBLE_RE.sub(invisible_replacement, t)
     t = _bounded_url_decode(t, max_url_decode)  # URL decode（有界）
     return t
 
@@ -154,6 +163,8 @@ def canonicalize(text: str, max_url_decode: int = 2) -> CanonicalViews:
     collapsed = re.sub(r"[\W_]+", "", normalized).lower()
     sql_view = _strip_sql_comments(normalized)
     hosts = _extract_hosts(normalized)
+    spaced = _normalize(text, max_url_decode, invisible_replacement=" ")
     return CanonicalViews(
         normalized=normalized, collapsed=collapsed, sql_view=sql_view, hosts=hosts,
+        spaced=spaced,
     )

@@ -17,11 +17,15 @@ MAX_INPUT_LENGTH = 2000
 # Detection patterns
 # ---------------------------------------------------------------------------
 
+# injection 填充詞：ignore/disregard/forget 與 previous/prior/above 之間的
+# 限定詞（僅列舉常見冠詞/指示詞/所有格，不用 \w+ 泛化，控誤判面）
+_FILLER = r'(?:all|the|these|those|my|any)'
+
 _INJECTION_PATTERNS = [
     # English injection
-    re.compile(r'ignore\s+(all\s+)?(previous|prior|above)\s+instructions?', re.IGNORECASE),
-    re.compile(r'disregard\s+(all\s+)?(previous|prior|above)\s+instructions?', re.IGNORECASE),
-    re.compile(r'forget\s+(all\s+)?(previous|prior|above)', re.IGNORECASE),
+    re.compile(r'ignore\s+(' + _FILLER + r'\s+)?(previous|prior|above)\s+instructions?', re.IGNORECASE),
+    re.compile(r'disregard\s+(' + _FILLER + r'\s+)?(previous|prior|above)\s+instructions?', re.IGNORECASE),
+    re.compile(r'forget\s+(' + _FILLER + r'\s+)?(previous|prior|above)', re.IGNORECASE),
     re.compile(r'\bDAN\b', re.IGNORECASE),
     re.compile(r'do\s+anything\s+now', re.IGNORECASE),
     re.compile(r'jailbreak', re.IGNORECASE),
@@ -122,7 +126,8 @@ _CSRF_PATTERNS = [
 
 _ROLE_SWITCH_PATTERNS = [
     re.compile(r'(你現在是|你是一個|假裝你是|扮演|變成).{0,20}(AI|機器人|助手|系統|GPT|LLM|大型語言模型|模型)', re.IGNORECASE),
-    re.compile(r'act\s+as\s+(a\s+)?', re.IGNORECASE),
+    # \b 必要：無詞界會誤中 "contact as ..." 等合法句尾 act 子字串
+    re.compile(r'\bact\s+as\s+(a\s+)?', re.IGNORECASE),
     re.compile(r'pretend\s+(you\s+are|to\s+be)', re.IGNORECASE),
     re.compile(r'roleplay\s+as', re.IGNORECASE),
     re.compile(r'you\s+are\s+now\s+(a\s+)?', re.IGNORECASE),
@@ -154,6 +159,10 @@ def sanitize(text: str, is_wrapper: bool = False) -> SanitizeResult:
 
     views = canonicalize(text)
     norm = views.normalized
+    # spaced：隱形字元以空白代換的視圖 — 抓「零寬取代空白」的邊界規避
+    # （act[ZWSP]as → norm 黏成 actas 繞過 \s+；spaced 還原 act as）。
+    # 無隱形字元時 spaced == norm，不增加誤判面。
+    spaced = views.spaced
 
     # ── 結構化 SSRF：內網/危險 host（整數/十六進位/IPv6/短式皆已解析）──
     for h in views.hosts:
@@ -189,7 +198,7 @@ def sanitize(text: str, is_wrapper: bool = False) -> SanitizeResult:
         return SanitizeResult(blocked=False)
 
     for pattern in _INJECTION_PATTERNS:
-        if pattern.search(norm):
+        if pattern.search(norm) or pattern.search(spaced):
             return SanitizeResult(blocked=True, reason="偵測到 Prompt Injection 攻擊模式",
                                   threat_type="prompt_injection")
 
@@ -209,7 +218,7 @@ def sanitize(text: str, is_wrapper: bool = False) -> SanitizeResult:
                               threat_type="prompt_injection")
 
     for pattern in _ROLE_SWITCH_PATTERNS:
-        if pattern.search(norm):
+        if pattern.search(norm) or pattern.search(spaced):
             return SanitizeResult(blocked=True, reason="偵測到角色切換攻擊",
                                   threat_type="role_switch")
 

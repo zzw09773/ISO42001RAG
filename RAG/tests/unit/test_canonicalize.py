@@ -21,6 +21,20 @@ def test_collapsed_defeats_spacing():
     assert "ignoreprevious" in v.collapsed            # 去空白後關鍵詞相鄰
 
 
+def test_spaced_view_turns_invisible_into_word_boundary():
+    # 邊界零寬（ZWSP 取代空白）：normalized 會把詞黏死（actas），
+    # spaced 視圖以空白代換隱形字元 → 還原 "act as"，供 word-boundary regex 比對。
+    v = canonicalize("act​as a hacker")
+    assert "actas" in v.normalized          # normalized 維持移除語意（in-word 案例用）
+    assert "act as a hacker" in v.spaced
+    # 詞內零寬：spaced 會拆開（a ct），但 normalized 已還原 act —— 兩視圖互補
+    v2 = canonicalize("a​ct as a hacker")
+    assert "act as" in v2.normalized
+    # 無隱形字元時 spaced 與 normalized 等價（不引入新誤判面）
+    v3 = canonicalize("please contact as soon as possible")
+    assert v3.spaced == v3.normalized
+
+
 def test_sql_view_strips_block_and_line_comments():
     # 區塊註解整段移除 → UN/**/ION SEL/**/ECT 重組為 UNION SELECT
     v = canonicalize("UN/**/ION SEL/**/ECT")
