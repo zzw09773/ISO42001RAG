@@ -106,6 +106,9 @@ services:
       # 稽核完整性：關閉使用者刪除對話／刪除訊息（避免抹除證據）
       USER_PERMISSIONS_CHAT_DELETE: "False"
       USER_PERMISSIONS_CHAT_DELETE_MESSAGE: "False"
+      # 轉發 X-OpenWebUI-Chat-Id/使用者身分給 rag-api，使 audit log 帶硬關聯 chat_id
+      # （A.8.15 稽核軌跡：每筆後端請求可回溯到來源對話與使用者）
+      ENABLE_FORWARD_USER_INFO_HEADERS: "True"
       # 連接 RAG API (service name) 和推論後端 LLM (LLM_HOST + LLM_PORT 變數)
       OPENAI_API_BASE_URLS: "http://rag-api:8000/v1;http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
       OPENAI_API_KEYS: ${OPENAI_API_KEYS:-dummy-key;dummy-key}

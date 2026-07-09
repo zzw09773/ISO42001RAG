@@ -133,3 +133,27 @@ def test_correlator_matches_cjk_query_stored_ascii_escaped(tmp_path):
     assert len(matches) == 1
     assert matches[0]["chat_id"] == "c1" and matches[0]["user_email"] == "a@b.c"
     assert matches[0]["delta_seconds"] == 0
+
+
+def test_correlator_hard_match_by_chat_id(tmp_path):
+    """開啟 header 轉發後，audit 帶 frontend_chat_id → 以 chat.id 精準對應，
+    連無使用者文字可比對的背景請求也能歸到同一對話。"""
+    import sqlite3
+    from monitoring.audit_search import OpenWebUICorrelator
+    db = tmp_path / "webui.db"
+    con = sqlite3.connect(db)
+    con.execute("create table chat (id text, user_id text, title text, created_at int, updated_at int, chat text)")
+    con.execute("create table user (id text, email text, name text)")
+    con.execute("insert into chat values (?,?,?,?,?,?)",
+                ("7241479d", "u1", "台灣軍事法規查詢", 1783567736, 1783567736, "{}"))
+    con.execute("insert into user values ('u1','a@b.c','tester')")
+    con.commit(); con.close()
+    corr = OpenWebUICorrelator(db)
+    # 背景請求：無可比對的 user_query，但帶 chat_id
+    ev = {"frontend_chat_id": "7241479d", "user_query": "### Task: Suggest follow-up",
+          "timestamp": "2026-07-09T11:28:56+08:00"}
+    m = corr.find_matches(ev)
+    assert len(m) == 1 and m[0]["chat_id"] == "7241479d"
+    assert m[0]["match_kind"] == "chat_id" and m[0]["user_email"] == "a@b.c"
+    # 錯誤 chat_id 不亂配
+    assert corr.find_matches({"frontend_chat_id": "nope", "user_query": ""}) == []

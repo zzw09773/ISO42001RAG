@@ -183,14 +183,48 @@ class OpenWebUICorrelator:
         return self.db_path.exists()
 
     def find_matches(self, event: dict, *, window_seconds: int = 900, max_matches: int = 5) -> List[dict]:
+        if not self.available:
+            return []
+        chat_id = (event.get("frontend_chat_id") or "").strip()
         query = (event.get("user_query") or "").strip()
-        if not query or not self.available:
+        # 無硬 ID 也無查詢文字時無從配對
+        if not chat_id and not query:
             return []
         event_ts = parse_time(event.get("timestamp"))
-        matches: List[dict] = []
         try:
             con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, timeout=1)
             con.row_factory = sqlite3.Row
+
+            # ① 硬關聯優先：OpenWebUI 轉發 X-OpenWebUI-Chat-Id 後，audit 帶 frontend_chat_id，
+            # 直接以 chat.id 精準對應——連背景請求（後續建議問題、標題生成，無使用者訊息
+            # 可比對）也能歸到同一對話。
+            if chat_id:
+                row = con.execute(
+                    """
+                    select c.id as chat_id, c.user_id, c.title, c.created_at, c.updated_at,
+                           c.chat, u.email, u.name
+                      from chat c left join user u on u.id = c.user_id
+                     where c.id = ?
+                    """,
+                    (chat_id,),
+                ).fetchone()
+                if row is not None:
+                    updated_at = parse_time(row["updated_at"])
+                    delta_sec = (
+                        abs(int((updated_at - event_ts).total_seconds()))
+                        if event_ts and updated_at else None
+                    )
+                    return [{
+                        "chat_id": row["chat_id"], "user_id": row["user_id"],
+                        "user_email": row["email"], "user_name": row["name"],
+                        "title": row["title"], "created_at": row["created_at"],
+                        "updated_at": row["updated_at"], "delta_seconds": delta_sec,
+                        "match_kind": "chat_id", "matched_text": "",
+                    }]
+
+            # ② 文字＋時間軟配對（未開啟 header 轉發、或舊紀錄的退路）
+            if not query:
+                return []
             rows = con.execute(
                 """
                 select c.id as chat_id, c.user_id, c.title, c.created_at, c.updated_at,
@@ -209,6 +243,7 @@ class OpenWebUICorrelator:
             except Exception:
                 pass
 
+        matches: List[dict] = []
         q_lower = query.lower()
         for row in rows:
             raw_chat = row["chat"] or ""
@@ -244,6 +279,7 @@ class OpenWebUICorrelator:
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
                 "delta_seconds": delta_sec,
+                "match_kind": "text",
                 "matched_text": matched_text[:500],
             })
             if len(matches) >= max_matches:
@@ -283,8 +319,12 @@ def render_audit_page(result: dict, params: dict, *, openwebui_available: bool) 
         for match in event.get("openwebui_matches") or []:
             delta = match.get("delta_seconds")
             delta_text = f" · Δ {delta}s" if delta is not None else ""
+            # 硬關聯（chat_id 精準對應）與軟關聯（文字＋時間猜測）明確標示，稽核可分辨可信度
+            kind = match.get("match_kind")
+            kind_badge = ("<span class='badge normal'>chat_id 對應</span>" if kind == "chat_id"
+                          else "<span class='badge warning'>文字/時間推測</span>")
             owui_bits.append(
-                f"<div><code>{escape(str(match.get('chat_id')))}</code>"
+                f"<div>{kind_badge} <code>{escape(str(match.get('chat_id')))}</code>"
                 f" · {escape(str(match.get('user_email') or match.get('user_name') or 'unknown'))}"
                 f"{delta_text}<br><span>{escape(str(match.get('title') or ''))}</span></div>"
             )
