@@ -57,7 +57,7 @@ def _line_chart(
         return (
             f'<svg viewBox="0 0 {width} {height}" width="100%" preserveAspectRatio="xMidYMid meet" '
             f'xmlns="http://www.w3.org/2000/svg" style="background:#fff">'
-            f'<text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
+            f'<text x="20" y="{height // 2}" fill="#888" font-size="15">no data</text></svg>'
         )
 
     # 單點無法成線（30 天視窗只有一天資料時）：畫明顯圓點＋數值＋日期提示，
@@ -71,15 +71,15 @@ def _line_chart(
         return (
             f'<svg viewBox="0 0 {width} {height}" width="100%" preserveAspectRatio="xMidYMid meet" '
             f'xmlns="http://www.w3.org/2000/svg" style="background:#fff">'
-            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="{color}"/>'
+            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="6" fill="{color}"/>'
             f'<text x="{cx:.1f}" y="{cy - 12:.1f}" text-anchor="middle" fill="#1a1f2c" '
-            f'font-size="14" font-weight="700">{_fmt(val)}</text>'
+            f'font-size="22" font-weight="700">{_fmt(val)}</text>'
             f'<text x="{cx:.1f}" y="{cy + 22:.1f}" text-anchor="middle" fill="#5b6578" '
-            f'font-size="11">僅單日資料（{lbl}）· 趨勢待累積</text>'
+            f'font-size="16">僅單日資料（{lbl}）· 趨勢待累積</text>'
             f'</svg>'
         )
 
-    pad_l, pad_r, pad_t, pad_b = 44, 16, 14, 28
+    pad_l, pad_r, pad_t, pad_b = 56, 16, 14, 30
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
 
@@ -126,7 +126,7 @@ def _line_chart(
         y = pad_t + plot_h - frac * plot_h
         yticks.append(
             f'<line x1="{pad_l}" x2="{width - pad_r}" y1="{y}" y2="{y}" stroke="#eef2f7"/>'
-            f'<text x="{pad_l - 6}" y="{y + 3}" text-anchor="end" fill="#5b6578" font-size="10">{_fmt(v)}</text>'
+            f'<text x="{pad_l - 6}" y="{y + 3}" text-anchor="end" fill="#5b6578" font-size="15">{_fmt(v)}</text>'
         )
 
     # X-axis labels: show first, mid, last
@@ -135,7 +135,7 @@ def _line_chart(
     if n > 0:
         for idx in {0, n // 2, n - 1}:
             xticks.append(
-                f'<text x="{x_pos(idx):.1f}" y="{height - 8}" text-anchor="middle" fill="#5b6578" font-size="10">{escape(labels[idx])}</text>'
+                f'<text x="{x_pos(idx):.1f}" y="{height - 8}" text-anchor="middle" fill="#5b6578" font-size="15">{escape(labels[idx])}</text>'
             )
 
     svg = (
@@ -163,7 +163,7 @@ def _bar_chart(
         return (
             f'<svg viewBox="0 0 {width} {height}" width="100%" preserveAspectRatio="xMidYMid meet" '
             f'xmlns="http://www.w3.org/2000/svg" style="background:#fff">'
-            f'<text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
+            f'<text x="20" y="{height // 2}" fill="#888" font-size="15">no data</text></svg>'
         )
 
     pad_l, pad_r, pad_t, pad_b = 100, 16, 14, 20
