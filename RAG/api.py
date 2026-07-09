@@ -29,6 +29,8 @@ from rag_system.core.version import (
 )
 from rag_system.agent.graph import run_query, astream_query
 from rag_system.core.output_filter import filter_output
+from rag_system.core.input_sanitizer import sanitize
+from rag_system.core.canonicalize import clean_text_for_downstream
 from rag_system.services.converter import FileConverter, ConversionPipeline, ConversionError
 from rag_system.services.conversation_store import ConversationStore
 
@@ -367,16 +369,18 @@ async def chat_completions(
         timer = QueryTimer()
 
         # 1. Convert OpenAI history to LangChain format
+        #    送 graph/LLM 的文字一律用 clean_text_for_downstream 去隱形字元；
+        #    raw 版本（last_user_content）只保留給 audit。
         langchain_messages = []
         for msg in request.messages:
             if msg.role == "user":
-                langchain_messages.append(HumanMessage(content=msg.content))
+                langchain_messages.append(HumanMessage(content=clean_text_for_downstream(msg.content)))
             elif msg.role == "assistant":
                 langchain_messages.append(AIMessage(content=msg.content))
             elif msg.role == "system":
-                langchain_messages.append(SystemMessage(content=msg.content))
-        
-        # Extract last user question
+                langchain_messages.append(SystemMessage(content=clean_text_for_downstream(msg.content)))
+
+        # Extract last user question（raw，供 audit）
         last_user_content = ""
         for msg in reversed(request.messages):
             if msg.role == "user":
@@ -387,6 +391,8 @@ async def chat_completions(
              raise HTTPException(status_code=400, detail="No user message found.")
 
         # Load conversation history from DB (if available)
+        # stored_history 恆為已定義的 list（pre-graph 掃描會用到）。
+        stored_history = []
         if conv_store:
             stored_history = conv_store.get_history(
                 session_id, limit=config.conversation_history_limit
@@ -396,17 +402,52 @@ async def chat_completions(
                 history_msgs = []
                 for role, content in stored_history:
                     if role == "user":
-                        history_msgs.append(HumanMessage(content=content))
+                        history_msgs.append(HumanMessage(content=clean_text_for_downstream(content)))
                     elif role == "assistant":
                         history_msgs.append(AIMessage(content=content))
                 # Only use stored history if current request doesn't already include it
                 if len(langchain_messages) <= 2:
                     langchain_messages = history_msgs + langchain_messages
 
-        # Construct IDs early
+        # Construct IDs early（掃描區塊與後續回應/稽核共用，避免重算不一致）
         chat_id = f"chatcmpl-{_safe_id(source_ctx['request_id'])}"
         audit_ctx = {**source_ctx, "openai_response_id": chat_id}
         created_time = int(time.time())
+
+        # ── Pre-graph 安全掃描：所有進 graph 的「非系統產生」訊息 ─────────────
+        # 掃描序列＝DB 歷史中的 user 訊息（DB assistant 已過 output_filter，豁免）
+        #   ＋本次 request 的 user/system/client-assistant 訊息。
+        # 任一被擋 → 立即回 security_block_response；LLM/graph 不會被呼叫。
+        # wrapper 判定僅經 _is_openwebui_wrapper（peer-IP 信任邊界，不可偽造）。
+        peer_ip = raw_request.client.host if (raw_request and raw_request.client) else ""
+        scan_seq = []
+        for _role, _content in (stored_history or []):
+            if _role == "user":
+                scan_seq.append(("stored_history", _role, _content))
+        for m in request.messages:
+            if m.role in ("user", "system", "assistant"):
+                scan_seq.append(("request", m.role, m.content))
+
+        for _idx, (_src, _role, _content) in enumerate(scan_seq):
+            _wrap = _is_openwebui_wrapper(_role, _content, peer_ip)
+            _res = sanitize(_content, is_wrapper=_wrap)
+            if _res.blocked:
+                logger.warning(
+                    "pre-graph block: %s src=%s idx=%s role=%s",
+                    _res.threat_type, _src, _idx, _role,
+                )
+                return security_block_response(
+                    audit, threat_type=_res.threat_type, reason=_res.reason,
+                    raw_content=_content, session_id=session_id, client_ip=client_ip,
+                    audit_ctx=audit_ctx, message_index=_idx, message_role=_role,
+                    message_source=_src, wrapper_mode=_wrap, stream=request.stream,
+                    chat_id=chat_id, created_time=created_time, model=request.model)
+
+        # graph wrapper_mode：僅反映「最後一則 user turn（實際問題）」是否為 wrapper，
+        # 不對整批訊息套用單一 wrapper_mode。
+        last_wrapper_mode = _is_openwebui_wrapper("user", last_user_content, peer_ip)
+        # 送 graph/LLM/入庫用乾淨問句；raw last_user_content 只給 audit。
+        clean_last_user = clean_text_for_downstream(last_user_content)
 
         # =====================================================================
         # STREAMING PATH: Use astream_query only (no blocking run_query)
@@ -435,13 +476,14 @@ async def chat_completions(
                 stream_timer = QueryTimer()
                 with stream_timer:
                     async for token in astream_query(
-                        question=last_user_content,
+                        question=clean_last_user,
                         config=config,
                         messages=langchain_messages,
                         session_id=session_id,
                         client_ip=client_ip,
                         audit_context=audit_ctx,
                         trace=stream_trace,
+                        wrapper_mode=last_wrapper_mode,
                     ):
                         if token:
                             full_response.append(token)
@@ -513,7 +555,8 @@ async def chat_completions(
                 if _post.redacted:
                     logger.warning("STREAM output filter redacted before persist: %s", _post.findings)
                 if conv_store:
-                    conv_store.save_message(session_id, "user", last_user_content)
+                    # 入庫 user 文字＝clean 版本；audit 才用 raw（見下方 log_query）。
+                    conv_store.save_message(session_id, "user", clean_last_user)
                     conv_store.save_message(session_id, "assistant", _persist)
                 if audit:
                     is_rejection = "無法回答與法律無關的問題" in streamed_content
@@ -552,12 +595,13 @@ async def chat_completions(
         with timer:
             result_state = await asyncio.to_thread(
                 run_query,
-                question=last_user_content,
+                question=clean_last_user,
                 config=config,
                 messages=langchain_messages,
                 session_id=session_id,
                 client_ip=client_ip,
                 audit_context=audit_ctx,
+                wrapper_mode=last_wrapper_mode,
             )
 
         # Extract the response
@@ -578,9 +622,9 @@ async def chat_completions(
         if response_content and not response_content.startswith("Error:"):
             response_content = response_content + ANSWER_DISCLAIMER
 
-        # Persist conversation to DB
+        # Persist conversation to DB（user 入庫用 clean 版本；audit 才用 raw）
         if conv_store:
-            conv_store.save_message(session_id, "user", last_user_content)
+            conv_store.save_message(session_id, "user", clean_last_user)
             conv_store.save_message(session_id, "assistant", response_content)
 
         # Audit log (ISO 42001)
