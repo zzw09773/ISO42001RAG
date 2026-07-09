@@ -66,7 +66,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <h1 id="changelog">Changelog</h1>
 <p>ISO42001 RAG 外部稽核準備變更紀錄。</p>
 <p>本文件只保留外部稽核準備所需的主系統變更摘要。歷史開發報告、舊部署包紀錄與舊測試資料不列入本基線文件集。</p>
-<h2 id="2026-07-09-input-sanitizer-v110">2026-07-09 — input sanitizer 抗規避強化（v1.1.0 維持）</h2>
+<h2 id="2026-07-02-input-sanitizer-v110">2026-07-02 — input sanitizer 抗規避強化（v1.1.0 維持）</h2>
 <p><strong>變更者</strong>：龔修潁</p>
 <ul>
 <li><strong>Canonicalization 偵測層</strong>（<code>RAG/rag_system/core/canonicalize.py</code>）：sanitizer 改對正規化視圖比對，不改寫送 LLM 的文字。含 NFKC（全形→半形）、去零寬/隱形字元、有界 URL-decode（≤2 次）、SQL 註解移除（<code>/* */</code> 整段、<code>--</code>/<code>#</code> 標記換空白）、IP parser（整數/十六進位/短式/IPv6 皆解析分類 loopback/private/link_local/metadata）。破解全形偽裝、零寬拆字、URL 編碼、<code>UN/**/ION</code>、非點分內網位址等規避手法。</li>
@@ -78,7 +78,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <li><strong>配套文件</strong>：<code>RAG/docs/SAFETY_CONTROLS.md</code> 守則③補述上述七點；<code>docker-compose.yaml</code> rag-api 加 <code>WRAPPER_TRUSTED_PEERS</code>（預設空）。</li>
 <li><strong>驗證</strong>：實機重跑規避變形全數擋下（含上述邊界零寬、填充詞變體）、合法查詢無誤擋；online V&amp;V 之 gating 業務目標 Hit Rate ≥ 0.90 仍達標（0.9355）。與變更前基線 0.9677 的一題之差經逐題 flip 分析證為檢索層非確定性噪音（eval_m07/eval_cr04 均為純中文合法查詢，<code>clean_text_for_downstream</code> 為 no-op、sanitize 未擋，graph 輸入與變更前逐位元組相同），與 sanitizer 清洗無關；補強部署後重跑仍為 0.9355（MET），該次 eval_m07 未命中為 60 秒 LLM 逾時（執行環境延遲）、非檢索退步。</li>
 </ul>
-<h2 id="2026-07-09-v110">2026-07-09 — 回覆使用聲明改為程式保證（v1.1.0 維持）</h2>
+<h2 id="2026-07-02-v110">2026-07-02 — 回覆使用聲明改為程式保證（v1.1.0 維持）</h2>
 <p><strong>變更者</strong>：龔修潁</p>
 <ul>
 <li><code>RAG/api.py</code>：每個模型回覆末尾由程式附加固定使用聲明「本回答由 AI 依知識庫收錄之法規文件生成，僅供參考，不構成法律意見；重要決策請諮詢專業法律人員。」（ISO 42001 A.9 透明性）。串流與非串流兩條出口皆保證；對話庫與稽核日誌儲存之文字＝使用者實際收到的文字。錯誤回覆與空回覆不附加。</li>
@@ -86,7 +86,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <li>評估端配套：<code>monitoring_addon/scripts/run_ragas_evaluation.py</code> 於 faithfulness 評分前剝除該固定聲明（聲明本不在檢索條文中，不應計入答案接地評分）；檢索指標（hit_rate 等）不受影響。</li>
 <li>驗證：串流/非串流實測含聲明、稽核紀錄一致；online V&amp;V + regression gate 對照變更前基線（baseline_vv_pre_disclaimer.json）確認無退步。</li>
 </ul>
-<h2 id="2026-07-07">2026-07-07 — 外部稽核準備乾淨基線</h2>
+<h2 id="2026-07-02">2026-07-02 — 外部稽核準備乾淨基線</h2>
 <p><strong>整理者</strong>：龔修潁（RAG 相關後端）、張丘（強密碼、憑證、OpenWebUI）</p>
 <h3 id="_1">文件整理</h3>
 <ul>
@@ -115,7 +115,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <li>code-server 掛載整個 ISO42001 專案，供內網維運與檢視。</li>
 <li>稽核日誌採 JSONL 每日滾動與 SHA-256 雜湊鏈，Prompt 行為以 <code>prompt_version_hash</code> 追溯。</li>
 </ul>
-<h2 id="v110-2026-07-09-1713">[v1.1.0] - 2026-07-09 17:13</h2>
+<h2 id="v110-2026-07-02-1713">[v1.1.0] - 2026-07-02 17:13</h2>
 <p><strong>操作者</strong>：龔修潁<br>
 <strong>說明</strong>：input sanitizer 抗規避強化：canonicalization + 全訊息涵蓋 + wrapper 信任邊界<br>
 <strong>審核簽名</strong>：＿＿＿＿＿＿＿＿  </p>

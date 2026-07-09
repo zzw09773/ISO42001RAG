@@ -1,7 +1,7 @@
 # 專案結構導覽（Project Structure）
 
 > ISO 42001 RAG 法律文件查詢系統 — 目錄地圖。供稽核員、維運人員、新進開發者
-> 快速定位。最後更新：2026-07-07。
+> 快速定位。最後更新：2026-07-02。
 >
 > 稽核證據總入口見 `AUDIT_EVIDENCE_INDEX.md`；架構說明見
 > `RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md`。

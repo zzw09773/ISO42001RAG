@@ -4,7 +4,7 @@ ISO42001 RAG 外部稽核準備變更紀錄。
 
 本文件只保留外部稽核準備所需的主系統變更摘要。歷史開發報告、舊部署包紀錄與舊測試資料不列入本基線文件集。
 
-## 2026-07-09 — input sanitizer 抗規避強化（v1.1.0 維持）
+## 2026-07-02 — input sanitizer 抗規避強化（v1.1.0 維持）
 
 **變更者**：龔修潁
 
@@ -17,7 +17,7 @@ ISO42001 RAG 外部稽核準備變更紀錄。
 - **配套文件**：`RAG/docs/SAFETY_CONTROLS.md` 守則③補述上述七點；`docker-compose.yaml` rag-api 加 `WRAPPER_TRUSTED_PEERS`（預設空）。
 - **驗證**：實機重跑規避變形全數擋下（含上述邊界零寬、填充詞變體）、合法查詢無誤擋；online V&V 之 gating 業務目標 Hit Rate ≥ 0.90 仍達標（0.9355）。與變更前基線 0.9677 的一題之差經逐題 flip 分析證為檢索層非確定性噪音（eval_m07/eval_cr04 均為純中文合法查詢，`clean_text_for_downstream` 為 no-op、sanitize 未擋，graph 輸入與變更前逐位元組相同），與 sanitizer 清洗無關；補強部署後重跑仍為 0.9355（MET），該次 eval_m07 未命中為 60 秒 LLM 逾時（執行環境延遲）、非檢索退步。
 
-## 2026-07-09 — 回覆使用聲明改為程式保證（v1.1.0 維持）
+## 2026-07-02 — 回覆使用聲明改為程式保證（v1.1.0 維持）
 
 **變更者**：龔修潁
 
@@ -26,7 +26,7 @@ ISO42001 RAG 外部稽核準備變更紀錄。
 - 評估端配套：`monitoring_addon/scripts/run_ragas_evaluation.py` 於 faithfulness 評分前剝除該固定聲明（聲明本不在檢索條文中，不應計入答案接地評分）；檢索指標（hit_rate 等）不受影響。
 - 驗證：串流/非串流實測含聲明、稽核紀錄一致；online V&V + regression gate 對照變更前基線（baseline_vv_pre_disclaimer.json）確認無退步。
 
-## 2026-07-07 — 外部稽核準備乾淨基線
+## 2026-07-02 — 外部稽核準備乾淨基線
 
 **整理者**：龔修潁（RAG 相關後端）、張丘（強密碼、憑證、OpenWebUI）
 
@@ -57,7 +57,7 @@ ISO42001 RAG 外部稽核準備變更紀錄。
 - code-server 掛載整個 ISO42001 專案，供內網維運與檢視。
 - 稽核日誌採 JSONL 每日滾動與 SHA-256 雜湊鏈，Prompt 行為以 `prompt_version_hash` 追溯。
 
-## [v1.1.0] - 2026-07-09 17:13
+## [v1.1.0] - 2026-07-02 17:13
 **操作者**：龔修潁  
 **說明**：input sanitizer 抗規避強化：canonicalization + 全訊息涵蓋 + wrapper 信任邊界  
 **審核簽名**：＿＿＿＿＿＿＿＿  
