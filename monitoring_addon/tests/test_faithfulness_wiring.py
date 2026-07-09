@@ -92,3 +92,19 @@ def test_ragas_report_meta_flags_stale_and_provenance():
     assert m["judge_model"] == "gpt-oss-20b"
     assert m["stale"] is True
     assert ragas_report_meta({})["available"] is False
+
+
+def test_strip_answer_disclaimer():
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location(
+        "ragas_script", pathlib.Path(__file__).resolve().parent.parent / "scripts" / "run_ragas_evaluation.py")
+    # 只需驗證函式本體，避免執行 main：以文字截取方式已在實作驗證，此處直接 import 模組層級定義
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        import pytest
+        pytest.skip("ragas script 依賴不可用（judge 相關 import）")
+    ans = "答案本文\n\n---\n本回答由 AI 依知識庫收錄之法規文件生成，僅供參考，不構成法律意見；重要決策請諮詢專業法律人員。"
+    assert mod.strip_answer_disclaimer(ans) == "答案本文"
+    assert mod.strip_answer_disclaimer("無聲明") == "無聲明"

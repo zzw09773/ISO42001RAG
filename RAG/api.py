@@ -52,6 +52,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# A.9 透明性：每個模型回覆末尾由「程式」保證附加的使用聲明——不放 prompt、
+# 不依賴 LLM 遵循格式（LLM 遵循是機率性的，聲明是不變量）。
+# 串流與非串流兩條出口都會附加；儲存至對話庫與 audit log 的文字＝使用者實際看到的文字。
+# 措辭若變更，須同步 monitoring_addon/scripts/run_ragas_evaluation.py 的豁免字串
+# （faithfulness 評的是「答案被檢索文件支撐」，聲明本就不在條文中，評分前剝除）。
+ANSWER_DISCLAIMER = (
+    "\n\n---\n"
+    "本回答由 AI 依知識庫收錄之法規文件生成，僅供參考，不構成法律意見；"
+    "重要決策請諮詢專業法律人員。"
+)
+
 # Load Config globally to avoid reloading on every request
 load_dotenv(override=True)
 config = None
@@ -382,6 +393,24 @@ async def chat_completions(
                             }
                             yield f"data: {json.dumps(content_chunk, ensure_ascii=False)}\n\n"
 
+                # A.9 使用聲明：程式保證附加（見 ANSWER_DISCLAIMER 註解），
+                # 只在有實際內容時附加，避免空回覆只剩一句聲明。
+                if full_response:
+                    disclaimer_chunk = {
+                        "id": chat_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_time,
+                        "model": request.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": ANSWER_DISCLAIMER},
+                                "finish_reason": None
+                            }
+                        ]
+                    }
+                    yield f"data: {json.dumps(disclaimer_chunk, ensure_ascii=False)}\n\n"
+
                 # Final chunk
                 final_chunk = {
                     "id": chat_id,
@@ -410,6 +439,9 @@ async def chat_completions(
                 streamed_content = "".join(full_response)
                 _post = filter_output(streamed_content)
                 _persist = _post.text if _post.redacted else streamed_content
+                # 入庫文字＝使用者實際收到的文字（含程式附加的聲明）
+                if full_response:
+                    _persist = _persist + ANSWER_DISCLAIMER
                 _anomaly = ["stream_output_redacted"] if _post.redacted else None
                 if _post.redacted:
                     logger.warning("STREAM output filter redacted before persist: %s", _post.findings)
@@ -473,6 +505,11 @@ async def chat_completions(
                 response_content = str(last_msg)
         else:
             response_content = "Error: No response generated from the RAG agent."
+
+        # A.9 使用聲明：程式保證附加（錯誤回覆不加）；置於入庫/稽核之前，
+        # 使儲存紀錄＝使用者實際收到的文字。
+        if response_content and not response_content.startswith("Error:"):
+            response_content = response_content + ANSWER_DISCLAIMER
 
         # Persist conversation to DB
         if conv_store:

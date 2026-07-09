@@ -49,6 +49,22 @@ THRESHOLDS = {
     "overall": 0.65,
 }
 
+# RAG/api.py 的 ANSWER_DISCLAIMER（程式保證附加的 A.9 使用聲明）。
+# faithfulness 評「答案是否被檢索文件支撐」，聲明本就不在條文中，
+# 評分前剝除以免每題被固定扣分。措辭變更須與 RAG/api.py 同步。
+_DISCLAIMER_MARK = "本回答由 AI 依知識庫收錄之法規文件生成"
+
+
+def strip_answer_disclaimer(answer: str) -> str:
+    """剝除答案末尾由程式附加的固定使用聲明（含其前的 --- 分隔線）。"""
+    idx = answer.find(_DISCLAIMER_MARK)
+    if idx == -1:
+        return answer
+    head = answer[:idx].rstrip()
+    if head.endswith("---"):
+        head = head[:-3].rstrip()
+    return head
+
 
 def preflight(rag_url: str) -> Optional[str]:
     """Verify the RAG API and the LLM judge are reachable BEFORE evaluating.
@@ -98,6 +114,7 @@ def ask_rag_with_context(rag_url: str, query: str, timeout: float = 90.0, articl
         r.raise_for_status()
         data = r.json()
         answer = data["choices"][0]["message"]["content"]
+        answer = strip_answer_disclaimer(answer)
     except Exception as e:
         return {"answer": "", "context": "", "retrieved_docs": [], "error": str(e)}
 
