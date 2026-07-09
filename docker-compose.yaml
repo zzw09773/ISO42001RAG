@@ -14,6 +14,7 @@ services:
     ports:
       - "15432:5432"
     environment:
+      TZ: "Asia/Taipei"
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-Judge}
@@ -34,6 +35,7 @@ services:
     ports:
       - "17100:7100"
     environment:
+      TZ: "Asia/Taipei"
       TRITON_GRPC_URL: "${LLM_HOST}:${EMBED_GRPC_PORT:-9000}"
       TRITON_MODEL: ${TRITON_MODEL_NAME:-nv-embed-v2}
       PROXY_PORT: "7100"
@@ -59,6 +61,7 @@ services:
       embed-proxy:
         condition: service_healthy
     environment:
+      TZ: "Asia/Taipei"
       # DB — 使用 service name
       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
       # Embedding：經 embed-proxy（OpenAI HTTP → Triton gRPC 轉換）
@@ -99,6 +102,10 @@ services:
       keycloak:
         condition: service_started
     environment:
+      TZ: "Asia/Taipei"
+      # 稽核完整性：關閉使用者刪除對話／刪除訊息（避免抹除證據）
+      USER_PERMISSIONS_CHAT_DELETE: "False"
+      USER_PERMISSIONS_CHAT_DELETE_MESSAGE: "False"
       # 連接 RAG API (service name) 和推論後端 LLM (LLM_HOST + LLM_PORT 變數)
       OPENAI_API_BASE_URLS: "http://rag-api:8000/v1;http://${LLM_HOST}:${LLM_PORT:-7000}/v1"
       OPENAI_API_KEYS: ${OPENAI_API_KEYS:-dummy-key;dummy-key}
@@ -130,6 +137,7 @@ services:
     ports:
       - "${KEYCLOAK_PORT:-18080}:8080"
     environment:
+      TZ: "Asia/Taipei"
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-this-keycloak-admin-password}
       KC_HTTP_ENABLED: "true"
@@ -167,6 +175,7 @@ services:
       embed-proxy:
         condition: service_healthy
     environment:
+      TZ: "Asia/Taipei"
       # 執行時 UID/GID — 由 deploy.sh 自動偵測寫入 .env
       NB_UID: ${HOST_UID:-1001}
       NB_GID: ${HOST_GID:-1001}
@@ -197,6 +206,7 @@ services:
     ports:
       - "${CODESERVER_PORT:-18443}:8080"
     environment:
+      TZ: "Asia/Taipei"
       PASSWORD: ${CODESERVER_PASSWORD:-change-this-code-server-password}
       SUDO_PASSWORD: ${CODESERVER_SUDO_PASSWORD:-change-this-code-server-sudo-password}
       DOCKER_HOST: unix:///var/run/docker.sock
@@ -223,6 +233,7 @@ services:
       rag-api:
         condition: service_healthy
     environment:
+      TZ: "Asia/Taipei"
       # 唯讀掛載 RAG/data 進來，路徑透過 RAG_DATA_DIR 統一
       RAG_DATA_DIR: /rag_data
       OPENWEBUI_DB: /openwebui_data/webui.db
@@ -280,6 +291,7 @@ services:
     ports:
       - "8300:8300"
     environment:
+      TZ: "Asia/Taipei"
       MONITORING_URL: "http://monitoring:8200"
       RAG_API_URL: "http://rag-api:8000"
       ENV_FILE: /host_env/.env
