@@ -169,6 +169,7 @@ def run_query(
     session_id: str = "",
     client_ip: str = "",
     audit_context: Optional[Dict[str, Any]] = None,
+    wrapper_mode: bool = False,
 ):
     """Execute a single query through the workflow (synchronous).
 
@@ -190,6 +191,7 @@ def run_query(
             session_id=session_id,
             client_ip=client_ip,
             audit_context=audit_context,
+            wrapper_mode=wrapper_mode,
         )
 
     workflow = create_rag_workflow(config, llm=llm)
@@ -206,6 +208,7 @@ def run_query(
         "session_id": session_id,
         "client_ip": client_ip,
         "audit_context": audit_context or {},
+        "wrapper_mode": wrapper_mode,
         "actions": [],
     }
 
@@ -222,6 +225,7 @@ async def astream_query(
     session_id: str = "",
     client_ip: str = "",
     audit_context: Optional[Dict[str, Any]] = None,
+    wrapper_mode: bool = False,
     trace: Optional[dict] = None,
 ) -> AsyncIterator[str]:
     """
@@ -241,6 +245,7 @@ async def astream_query(
             session_id=session_id,
             client_ip=client_ip,
             audit_context=audit_context,
+            wrapper_mode=wrapper_mode,
         ):
             yield chunk
         return
@@ -259,6 +264,7 @@ async def astream_query(
         "session_id": session_id,
         "client_ip": client_ip,
         "audit_context": audit_context or {},
+        "wrapper_mode": wrapper_mode,
         "actions": [],
     }
 

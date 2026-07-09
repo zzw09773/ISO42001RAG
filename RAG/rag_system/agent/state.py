@@ -36,6 +36,7 @@ class GraphState(MessagesState):
     client_ip: str = ""     # ISO 27001 A.8.15 — originating IP for audit/security trace
     audit_context: dict = {}  # request_id / OpenWebUI correlation fields
     threat_type: str = ""   # set by classify_node on security block
+    wrapper_mode: bool = False  # OpenWebUI 可信背景任務；豁免 injection/role/probe（見 input_sanitizer）
     security_reason: str = ""  # human-readable block reason
     tokens_used: int = 0           # NEW: real token count from LLM usage
     # ISO 42001 A.6 — workflow action trail. Annotated reducer makes each

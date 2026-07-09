@@ -134,7 +134,9 @@ def create_classify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
         logger.info(f"--- CLASSIFY NODE --- question: {question[:80]}")
 
         # ── Security always first — never delegated to LLM ────────────────
-        san = sanitize(question)
+        # wrapper_mode 由 graph state 傳入（API 層以不可偽造條件判定 OpenWebUI 背景
+        # 任務後設定），使第二道 sanitizer 與前置 sanitizer 的 wrapper 豁免一致。
+        san = sanitize(question, is_wrapper=bool(state.get("wrapper_mode", False)))
         if san.blocked:
             logger.warning(f"Input blocked by sanitizer: {san.threat_type} — {san.reason}")
             return {

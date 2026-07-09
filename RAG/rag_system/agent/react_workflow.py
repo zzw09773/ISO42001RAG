@@ -247,6 +247,7 @@ def run_react_query(
     session_id: str = "",
     client_ip: str = "",
     audit_context: Optional[Dict[str, Any]] = None,
+    wrapper_mode: bool = False,
 ) -> dict:
     """Synchronous execution. Returns a state-like dict mirroring graph.py.
 
@@ -258,7 +259,8 @@ def run_react_query(
     to the originating request (ISO 42001 A.9).
     """
     # ── Security check FIRST (never inside the agent) ──────────────────
-    san = sanitize(question)
+    # wrapper_mode 由 graph.run_query 傳入，與第二道 sanitizer 及前置 sanitizer 一致。
+    san = sanitize(question, is_wrapper=bool(wrapper_mode))
     if san.blocked:
         logger.warning(f"[ReAct] blocked: {san.threat_type}")
         try:
@@ -419,10 +421,12 @@ async def astream_react_query(
     session_id: str = "",
     client_ip: str = "",
     audit_context: Optional[Dict[str, Any]] = None,
+    wrapper_mode: bool = False,
 ) -> AsyncIterator[str]:
     """Streaming version (token-level)."""
     # Security check (same as sync path) — log alert with session_id
-    san = sanitize(question)
+    # wrapper_mode 由 graph.astream_query 傳入，與同步路徑保持一致。
+    san = sanitize(question, is_wrapper=bool(wrapper_mode))
     if san.blocked:
         try:
             AuditLogger(config.audit_log_dir).log_security_alert(
