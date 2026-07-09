@@ -2,7 +2,7 @@
 
 > ISO/IEC 42001 A.8（安全與隱私）/ A.9（使用控管）/ ISO/IEC 27001 A.5.15 / A.8.2 / A.8.15 / A.5.28 證據文件
 > 涵蓋本系統所有自動執行的防護守則：偵測類型、觸發條件、採取動作、稽核欄位、ISO 對應
-> 最後更新：2026-06-08
+> 最後更新：2026-07-09
 
 ---
 
@@ -67,7 +67,7 @@
 |---|---|---|---|---|---|---|
 | ① | API Key / Intranet Auth | `rag_system/core/auth.py:get_api_key` | 進入端點前 | Bearer 驗證 / X-Forwarded-For spoof-guard | `auth_success` / `auth_failure` | A.9 / 27001 A.8.15 |
 | ② | Per-Key Rate Limit | `rag_system/core/rate_limiter.py:check_rate_limit` | 認證後 | 滑動視窗計數，超限 → 429 | （無，待補） | A.9 |
-| ③ | Input Sanitizer | `rag_system/core/input_sanitizer.py:sanitize` | LLM 前 | 8 種威脅 regex 比對，命中即 block | `security_alert` | A.8 |
+| ③ | Input Sanitizer | `rag_system/core/input_sanitizer.py:sanitize`＋`core/canonicalize.py`＋`api.py` pre-graph | LLM 前 | canonical 視圖比對 8 種威脅、逐則掃描所有非系統產生訊息（含 DB 歷史）、命中即 block；raw 進 audit／clean 進 LLM | `security_alert` | A.8 |
 | ④ | Scope Classify | `rag_system/agent/nodes.py:create_classify_node` | LLM 前路由 | 4 分類（legal/passthrough/reject/security_block）| 寫入 `scope_check` | A.9 |
 | ⑤ | Self-Query Filter | `rag_system/services/retrieval.py:_filtered_vector_search` | 檢索層 | 從查詢萃取 metadata 條件，限縮向量檢索範圍 | `retrieved_docs` 含過濾後來源 | A.7 |
 | ⑥ | Output Filter | `rag_system/core/output_filter.py:filter_output` | LLM 後 | 6 種敏感 regex 遮蔽 | `redacted_categories`（若有） | A.8 |
@@ -114,7 +114,55 @@
 
 **動作**：命中即回傳 `SanitizeResult(blocked=True, threat_type, reason)`；流程跳到 `security_block_node` → 寫 `security_alert` 事件 → 回覆 `SECURITY_MSG`（含範例引導）。
 
-**紀錄欄位**：`session_id`、`client_ip`、`user_query`（截斷至 200 字元）、`threat_type`、`reason`、`stage="input"`、`action_taken="blocked"`、`user_notified=true`、`detection_method="input_sanitizer"`。
+**紀錄欄位**：`session_id`、`client_ip`、`user_query`（截斷至 200 字元）、`threat_type`、`reason`、`stage="input"`、`action_taken="blocked"`、`user_notified=true`、`detection_method="input_sanitizer"`；pre-graph 掃描另帶 `message_index`、`message_role`、`message_source`（`stored_history`／`request`）、`wrapper_mode`，供稽核定位是哪一則訊息被擋。
+
+#### 3.3.1 Canonicalization 偵測層（`canonicalize.py`）— 抗規避
+
+規避手法（全形字、零寬字元、URL 編碼、SQL 註解、非點分 IP）會讓「原字串 regex」漏接。故 sanitizer 不再直接比對 raw text，而是先由 `canonicalize()` 產生**只供偵測比對**的正規化視圖，**不改寫**送往 LLM／入庫的文字：
+
+| 處理 | 作用 | 破解的規避手法 |
+|---|---|---|
+| **NFKC 正規化** | 全形→半形、相容字元展開 | `ＳＹＳＴＥＭ：`、全形標點偽裝 |
+| **去零寬/隱形字元** | 移除 ZWSP/ZWNJ/ZWJ/BOM/soft-hyphen/雙向控制字元 | `act​as`（字元間插零寬）、`i‍g‍n‍o‍r‍e` |
+| **URL-decode（有界 ≤2 次）** | 還原 `%20`／百分比編碼，達不動點即停 | `ignore%20previous instructions` |
+| **SQL 註解移除** | 區塊註解 `/* */` 整段移除、行註解標記 `--`／`#` 換空白 | `UN/**/ION SELECT`、`#` 行內繞過 |
+| **IP parser** | 把 URL host 解析為 `ipaddress` 物件（支援整數 `2130706433`、十六進位 `0x7f000001`、短式 `127.1`、IPv6 `[::1]`），再分類 loopback／private／link_local／metadata | 非點分十進位／十六進位／IPv6 內網位址 SSRF |
+
+**四個偵測視圖**（`CanonicalViews`）：
+
+| 視圖 | 內容 | 用於偵測 |
+|---|---|---|
+| `normalized` | NFKC＋去零寬＋URL-decode 後字串 | injection／system_probe／role_switch／CSRF／具名 SSRF（LDAP 風險/屬性型亦跑此） |
+| `collapsed` | `normalized` 去除所有非字元符號並小寫 | 破拆字 injection 關鍵詞（`ignoreprevious`、`systemprompt` …） |
+| `sql_view` | `normalized` 去 SQL 註解後字串 | SQL Injection 樣式 |
+| `hosts` | 從 URL 萃取並解析分類的 host 清單 | 結構化 SSRF（內網/危險位址） |
+
+> **LDAP 結構型例外**：`)( |`、`*)(`、`(|(` 等過濾器語法跑 **raw text 且要求相鄰運算子**，避免中文法律文字（如「（債編）（第二版）」NFKC 折成 `)(`）被誤擋。
+
+#### 3.3.2 掃描範圍（pre-graph，`api.py`）
+
+偵測不再只看「最後一則問題」，而是在 graph／LLM 被呼叫前，逐則掃描**所有進 graph 的非系統產生訊息**：
+
+- **納入**：本次 request 的 `user`／`system`／client 端 `assistant` 訊息 ＋ DB 取回的**歷史 user 訊息**（`stored_history`）——避免攻擊者把注入語句藏在早前對話輪、於後續輪引爆。
+- **豁免**：系統內部 prompt（`SYSTEM_PROMPT_BASELINE` 等本系統自帶指令）與**系統產生的 assistant 訊息**（DB 內 assistant 已於寫入前過 ⑥ Output Filter，重掃只會誤傷）。
+- 任一則被擋 → 立即回 `security_block_response`，graph／LLM 不被呼叫，並寫 `security_alert`（帶上節 `message_*` 定位欄位）。
+
+#### 3.3.3 wrapper 豁免的「不可偽造」條件（`api.py:_is_openwebui_wrapper`）
+
+OpenWebUI 會發背景任務（自動標題／標籤／後續提問建議，內容以 `### Task:` 起始），這類 meta 指令若一律套 injection 規則會誤擋。豁免採**三個條件同時成立**（AND），且信任邊界不可由呼叫端偽造：
+
+1. **`WRAPPER_TRUSTED_PEERS`**：來源 `peer IP`（TCP 對端，非 header）落在白名單內。信任邊界刻意選 peer IP 而非 `source_app`／User-Agent／自訂 header——**後者皆可由呼叫端偽造**。清單由 env `WRAPPER_TRUSTED_PEERS` 讀入，**預設空＝無人豁免**；內網部署才填 OpenWebUI 容器/反代 IP，**不硬編碼**。
+2. **任務簽章**：內容須以 `### Task:` 起始且命中已知 OpenWebUI 任務 body 句（title/tag/follow-up）。
+3. **role**：訊息 role ∈ {`user`, `system`}。
+
+豁免僅放行 injection／system_probe／role_switch 類；**長度／SSRF／SQL／LDAP／CSRF 對 wrapper 仍強制**（背景任務不該含這些）。
+
+#### 3.3.4 raw 進 audit／clean 進 LLM
+
+偵測與清洗分離，兩者用途不同的文字：
+
+- **raw**（原始使用者字串，含任何隱形字元/編碼）→ 只給**稽核**（`security_alert`／`query` 事件、雜湊鏈），確保稽核看到的是攻擊者真正送的內容、不被清洗掩蓋。
+- **clean**（`clean_text_for_downstream()` 僅去隱形/零寬字元）→ 送 **graph／LLM** 與**入對話庫**。入庫 user 文字＝clean 版本、稽核才用 raw；正常查詢的可見語意不變（clean 不做 NFKC/URL-decode/SQL 移除，故不影響檢索）。
 
 ### 3.4 ④ Scope Classify（`nodes.py:create_classify_node`）
 
@@ -184,4 +232,4 @@
 
 ---
 
-*本文件為 ISO 42001 A.8 / A.9 與 ISO 27001 A.5.15 / A.8.2 / A.8.15 / A.5.28 之配套規格，與 `input_sanitizer.py`、`output_filter.py`、`auth.py`、`rate_limiter.py`、`audit_logger.py`、`agent/nodes.py` 實作保持同步。*
+*本文件為 ISO 42001 A.8 / A.9 與 ISO 27001 A.5.15 / A.8.2 / A.8.15 / A.5.28 之配套規格，與 `input_sanitizer.py`、`canonicalize.py`、`api.py`（pre-graph 掃描/wrapper 豁免）、`output_filter.py`、`auth.py`、`rate_limiter.py`、`audit_logger.py`、`agent/nodes.py` 實作保持同步。*

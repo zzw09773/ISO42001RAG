@@ -79,6 +79,9 @@ services:
       # 認證模式（內網部署無 API Key 時需明確啟用）
       ALLOW_INTRANET_MODE: ${ALLOW_INTRANET_MODE:-false}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1}
+      # OpenWebUI 背景任務(### Task:)豁免 injection 偵測的「不可偽造 peer」白名單；
+      # 空＝無人豁免。內網填 OpenWebUI 容器/反代 IP。見 SAFETY_CONTROLS 守則③。
+      WRAPPER_TRUSTED_PEERS: ${WRAPPER_TRUSTED_PEERS:-}
     volumes:
       - ./RAG:/app 
       - ./RAG/data:/app/data
