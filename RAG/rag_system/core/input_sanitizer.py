@@ -161,7 +161,8 @@ def sanitize(text: str, is_wrapper: bool = False) -> SanitizeResult:
     norm = views.normalized
     # spaced：隱形字元以空白代換的視圖 — 抓「零寬取代空白」的邊界規避
     # （act[ZWSP]as → norm 黏成 actas 繞過 \s+；spaced 還原 act as）。
-    # 無隱形字元時 spaced == norm，不增加誤判面。
+    # 無隱形字元時 spaced == norm，不增加誤判面（隱形字元落在詞內的罕見情況才可能
+    # 製造詞界，靠既有 \b 錨點收斂）。
     spaced = views.spaced
 
     # ── 結構化 SSRF：內網/危險 host（整數/十六進位/IPv6/短式皆已解析）──

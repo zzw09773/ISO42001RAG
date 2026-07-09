@@ -21,9 +21,14 @@ _INVISIBLE_RE = re.compile(
 INJECTION_COLLAPSED_KEYWORDS = frozenset({
     "ignoreprevious", "ignoreallprevious", "ignoreaboveinstructions",
     # 填充詞變體（the/these/those/my/any）— 與 regex 填充詞擴充對應的拆字/黏字錨點
+    # ignore/disregard/forget 三家族保持一致，避免拆字＋填充詞的單家族缺口
     "ignoretheprevious", "ignoretheseprevious", "ignorethoseprevious",
     "ignoremyprevious", "ignoreanyprevious",
     "disregardprevious", "forgetprevious", "forgetall",
+    "disregardtheprevious", "disregardtheseprevious", "disregardthoseprevious",
+    "disregardmyprevious", "disregardanyprevious",
+    "forgettheprevious", "forgettheseprevious", "forgetthoseprevious",
+    "forgetmyprevious", "forgetanyprevious",
     "doanythingnow", "jailbreak",
     "systemprompt", "newsystemprompt",
     "revealyourinstructions", "showyourprompt",
@@ -48,7 +53,8 @@ class CanonicalViews:
     hosts: list
     # 隱形字元「以空白代換」（而非移除）的視圖：邊界零寬（ZWSP 取代空白，
     # 如 act[ZWSP]as）在 normalized 會黏字（actas）繞過 \s+ regex；spaced
-    # 還原詞界供既有 word-boundary regex 比對。無隱形字元時與 normalized 相同。
+    # 還原詞界供既有 word-boundary regex 比對。無隱形字元時與 normalized 逐字相同，
+    # 不增誤判面；僅當隱形字元恰落在詞內時才可能製造出詞界（罕見，靠 \b 錨點收斂）。
     spaced: str = ""
 
 
