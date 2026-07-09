@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+from .canonicalize import canonicalize, INJECTION_COLLAPSED_KEYWORDS
+
 
 MAX_INPUT_LENGTH = 2000
 
@@ -44,6 +46,8 @@ _SYSTEM_PROBE_PATTERNS = [
     re.compile(r'(postgresql|mongodb|redis|mysql)\s*://', re.IGNORECASE),
     re.compile(r'(api[_\s]?key|api[_\s]?token|secret[_\s]?key|bearer\s+token)', re.IGNORECASE),
     re.compile(r'(連接字串|資料庫密碼|資料庫帳號|API\s*金鑰)', re.IGNORECASE),
+    # 憑證變體（維持列舉具體詞風格，避免單一「密碼」誤判合法查詢）
+    re.compile(r'(sql\s*密碼|sql\s*帳號|db\s*密碼|sql\s*password|db\s*password)', re.IGNORECASE),
     # Asking for server paths
     re.compile(r'(server\s+path|file\s+path|directory\s+path|working\s+directory)', re.IGNORECASE),
     re.compile(r'/home/\w+|/var/|/etc/|C:\\\\', re.IGNORECASE),
@@ -57,7 +61,7 @@ _SQL_INJECTION_PATTERNS = [
     # Destructive statements
     re.compile(r"\b(drop|truncate)\s+table\b", re.IGNORECASE),
     re.compile(r"\bdelete\s+from\b", re.IGNORECASE),
-    re.compile(r"\bunion\s+(all\s+)?select\b", re.IGNORECASE),
+    re.compile(r"\bunion\s*(all\s*)?select\b", re.IGNORECASE),
     # Schema probing
     re.compile(r"\binformation_schema\b", re.IGNORECASE),
     re.compile(r"\bpg_catalog\b|\bpg_tables\b|\bpg_class\b", re.IGNORECASE),
@@ -127,12 +131,12 @@ class SanitizeResult:
     threat_type: Optional[str] = None
 
 
-def sanitize(text: str) -> SanitizeResult:
-    """
-    Check user input for prompt injection and system probing attempts.
+def sanitize(text: str, is_wrapper: bool = False) -> SanitizeResult:
+    """檢查使用者輸入的注入/探測/危險模式。
 
-    Returns SanitizeResult with blocked=True if malicious input is detected.
-    The caller should log and reject without passing to the LLM.
+    detection-only：對 canonicalize 產生的視圖比對，不改寫 text 本身。
+    is_wrapper=True（OpenWebUI 背景任務，由 API 層以不可偽造條件判定後傳入）時，
+    豁免 injection/role-switch/system-probe，但仍強制長度/SSRF/SQL/LDAP/CSRF。
     """
     if len(text) > MAX_INPUT_LENGTH:
         return SanitizeResult(
@@ -141,60 +145,60 @@ def sanitize(text: str) -> SanitizeResult:
             threat_type="input_too_long",
         )
 
-    for pattern in _INJECTION_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到 Prompt Injection 攻擊模式",
-                threat_type="prompt_injection",
-            )
+    views = canonicalize(text)
+    norm = views.normalized
 
-    for pattern in _SYSTEM_PROBE_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到系統資訊探測嘗試",
-                threat_type="system_probe",
-            )
+    # ── 結構化 SSRF：內網/危險 host（整數/十六進位/IPv6/短式皆已解析）──
+    for h in views.hosts:
+        if h.kind == "ip" and h.category in ("loopback", "private", "link_local", "metadata"):
+            return SanitizeResult(blocked=True, reason=f"偵測到內部/危險位址（{h.category}）",
+                                  threat_type="ssrf")
+    for pattern in _SSRF_PATTERNS:   # 具名內部 host、非 http scheme、重導
+        if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到 SSRF 攻擊模式", threat_type="ssrf")
 
+    # ── SQL：跑去註解後的 sql_view ──
     for pattern in _SQL_INJECTION_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到 SQL Injection 攻擊模式",
-                threat_type="sql_injection",
-            )
+        if pattern.search(views.sql_view):
+            return SanitizeResult(blocked=True, reason="偵測到 SQL Injection 攻擊模式",
+                                  threat_type="sql_injection")
 
     for pattern in _LDAP_INJECTION_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到 LDAP Injection 攻擊模式",
-                threat_type="ldap_injection",
-            )
-
-    for pattern in _SSRF_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到 SSRF 攻擊模式",
-                threat_type="ssrf",
-            )
+        if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到 LDAP Injection 攻擊模式",
+                                  threat_type="ldap_injection")
 
     for pattern in _CSRF_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到 CSRF 攻擊模式",
-                threat_type="csrf",
-            )
+        if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到 CSRF 攻擊模式", threat_type="csrf")
+
+    # ── 以下為 wrapper 豁免類別（injection / system_probe / role_switch）──
+    if is_wrapper:
+        return SanitizeResult(blocked=False)
+
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到 Prompt Injection 攻擊模式",
+                                  threat_type="prompt_injection")
+
+    # system_probe 先於 collapsed injection 比對：
+    # 正常語序的系統探測（如「show/reveal your system prompt」）其 collapsed 視圖含
+    # 關鍵詞 "systemprompt"，若先跑 collapsed 會被誤標為 prompt_injection，破壞既有
+    # system_probe 分類（稽核證據用）。破拆字注入（i g n o r e）不會命中 system_probe
+    # 的字面 regex，故仍會落到下方 collapsed 檢查，分類不受影響。
+    for pattern in _SYSTEM_PROBE_PATTERNS:
+        if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到系統資訊探測嘗試",
+                                  threat_type="system_probe")
+
+    # collapsed 關鍵詞（破拆字 i g n o r e）
+    if any(kw in views.collapsed for kw in INJECTION_COLLAPSED_KEYWORDS):
+        return SanitizeResult(blocked=True, reason="偵測到 Prompt Injection（去空白比對）",
+                              threat_type="prompt_injection")
 
     for pattern in _ROLE_SWITCH_PATTERNS:
-        if pattern.search(text):
-            return SanitizeResult(
-                blocked=True,
-                reason="偵測到角色切換攻擊",
-                threat_type="role_switch",
-            )
+        if pattern.search(norm):
+            return SanitizeResult(blocked=True, reason="偵測到角色切換攻擊",
+                                  threat_type="role_switch")
 
     return SanitizeResult(blocked=False)
