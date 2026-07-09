@@ -19,7 +19,7 @@ from rag_system.core.config import RAGConfig
 from rag_system.core.audit_logger import AuditLogger, QueryTimer
 from rag_system.core.auth import get_api_key, key_prefix, get_client_ip
 from rag_system.core.rate_limiter import check_rate_limit
-from rag_system.core.prompts import PROMPT_VERSIONS, prompt_version_hash
+from rag_system.core.prompts import PROMPT_VERSIONS, prompt_version_hash, SECURITY_MSG
 from rag_system.core.version import (
     OPENWEBUI_MODEL_ID,
     SYSTEM_BASELINE_DATE,
@@ -87,6 +87,39 @@ if _intranet_mode and not _api_keys_set:
         "All requests are accepted based on network perimeter trust. "
         "Set API_KEYS to enable credential-based authentication."
     )
+
+
+# --- OpenWebUI 背景任務 wrapper 偵測（pre-graph 豁免，不可偽造）---
+# 豁免的信任邊界是「peer IP 在信任清單內」，而非 source_app/header/user-agent
+# （後者皆可由呼叫端偽造）。清單自 env WRAPPER_TRUSTED_PEERS 讀入，預設空＝無人豁免。
+_WRAPPER_TRUSTED_PEERS: set | None = None
+
+# OpenWebUI 已知背景任務簽章（title/tag/follow-up）。比對用「### Task: 起始 + 已知 body 句」。
+_WRAPPER_TASK_SIGNATURES = (
+    "generate a concise, 3-5 word title",
+    "suggest 3-5 relevant follow-up",
+    "generate 1-3 broad tags",
+)
+
+
+def _wrapper_trusted_peers() -> set:
+    global _WRAPPER_TRUSTED_PEERS
+    if _WRAPPER_TRUSTED_PEERS is None:
+        raw = _os.environ.get("WRAPPER_TRUSTED_PEERS", "")
+        _WRAPPER_TRUSTED_PEERS = {ip.strip() for ip in raw.split(",") if ip.strip()}
+    return _WRAPPER_TRUSTED_PEERS
+
+
+def _is_openwebui_wrapper(role: str, content: str, peer_ip: str) -> bool:
+    """極窄豁免：peer 在信任清單 ∧ 內容為已知 OpenWebUI 任務簽章 ∧ role∈{user,system}。"""
+    if role not in ("user", "system"):
+        return False
+    if peer_ip not in _wrapper_trusted_peers():
+        return False
+    low = content.lower()
+    if not low.lstrip().startswith("### task:"):
+        return False
+    return any(sig in low for sig in _WRAPPER_TASK_SIGNATURES)
 
 
 _SOURCE_HEADER_KEYS = [
@@ -258,6 +291,40 @@ async def list_models():
             }
         ]
     }
+
+def security_block_response(audit, *, threat_type, reason, raw_content, session_id,
+                            client_ip, audit_ctx, message_index, message_role,
+                            message_source, wrapper_mode, stream, chat_id,
+                            created_time, model):
+    """pre-graph 攔截：寫入與 graph 一致的 security_alert，回與 graph 一致的使用者回應。"""
+    if audit:
+        audit.log_security_alert(
+            session_id=session_id, user_query=raw_content, threat_type=threat_type,
+            reason=reason, stage="input", action_taken="blocked", user_notified=True,
+            detection_method="input_sanitizer", client_ip=client_ip,
+            message_index=message_index, message_role=message_role,
+            message_source=message_source, wrapper_mode=wrapper_mode, **audit_ctx,
+        )
+    if stream:
+        def _gen():
+            first = {"id": chat_id, "object": "chat.completion.chunk", "created": created_time,
+                     "model": model, "choices": [{"index": 0, "delta": {"role": "assistant"},
+                     "finish_reason": None}]}
+            yield f"data: {json.dumps(first)}\n\n"
+            body = {"id": chat_id, "object": "chat.completion.chunk", "created": created_time,
+                    "model": model, "choices": [{"index": 0, "delta": {"content": SECURITY_MSG},
+                    "finish_reason": None}]}
+            yield f"data: {json.dumps(body, ensure_ascii=False)}\n\n"
+            fin = {"id": chat_id, "object": "chat.completion.chunk", "created": created_time,
+                   "model": model, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+            yield f"data: {json.dumps(fin)}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(_gen(), media_type="text/event-stream")
+    return ChatCompletionResponse(
+        id=chat_id, created=created_time, model=model,
+        choices=[ChatCompletionResponseChoice(index=0,
+            message=Message(role="assistant", content=SECURITY_MSG), finish_reason="stop")])
+
 
 @app.post("/v1/chat/completions")
 async def chat_completions(

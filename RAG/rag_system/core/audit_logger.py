@@ -313,6 +313,10 @@ class AuditLogger:
         frontend_chat_id: str = "",
         frontend_message_id: str = "",
         frontend_metadata: Optional[Dict[str, Any]] = None,
+        message_index: Optional[int] = None,
+        message_role: Optional[str] = None,
+        message_source: Optional[str] = None,
+        wrapper_mode: bool = False,
     ) -> None:
         """Log a security alert (prompt injection / system probe / output leak).
 
@@ -346,6 +350,12 @@ class AuditLogger:
             frontend_message_id=frontend_message_id,
             frontend_metadata=frontend_metadata,
         ))
+        # pre-graph 攔截補充欄位（訊息定位與 wrapper 豁免狀態）。僅非 None 併入，
+        # graph 既有呼叫不帶這些引數時 schema 維持相容（message_* 缺席）。
+        for _k, _v in (("message_index", message_index), ("message_role", message_role),
+                       ("message_source", message_source), ("wrapper_mode", wrapper_mode)):
+            if _v is not None:
+                record[_k] = _v
         self._write(record)
 
     def log_auth_event(
