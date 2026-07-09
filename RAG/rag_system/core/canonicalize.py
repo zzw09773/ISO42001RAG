@@ -73,6 +73,8 @@ def _normalize(text: str, max_url_decode: int, invisible_replacement: str = "") 
     # spaced 視圖以空白代換（還原邊界零寬 act[ZWSP]as→act as）
     t = _INVISIBLE_RE.sub(invisible_replacement, t)
     t = _bounded_url_decode(t, max_url_decode)  # URL decode（有界）
+    # decode 可能重新引入隱形字元（%E2%80%8B → ZWSP），再處理一次
+    t = _INVISIBLE_RE.sub(invisible_replacement, t)
     return t
 
 

@@ -33,6 +33,10 @@ def test_spaced_view_turns_invisible_into_word_boundary():
     # 無隱形字元時 spaced 與 normalized 等價（不引入新誤判面）
     v3 = canonicalize("please contact as soon as possible")
     assert v3.spaced == v3.normalized
+    # URL decode 後才出現的隱形字元也要處理（%E2%80%8B → ZWSP → 空白/移除）
+    v4 = canonicalize("act%E2%80%8Bas a hacker")
+    assert "act as a hacker" in v4.spaced
+    assert "actas" in v4.normalized and "​" not in v4.normalized
 
 
 def test_sql_view_strips_block_and_line_comments():
