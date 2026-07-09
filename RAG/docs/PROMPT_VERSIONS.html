@@ -146,31 +146,25 @@ RAG API 的 OpenAPI metadata、<code>/health</code> 與 <code>/v1/models</code> 
 <li>記錄新 <code>prompt_version_hash</code>。</li>
 </ol>
 <hr>
-<h2 id="3">3. 基線版本歷程</h2>
+<h2 id="3">3. 基線版本</h2>
+<p>目前唯一受控的 Prompt 基線版本為 <code>1.1.0</code>。開發初期較早的 prompt 迭代不另行列版，全部收斂於此單一受控基線；後續任何 prompt 字串調整，一律依 §2 升版規則遞增此單一基線並記錄新的 <code>prompt_version_hash</code>。</p>
 <table>
 <thead>
 <tr>
 <th>基線版本</th>
 <th>日期</th>
 <th>操作者</th>
-<th>變更摘要</th>
+<th>說明</th>
 <th>驗證</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>1.0.0</code></td>
-<td>2026-04-13</td>
-<td>龔修潁（RAG 相關後端）</td>
-<td>初版法律文件助理 prompt 基線，包含檢索回答、拒答、安全攔截、分類與摘要模板</td>
-<td>初始功能測試</td>
-</tr>
-<tr>
 <td><code>1.1.0</code></td>
 <td>2026-07-02</td>
 <td>龔修潁（RAG 相關後端）</td>
-<td>統一為單一 Prompt 基線版本；保留強化後的中華民國軍事法規回答、安全拒答、能力說明與中共/大陸相關硬擋規則</td>
-<td>外部稽核準備基線，啟動後重新產生 V&amp;V</td>
+<td>外部稽核準備之單一受控 Prompt 基線：中華民國軍事法規檢索回答、安全拒答、能力說明、分類與摘要模板，及中共/大陸相關硬擋規則，整合於單一 <code>SYSTEM_PROMPT_BASELINE</code></td>
+<td>外部稽核準備基線，內網啟動後重新產生 V&amp;V</td>
 </tr>
 </tbody>
 </table>
@@ -194,11 +188,11 @@ RAG API 的 OpenAPI metadata、<code>/health</code> 與 <code>/v1/models</code> 
 </table>
 <hr>
 <h2 id="5">5. 稽核回答口徑</h2>
-<p>外部稽核若詢問「為何之前看到多個 prompt 版本」，回答如下：</p>
+<p>外部稽核若詢問「目前主要／唯一的 prompt 版本是哪一個」或「為何之前看到多個 prompt 版本」，回答如下：</p>
 <blockquote>
-<p>舊文件把每個 prompt/template 都分別列版，造成稽核理解成本過高。現行外部稽核準備版已改為單一
-<code>SYSTEM_PROMPT_BASELINE</code>，所有 prompt 字串視為同一套受控 AI artifact。任何 prompt 字串調整，
-都必須升版這個單一基線、重跑驗證並留下 <code>prompt_version_hash</code>。</p>
+<p>目前唯一受控的 Prompt 基線版本為 <code>1.1.0</code>。舊文件曾把每個 prompt/template 分別列版，造成稽核理解成本過高；
+現行外部稽核準備版已改為單一 <code>SYSTEM_PROMPT_BASELINE</code>，所有 prompt 字串視為同一套受控 AI artifact。
+任何 prompt 字串調整，都必須升版這個單一基線、重跑驗證並留下 <code>prompt_version_hash</code>。</p>
 </blockquote>
   </div>
   <div class="docfoot">

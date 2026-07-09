@@ -47,12 +47,13 @@ RAG API 的 OpenAPI metadata、`/health` 與 `/v1/models` 也由 `rag_system/cor
 
 ---
 
-## 3. 基線版本歷程
+## 3. 基線版本
 
-| 基線版本 | 日期 | 操作者 | 變更摘要 | 驗證 |
+目前唯一受控的 Prompt 基線版本為 `1.1.0`。開發初期較早的 prompt 迭代不另行列版，全部收斂於此單一受控基線；後續任何 prompt 字串調整，一律依 §2 升版規則遞增此單一基線並記錄新的 `prompt_version_hash`。
+
+| 基線版本 | 日期 | 操作者 | 說明 | 驗證 |
 |---|---|---|---|---|
-| `1.0.0` | 2026-04-13 | 龔修潁（RAG 相關後端） | 初版法律文件助理 prompt 基線，包含檢索回答、拒答、安全攔截、分類與摘要模板 | 初始功能測試 |
-| `1.1.0` | 2026-07-02 | 龔修潁（RAG 相關後端） | 統一為單一 Prompt 基線版本；保留強化後的中華民國軍事法規回答、安全拒答、能力說明與中共/大陸相關硬擋規則 | 外部稽核準備基線，啟動後重新產生 V&V |
+| `1.1.0` | 2026-07-02 | 龔修潁（RAG 相關後端） | 外部稽核準備之單一受控 Prompt 基線：中華民國軍事法規檢索回答、安全拒答、能力說明、分類與摘要模板，及中共/大陸相關硬擋規則，整合於單一 `SYSTEM_PROMPT_BASELINE` | 外部稽核準備基線，內網啟動後重新產生 V&V |
 
 ---
 
@@ -66,8 +67,8 @@ RAG API 的 OpenAPI metadata、`/health` 與 `/v1/models` 也由 `rag_system/cor
 
 ## 5. 稽核回答口徑
 
-外部稽核若詢問「為何之前看到多個 prompt 版本」，回答如下：
+外部稽核若詢問「目前主要／唯一的 prompt 版本是哪一個」或「為何之前看到多個 prompt 版本」，回答如下：
 
-> 舊文件把每個 prompt/template 都分別列版，造成稽核理解成本過高。現行外部稽核準備版已改為單一
-> `SYSTEM_PROMPT_BASELINE`，所有 prompt 字串視為同一套受控 AI artifact。任何 prompt 字串調整，
-> 都必須升版這個單一基線、重跑驗證並留下 `prompt_version_hash`。
+> 目前唯一受控的 Prompt 基線版本為 `1.1.0`。舊文件曾把每個 prompt/template 分別列版，造成稽核理解成本過高；
+> 現行外部稽核準備版已改為單一 `SYSTEM_PROMPT_BASELINE`，所有 prompt 字串視為同一套受控 AI artifact。
+> 任何 prompt 字串調整，都必須升版這個單一基線、重跑驗證並留下 `prompt_version_hash`。
