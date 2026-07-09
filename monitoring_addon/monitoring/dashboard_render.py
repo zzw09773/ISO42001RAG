@@ -60,6 +60,25 @@ def _line_chart(
             f'<text x="20" y="{height // 2}" fill="#888">no data</text></svg>'
         )
 
+    # 單點無法成線（30 天視窗只有一天資料時）：畫明顯圓點＋數值＋日期提示，
+    # 不硬畫退化折線與重複刻度軸，避免看起來像壞掉的空圖。
+    valid_idx = [i for i, p in enumerate(points) if p is not None]
+    if len(valid_idx) == 1:
+        i = valid_idx[0]
+        val = points[i]
+        cx, cy = width / 2, height / 2
+        lbl = escape(labels[i]) if i < len(labels) else ""
+        return (
+            f'<svg viewBox="0 0 {width} {height}" width="100%" preserveAspectRatio="xMidYMid meet" '
+            f'xmlns="http://www.w3.org/2000/svg" style="background:#fff">'
+            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="5" fill="{color}"/>'
+            f'<text x="{cx:.1f}" y="{cy - 12:.1f}" text-anchor="middle" fill="#1a1f2c" '
+            f'font-size="14" font-weight="700">{_fmt(val)}</text>'
+            f'<text x="{cx:.1f}" y="{cy + 22:.1f}" text-anchor="middle" fill="#5b6578" '
+            f'font-size="11">僅單日資料（{lbl}）· 趨勢待累積</text>'
+            f'</svg>'
+        )
+
     pad_l, pad_r, pad_t, pad_b = 44, 16, 14, 28
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b

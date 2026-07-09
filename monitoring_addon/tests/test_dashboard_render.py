@@ -177,3 +177,16 @@ def test_faith_eval_reflects_value():
     p["health"]["faithfulness"] = {"current": 0.9611, "target": 0.9}
     html = render_dashboard(p)
     assert "0.80 嚴重" not in html
+
+
+def test_line_chart_single_point_marker():
+    from monitoring.dashboard_render import _line_chart
+    svg = _line_chart([None, 42.0], ["07/08", "07/09"])
+    assert "<circle" in svg and "僅單日資料" in svg
+    assert "<path" not in svg          # 不畫退化折線
+    assert "07/09" in svg              # 標出是哪一天
+
+
+def test_line_chart_multi_point_draws_line():
+    from monitoring.dashboard_render import _line_chart
+    assert "<path" in _line_chart([10.0, 20.0, 30.0], ["a", "b", "c"])
