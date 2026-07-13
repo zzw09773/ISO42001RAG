@@ -61,7 +61,7 @@ from ..core.output_filter import filter_output
 from ..core.audit_logger import AuditLogger
 from ..core.retrieval_generation import current_retrieval_generation
 from ..services.retrieval import RetrievalService
-from .nodes import _article_nums, _expand_query, _retrieved_article_nums
+from .nodes import _article_nums, _expand_query, _retrieved_evidence_article_nums
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +95,12 @@ def _react_retrieved_sources(messages: List[BaseMessage]) -> List[str]:
     return sources
 
 
-def _ungrounded_react_citations(answer: str, sources: List[str]) -> set[int]:
-    return _article_nums(answer) - _retrieved_article_nums(sources)
+def _ungrounded_react_citations(
+    answer: str,
+    sources: List[str],
+    evidence: Optional[List[str]] = None,
+) -> set[int]:
+    return _article_nums(answer) - _retrieved_evidence_article_nums(sources, evidence)
 
 
 def _classify_pre_check(question: str, llm) -> str:
@@ -406,7 +410,14 @@ def run_react_query(
 
         # Deterministic provenance must run before short-answer/LLM fast paths.
         retrieved_sources = _react_retrieved_sources(out_messages)
-        ungrounded = sorted(_ungrounded_react_citations(answer, retrieved_sources))
+        tool_evidence = [
+            str(message.content or "")
+            for message in out_messages
+            if isinstance(message, ToolMessage)
+        ]
+        ungrounded = sorted(
+            _ungrounded_react_citations(answer, retrieved_sources, tool_evidence)
+        )
         if ungrounded:
             if retry_count >= MAX_REACT_RETRIES:
                 logger.warning("[ReAct] ungrounded citation at retry limit; failing safe")
