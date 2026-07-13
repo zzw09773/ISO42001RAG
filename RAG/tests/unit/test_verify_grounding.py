@@ -1,8 +1,8 @@
 """Evidence-grounded verify — citation provenance gate.
 
-The verify node must flag an answer that cites an article NOT present in
-retrieved_sources (a fabricated/ungrounded citation), WITHOUT second-guessing
-which articles retrieval should have returned.
+The verify node must flag an answer that cites an article absent from both the
+source identifiers and retrieved text, without second-guessing which articles
+retrieval should have returned.
 """
 import sys
 from pathlib import Path
@@ -73,6 +73,47 @@ def test_grounded_citation_passes():
            "這段內容足夠長以通過前置快速通道並帶有結構關鍵字。")
     out = vn(_state(gen, ["陸海空軍懲罰法.md#第6條"]))
     assert out["scope"] == "verified"
+
+
+def test_cross_reference_present_in_retrieved_text_is_grounded():
+    generation = (
+        "依據第52條，復審決定原則上應於三個月內作成；條文並明確提及"
+        "依第23條通知補正時的起算方式。以下為具體條文與程序摘要。"
+    )
+    out = create_verify_node(llm=None)({
+        "generation": generation,
+        "question": "52條",
+        "retry_count": 0,
+        "retrieved_sources": ["軍人權益事件處理法.md#第52條"],
+        "retrieved_docs": [
+            "來源: 軍人權益事件處理法.md\n"
+            "內容: 第52條 復審決定應於三個月內為之。"
+            "依第23條規定通知補正者，自補正之次日起算。"
+        ],
+    })
+
+    assert out["scope"] == "verified"
+
+
+def test_retrieved_cross_reference_does_not_allow_another_article():
+    generation = (
+        "依據第99條，復審決定必須立即作成。以下為具體條文與程序摘要，"
+        "這段回答刻意超過五十字以進入引用出處核對。"
+    )
+    out = create_verify_node(llm=None)({
+        "generation": generation,
+        "question": "52條",
+        "retry_count": 0,
+        "retrieved_sources": ["軍人權益事件處理法.md#第52條"],
+        "retrieved_docs": [
+            "來源: 軍人權益事件處理法.md\n"
+            "內容: 第52條 復審決定應於三個月內為之。"
+            "依第23條規定通知補正者，自補正之次日起算。"
+        ],
+    })
+
+    assert out["scope"] == "needs_retry"
+    assert "第99條" in out["feedback"]
 
 
 def test_no_sources_without_citations_uses_existing_verifier():
@@ -148,3 +189,14 @@ def test_react_provenance_rejects_short_and_chinese_ungrounded_citations():
     assert _ungrounded_react_citations(
         "依第四十六條辦理。", ["法.md#第46條"]
     ) == set()
+
+
+def test_react_cross_reference_present_in_tool_evidence_is_grounded():
+    evidence = ["來源: 法.md (第52條)\n第52條依第23條規定辦理。"]
+
+    assert _ungrounded_react_citations(
+        "依第52條及第23條辦理。", ["法.md#第52條"], evidence
+    ) == set()
+    assert _ungrounded_react_citations(
+        "依第99條辦理。", ["法.md#第52條"], evidence
+    ) == {99}

@@ -102,6 +102,14 @@ def _retrieved_article_nums(sources) -> set:
     return nums
 
 
+def _retrieved_evidence_article_nums(sources, evidence=None) -> set:
+    """Article numbers grounded by source identifiers or retrieved text."""
+    nums = _retrieved_article_nums(sources)
+    for item in evidence or []:
+        nums |= _article_nums(str(item))
+    return nums
+
+
 # Deterministic PRC / 中共 hard-block pattern (中科院要求). SPECIFIC PRC markers
 # only — must NOT match ROC terms (e.g. 陸海空軍, 中華民國) or generic words.
 _PRC_BLOCK_RE = re.compile(
@@ -332,9 +340,9 @@ def create_passthrough_node(llm: ChatOpenAI) -> Callable:
 # Query Expansion Helper
 # ---------------------------------------------------------------------------
 
-# Pattern to detect short article references (e.g., "第8條", "第 8 條", "第八條")
+# Pattern to detect short article references (e.g., "8條", "第 8 條", "第八條")
 _ARTICLE_REF_PATTERN = re.compile(
-    r'^第\s*([0-9一二三四五六七八九十百千]+)\s*條'
+    r'^(?:第\s*)?([0-9一二三四五六七八九十百千]+)\s*條'
 )
 
 _CN_NUMS = {
@@ -653,7 +661,10 @@ def create_verify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
         # monitoring_addon RAGAS faithfulness.
         retrieved_sources = state.get("retrieved_sources", []) or []
         answer_articles = _article_nums(generation)
-        retrieved_articles = _retrieved_article_nums(retrieved_sources)
+        retrieved_articles = _retrieved_evidence_article_nums(
+            retrieved_sources,
+            state.get("retrieved_docs", []) or [],
+        )
         reports_no_info = any(phrase in generation for phrase in _NO_INFO_PHRASES)
         honestly_missing = (
             _reported_missing_article_nums(generation)

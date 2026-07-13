@@ -21,6 +21,10 @@ def test_short_article_reference_keeps_its_existing_expansion():
     assert nodes._expand_query("第八條") == "第 8 條 法律條文規定內容 第8條"
 
 
+def test_short_article_reference_without_prefix_is_expanded():
+    assert nodes._expand_query("46條") == "第 46 條 法律條文規定內容 第46條"
+
+
 def test_source_scoped_search_sends_original_query_to_every_corpus_source():
     calls = []
 
