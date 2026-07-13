@@ -135,6 +135,10 @@ services:
       OPENID_PROVIDER_URL: ${OPENID_PROVIDER_URL:-http://keycloak:8080/realms/iso42001/.well-known/openid-configuration}
       OAUTH_SCOPES: ${OAUTH_SCOPES:-openid email profile}
       OAUTH_MERGE_ACCOUNTS_BY_EMAIL: ${OAUTH_MERGE_ACCOUNTS_BY_EMAIL:-true}
+      # 避免背景 task 把完整聊天歷史送進 RAG，造成 input_too_long 稽核噪音。
+      ENABLE_TITLE_GENERATION: "False"
+      ENABLE_FOLLOW_UP_GENERATION: "False"
+      ENABLE_TAGS_GENERATION: "False"
     volumes:
       - openwebui_data:/app/backend/data
 
