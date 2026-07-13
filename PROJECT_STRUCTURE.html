@@ -66,7 +66,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <h1 id="project-structure">專案結構導覽（Project Structure）</h1>
 <blockquote>
 <p>ISO 42001 RAG 法律文件查詢系統 — 目錄地圖。供稽核員、維運人員、新進開發者
-快速定位。最後更新：2026-07-02。</p>
+快速定位。最後更新：2026-07-13。</p>
 <p>稽核證據總入口見 <code>AUDIT_EVIDENCE_INDEX.md</code>；架構說明見
 <code>RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</code>。
 本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。</p>
@@ -92,6 +92,16 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>原始碼</td>
 </tr>
 <tr>
+<td><code>monitoring_addon/</code></td>
+<td>健康、告警、漂移、V&amp;V 與稽核儀表板</td>
+<td>原始碼＋執行期資料</td>
+</tr>
+<tr>
+<td><code>admin_console/</code></td>
+<td>憑證卡登入的維運管理台；<code>data/rag-runtime.env</code> 僅同步非秘密 RAG 白名單設定</td>
+<td>原始碼＋執行期設定</td>
+</tr>
+<tr>
 <td><code>code-server/</code></td>
 <td>瀏覽器 IDE image，預裝 Docker/container extension，掛載整個專案</td>
 <td>設定</td>
@@ -108,12 +118,12 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td><code>docker-compose.yaml</code></td>
-<td>外部稽核準備服務編排：rag-api / embed-proxy / jupyter / openwebui / keycloak / code-server / nginx，加上 db 依賴</td>
+<td>10 服務編排：db / embed-proxy / rag-api / openwebui / keycloak / nginx / jupyter / code-server / monitoring / admin</td>
 <td>設定</td>
 </tr>
 <tr>
 <td><code>docker-compose.hardening.yml</code></td>
-<td>部署強化 override（R-INFRA 修正，可一鍵套用）</td>
+<td>部署強化 override，含 <code>admin:8300</code> 的 loopback 限制</td>
 <td>設定</td>
 </tr>
 <tr>
@@ -122,9 +132,14 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>設定範本</td>
 </tr>
 <tr>
-<td><code>deploy.sh</code> / <code>save_images.sh</code></td>
-<td>離線部署管線</td>
+<td><code>deploy.sh</code> / <code>save_images.sh</code> / <code>make_update_package.sh</code></td>
+<td>包含 admin image/code 的離線部署管線</td>
 <td>腳本</td>
+</tr>
+<tr>
+<td><code>scripts/verify_project.sh</code></td>
+<td>不讀 <code>.env</code> 機密的 Compose、shell 與三套 pytest 本機驗證入口</td>
+<td>驗證腳本</td>
 </tr>
 <tr>
 <td><code>deploy_packages/</code></td>
@@ -164,7 +179,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <tbody>
 <tr>
 <td><code>rag_system/agent/</code></td>
-<td>LangGraph 工作流：<code>graph.py</code>（圖拓撲）、<code>nodes.py</code>（classify/retrieve/generate/verify）、<code>state.py</code>、<code>react_workflow.py</code>（ReAct 原型，預設關閉）</td>
+<td>classic LangGraph 為預設；<code>nodes.py</code> 的 verify 含 citation provenance gate；<code>react_workflow.py</code> 僅在 <code>REACT_MODE=true</code> 時 opt-in</td>
 </tr>
 <tr>
 <td><code>rag_system/core/</code></td>
@@ -196,7 +211,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td><code>tests/</code></td>
-<td>評估與單元測試（V&amp;V、prompt 安全、偏誤公平、認證、異常偵測）</td>
+<td>評估與單元測試（含 runtime regression 與 citation provenance gate）</td>
 </tr>
 <tr>
 <td><code>docs/</code></td>
@@ -250,14 +265,15 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <ul>
 <li><strong>忽略</strong>：建置產物（deploy_packages、images、<em>.tar、</em>.zip）、執行期資料
   （audit_logs、reports、processed）、機密（.env、ssl 私鑰）、本機 IDE/工具狀態。</li>
+<li><code>nginx/ssl/</code> 只追蹤 <code>.gitkeep</code>；<code>*.key</code> / <code>*.crt</code> / <code>*.csr</code> 由部署機產生或配發，不得進入 Git 或離線程式碼包。</li>
 <li><strong>追蹤</strong>：原始碼、設定範本、文件、golden_dataset、必要 <code>.gitkeep</code>。</li>
 <li>外部稽核準備以 Git 管理原始碼與文件；正式內網若不使用 Git，可重新啟用
   <code>version_tracker.py</code> 產生 SHA-256 快照（<code>RAG/data/versions/</code>）＋ CHANGELOG。</li>
 </ul>
-<h2 id="_2">維運建議（未執行，待決定）</h2>
-<ul>
-<li>外部稽核準備目前已刪除舊部署包、Docker tar、audit log、版本 snapshot、快取、舊 <code>.env</code> 與本機工具狀態。</li>
-</ul>
+<h2 id="_2">本機驗證入口</h2>
+<pre><code class="language-bash">./scripts/verify_project.sh
+</code></pre>
+<p>腳本使用 <code>.env.example</code> 解析 base/hardening Compose，以 <code>bash -n</code> 檢查 shell，並執行部署契約、<code>RAG/tests</code>、<code>monitoring_addon/tests</code>、<code>admin_console/tests</code>；不讀取或印出 <code>.env</code> 內容。</p>
   </div>
   <div class="docfoot">
     本檔由 <code>scripts_md2html.py</code> 自 <code>PROJECT_STRUCTURE.md</code> 產生 · 自包含，可離線開啟。

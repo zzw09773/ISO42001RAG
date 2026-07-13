@@ -2,9 +2,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SSL_DIR="$SCRIPT_DIR/ssl"
+SSL_DIR="${SSL_DIR:-${SCRIPT_DIR}/ssl}"
 DOMAIN="${CERT_DNS:-aimla.ai.example.com}"
 
+umask 077
 mkdir -p "$SSL_DIR"
 
 OPENSSL_CONF="$(mktemp)"
@@ -41,5 +42,8 @@ openssl x509 -req -days 365 \
   -out "$SSL_DIR/cert.crt" \
   -extensions req_ext \
   -extfile "$OPENSSL_CONF"
+
+chmod 600 "$SSL_DIR/cert.key"
+chmod 644 "$SSL_DIR/cert.crt" "$SSL_DIR/cert.csr"
 
 echo "自簽憑證已建立於 $SSL_DIR，DNS SAN: $DOMAIN"

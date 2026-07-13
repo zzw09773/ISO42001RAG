@@ -66,7 +66,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <h1 id="ai-ai-risk-assessment-iso-42001-rag">AI 風險評估（AI Risk Assessment）— ISO 42001 RAG 法律文件查詢系統</h1>
 <blockquote>
 <p>ISO 42001 條文 6.1.2 / 8.2（AI 風險評估）證據。
-狀態：v1.1.0（2026-07-02 編製）。
+狀態：v1.1.0（2026-07-13 復核）。
 風險識別與現有控制為工程盤點結果；<strong>風險等級（可能性×衝擊）與接受決定
 必須由稽核負責人／單位主管評定</strong>，AI 不代為決策。</p>
 </blockquote>
@@ -115,7 +115,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>R4</td>
 <td>個資／敏感資料外洩</td>
 <td>查詢內容含個資，日誌外流</td>
-<td>內網部署、日誌 chmod 0o640、API 認證 + TRUSTED_PROXIES、來源 IP 溯源</td>
+<td>內網部署、日誌 chmod 0o640、TRUSTED_PROXIES IP/CIDR、來源 IP 溯源、串流完整緩衝後輸出過濾</td>
 <td>☐</td>
 <td>☐</td>
 <td>☐</td>
@@ -177,7 +177,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tbody>
 </table>
 <h2 id="2026-06-11">架構面技術風險（2026-06-11 架構分析發現，經證據交叉覆核）</h2>
-<p>下列風險來自 <code>SYSTEM_ARCHITECTURE_ANALYSIS.md</code> §7 的逐元件盤點，均附 file:line 證據。
+<p>下列風險來自 <code>SYSTEM_ARCHITECTURE_ANALYSIS.md</code> §7 的逐元件盤點，均附 file/symbol 證據。
 與 R1–R10（AI 行為風險）互補，偏部署組態與安全機制面。<strong>多數高影響項可在內網部署
 層處置，不需解凍 RAG/ 程式碼。</strong> 等級與接受決定同樣由稽核負責人評定。</p>
 <table>
@@ -213,10 +213,17 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>☐</td>
 </tr>
 <tr>
-<td>R-SEC-1</td>
-<td>串流路徑繞過輸出過濾（PII 不遮罩）</td>
+<td>R-SEC-1r</td>
+<td>API 與 ReAct SSE 已在送出前完成 post-verify、citation fail-safe 與輸出過濾；ReAct actions 稽核與完整 golden gating 尚未補齊</td>
+<td>medium</td>
+<td>維持 <code>REACT_MODE=false</code>；啟用前補齊治理閘</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>R-INFRA-7</td>
+<td>Admin 掛載 Docker socket 與 <code>.env</code>，權限影響面高</td>
 <td>high</td>
-<td>稽核後：串流套用 filter_output</td>
+<td>憑證卡白名單；hardening 將 8300 綁 loopback；break-glass 預設關閉</td>
 <td>☐</td>
 </tr>
 <tr>

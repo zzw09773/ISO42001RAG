@@ -5,12 +5,13 @@ Implements a multi-node LangGraph workflow:
 
   START → classify → [legal]  → retrieve → generate → verify → [verified] → END
                      [reject] → reject → END          ↑          [needs_retry] ↓
-                                                       └──────────────────────┘
+                                                       └──── regenerate ──────┘
 
 Provides both synchronous (run_query) and async streaming (astream_query) APIs.
 """
 from __future__ import annotations
 import logging
+from threading import RLock
 from typing import Any, AsyncIterator, Dict, Optional, List
 
 from langgraph.graph import END, StateGraph
@@ -19,6 +20,10 @@ from langchain_openai import ChatOpenAI
 from ..core.config import RAGConfig
 from ..core.factory import ComponentFactory
 from ..core.audit_logger import AuditLogger
+from ..core.retrieval_generation import (
+    bump_retrieval_generation,
+    current_retrieval_generation,
+)
 from .state import GraphState
 from .nodes import (
     create_classify_node,
@@ -36,6 +41,19 @@ logger = logging.getLogger(__name__)
 
 # Cache for the compiled workflow
 _WORKFLOW_CACHE = {}
+_WORKFLOW_CACHE_LOCK = RLock()
+
+
+def invalidate_workflow_cache() -> None:
+    """Drop compiled workflows so retrieval indexes rebuild on next query."""
+    bump_retrieval_generation()
+    with _WORKFLOW_CACHE_LOCK:
+        _WORKFLOW_CACHE.clear()
+
+    # ReAct agents also close over a RetrievalService with its own BM25 index.
+    from .react_workflow import invalidate_react_workflow_cache
+
+    invalidate_react_workflow_cache()
 
 
 def create_llm(config: RAGConfig) -> ChatOpenAI:
@@ -64,7 +82,7 @@ def _route_after_verify(state: GraphState) -> str:
     """Route based on verification result."""
     scope = state.get("scope", "")
     if scope == "needs_retry":
-        return "retrieve"
+        return "generate"
     return END
 
 
@@ -79,13 +97,17 @@ def create_rag_workflow(
     Graph structure:
       classify → retrieve → generate → verify → END
                ↘ reject → END           ↑ needs_retry ↓
-                                         └─────────────┘
+                                         └─ regenerate ┘
     """
     use_cache = llm is None
-    cache_key = hash(config)
+    generation = current_retrieval_generation()
+    cache_key = (hash(config), generation)
 
-    if use_cache and cache_key in _WORKFLOW_CACHE:
-        return _WORKFLOW_CACHE[cache_key]
+    if use_cache:
+        with _WORKFLOW_CACHE_LOCK:
+            cached = _WORKFLOW_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
 
     config.validate()
 
@@ -142,14 +164,18 @@ def create_rag_workflow(
     workflow.add_conditional_edges(
         "verify",
         _route_after_verify,
-        {"retrieve": "retrieve", END: END},
+        {"generate": "generate", END: END},
     )
 
     app = workflow.compile()
 
     if use_cache:
-        _WORKFLOW_CACHE[cache_key] = app
-        logger.info(f"Compiled and cached multi-node RAG workflow")
+        with _WORKFLOW_CACHE_LOCK:
+            # A document mutation may finish while this expensive workflow is
+            # compiling. Never repopulate the cache under a stale generation.
+            if current_retrieval_generation() == generation:
+                _WORKFLOW_CACHE[cache_key] = app
+                logger.info("Compiled and cached multi-node RAG workflow")
 
     return app
 
@@ -291,7 +317,7 @@ async def astream_query(
             if etype == "on_chat_model_start" and node == "generate":
                 generation_count += 1
                 if generation_count > 1:
-                    yield f"\n\n> ⚠️ **系統檢測到回答需要補強，正在進行第 {generation_count} 次深度檢索與生成...**\n\n"
+                    yield f"\n\n> ⚠️ **系統檢測到回答需要補強，正在進行第 {generation_count} 次重新生成...**\n\n"
 
             if etype == "on_chat_model_stream":
                 # Token streaming from LLM-backed nodes
@@ -314,6 +340,11 @@ async def astream_query(
                         trace.setdefault("actions", []).extend(out["actions"])
                     if out.get("retrieved_sources"):
                         trace["retrieved_sources"] = out["retrieved_sources"]
+                    if "generation" in out:
+                        # API buffers model events and emits only this final,
+                        # post-verify value. A verify node may replace an
+                        # ungrounded answer after the model tokens were seen.
+                        trace["final_generation"] = out["generation"]
                 ev_name = event.get("name", "")
                 if ev_name in _NON_LLM_OUTPUT_NODES and ev_name not in _emitted_non_llm:
                     gen = out.get("generation", "") if isinstance(out, dict) else ""
@@ -327,6 +358,7 @@ async def astream_query(
 
 __all__ = [
     "create_rag_workflow",
+    "invalidate_workflow_cache",
     "run_query",
     "astream_query",
 ]

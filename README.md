@@ -1,181 +1,119 @@
-# ISO42001 實作系統 — 一鍵離線部署包
+# ISO 42001 中文法律 RAG 系統
 
-這是一個整合 Retrieval-Augmented Generation (RAG) API、Open WebUI、Keycloak、Code Server、PostgreSQL/pgvector、Jupyter 與 Nginx 的 ISO42001 外部稽核準備部署專案。
-本專案保留完整服務架構，但已清空歷史稽核資料、部署包、Docker tar 與本機機密設定。
-本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。
+本專案將中文法律 RAG API、Open WebUI、OIDC 認證、稽核監測與內網維運工具整合為可離線部署的 Docker Compose stack。模型不包在專案內；`rag-api` 透過內網 LLM HTTP 端點與 `embed-proxy` 連接 GPU 推論主機。
 
----
+## 服務架構
 
-## 🏗️ 系統服務架構
+`docker-compose.yaml` 定義 10 個服務：
 
-本系統透過單一 `docker-compose.yaml` 管理以下服務。`db/pgvector` 是 RAG 基礎依賴；其餘為主要內網入口與維運服務。
-
-| 服務 | 說明 | Port |
+| 服務 | 用途 | 預設宿主埠 |
 |---|---|---|
-| **pgvector** (`db`) | PostgreSQL + pgvector 向量資料庫 | `15432` |
-| **embed-proxy** | OpenAI Embeddings API ↔ Triton gRPC 轉換層 | `17100` → `7100` |
-| **rag-api** | FastAPI RAG 服務（向量檢索 + LLM 回答） | `8043` → `8000` |
-| **openwebui** | 使用者聊天介面 | `18088` → `8080` |
-| **keycloak** | OpenWebUI OIDC / 強密碼註冊用 | `18080` → `8080` |
-| **code-server** | 瀏覽器 IDE，掛載整個 ISO42001 專案，含 container/Docker extension | `18443` → `8080` |
-| **nginx** | HTTPS 反向代理，宿主端避開內網既有 80/443 服務 | `8088` → `80`, `8443` → `443` |
-| **jupyter** | 開發 / 索引環境 | `25678` → `8888` |
+| `db` | PostgreSQL 17 + pgvector | `15432` |
+| `embed-proxy` | OpenAI Embeddings HTTP（容器 `7100`）轉 Triton gRPC（`EMBED_GRPC_PORT`） | `17100` |
+| `rag-api` | FastAPI RAG、稽核與 OpenAI 相容 API | `8043` |
+| `openwebui` | 使用者對話介面 | `18088` |
+| `keycloak` | OpenWebUI OIDC 與強密碼政策 | `18080` |
+| `nginx` | OpenWebUI 與 monitoring 的 HTTPS 反向代理 | `8088` / `8443` |
+| `jupyter` | 法規索引與開發環境 | `25678` |
+| `code-server` | 內網維運 IDE | `18443` |
+| `monitoring` | 健康、漂移、V&V 與稽核儀表板 | `8200` |
+| `admin` | 憑證卡登入的維運管理台 | `8300` |
 
-```
-使用者瀏覽器
-    │ HTTPS
-    ▼
-  Nginx (:8443 on host)
-    └── / → Open WebUI (:8080)
+```text
+使用者 ─HTTPS→ nginx ─→ OpenWebUI ─→ rag-api
+                                  ├→ db / pgvector
+                                  ├→ embed-proxy:7100 ─gRPC→ Triton
+                                  └→ 內網 LLM HTTP
+                    └→ monitoring
 
-Open WebUI
-    ├── OIDC → Keycloak (:8080)
-    └── OpenAI API → RAG API (:8000)
-                      ├── pgvector (:5432)
-                      ├── embed-proxy (:7100) → Triton gRPC (:9001)
-                      └── LLM HTTP (:7000)
-
-Code Server (:18443) 掛載整個專案並透過 Docker socket 管理容器。
+OpenWebUI ─OIDC→ Keycloak
+維運人員 ─憑證卡→ admin:8300
 ```
 
----
+`admin` 不經 nginx，以一次性 nonce 綁定的 PKCS#7/CMS 簽章、釘選 CA 憑證鏈與 `ADMIN_CARD_SERIALS` 白名單登入。帳密 fallback 預設關閉；若作為 break-glass 啟用，必須同時設定強密碼。
 
-## ⚙️ LLM 與 Embedding 服務設定
+Admin 儲存設定時仍維護根 `.env`，但只把 13 個可管理的非秘密鍵同步到 `admin_console/data/rag-runtime.env`；rag-api 以唯讀方式載入此白名單檔後 restart。`rag-effective.env` 也只記錄同一組 13 鍵的實際生效值。這兩份 runtime 檔均不含 `API_KEYS`、`LLM_API_KEY`、`EMBED_API_KEY` 或管理密碼；但 rag-api 連接上游推論服務所需的 `LLM_API_KEY` / `EMBED_API_KEY` 仍會由 Compose `environment` 單獨注入容器，不應解讀為 RAG 容器內永遠沒有 API key。
 
-本系統不內建 LLM 或 Embedding 模型，需要連接內網 **GPU 推論伺服器**（Triton）。
+## RAG 執行模式與安全邊界
 
-### 架構說明
+- 生產預設是 classic LangGraph：`classify → retrieve → generate → verify`。
+- ReAct 是 opt-in 原型；只有明確設定 `REACT_MODE=true` 才啟用。
+- classic `verify` 先執行確定性 citation provenance gate：回答中的「第 N 條」必須可回溯至 `retrieved_sources`；無據引用先重試，重試額度耗盡時以 fail-safe 訊息取代原回答，不會將無據條號送給使用者。
+- `stream=true` 保留 OpenAI SSE envelope，但答案會先完整緩衝並通過輸出過濾，再送給客戶端。
 
-```
-┌─────────────────────────────────┐
-│  GPU 推論伺服器（獨立機器）        │
-│  ┌─────────────────────────┐    │
-│  │  Triton Inference Server │    │
-│  │  - LLM Model (HTTP)     │ :7000 (HTTP)
-│  │  - nv-embed-v2 (gRPC)   │ :9001 (gRPC)
-│  └─────────────────────────┘    │
-└─────────────────────────────────┘
-         ▲                ▲
-         │                │
-   直接 HTTP           gRPC（需轉換）
-         │                │
-   RAG API          embed-proxy
-                  （OpenAI ↔ Triton 轉換層）
-                          │
-                     RAG API / Jupyter
-```
+## 部署
 
-### `.env` 參數說明
+1. 建立設定，並將所有佔位密碼改為強隨機值：
 
-```ini
-# ── 必填：GPU 推論伺服器 IP ──────────────────────────────────
-LLM_HOST=172.16.120.35        # Triton 伺服器的 IP 位址
-
-# ── LLM 服務（HTTP，OpenAI 相容） ────────────────────────────
-LLM_PORT=7000                 # LLM HTTP port（Triton 的 OpenAI endpoint）
-CHAT_MODEL_NAME=openai/gpt-oss-20b
-
-# ── Embedding 服務（經由 embed-proxy 轉換 gRPC） ──────────────
-# Triton 使用 gRPC，embed-proxy 負責轉換成 OpenAI /v1/embeddings 格式
-# EMBED_PORT 是 embed-proxy 對外的 HTTP port（供 RAG API 使用，不是 Triton port）
-EMBED_PORT=9000               # ← 此為 Triton gRPC port，embed-proxy 讀取此值
-EMBED_MODEL_NAME=nvidia/nv-embed-v2
-
-# ── API Key（Triton 端若有設定 JWT 驗證則填入） ───────────────
-LLM_API_KEY=<Triton JWT Token>
-EMBED_API_KEY=<Triton JWT Token>
-```
-
-> **embed-proxy 說明**：Triton 的 Embedding 服務使用 gRPC 協定，而 LangChain 只支援 OpenAI HTTP 格式。`embed-proxy` 容器作為中間層，將 `POST /v1/embeddings`（OpenAI 格式）轉換成 Triton gRPC 呼叫，RAG API 只需設定 `EMBED_API_BASE=http://embed-proxy:8100/v1` 即可。
-
-### 搬遷到不同內網的修改步驟
-
-只需修改 `.env` 中的一行：
-```ini
-LLM_HOST=<新的 GPU 伺服器 IP>
-```
-其他所有設定（port、API Key、模型名稱）若不變則不需修改。
-
----
-
-
-
-在開始之前，請確保系統已安裝 **Docker** 與 **Docker Compose**。
-
-1. **建立 `.env` 檔案**
-   複製一份環境變數範本並修改：
    ```bash
    cp .env.example .env
+   chmod 600 .env
    ```
-   *⚠️ 您必須「手動修改」 `.env` 檔案中的設定：*
-   - 打開 `.env` 檔案，找到 **`LLM_HOST=`** 這一行。
-   - 將它修改為提供 LLM/Embedding API 的「GPU 推論伺服器」的內部 IP（例如 `LLM_HOST=192.168.1.100`）。
-   - *（注意：至於本機的 IP 與目錄權限 UID/GID，`deploy.sh` 會全自動偵測處理，您不需手動填寫）*
-   - **UID/GID (全自動)**：部署腳本會自動偵測您的使用者 ID 並覆寫此檔案。
 
-2. **目錄結構與憑證**
-   請確保已將 Nginx 的 SSL 自簽憑證放在以下路徑：
-   - `nginx/ssl/cert.crt`
-   - `nginx/ssl/cert.key`
+2. 確認至少已設定 LLM、Embedding、DB、OpenWebUI/Keycloak 與 code-server。Admin 登入必須二擇一：填入 `ADMIN_CARD_SERIALS`，或作為 break-glass 明確設定 `ENABLE_PASSWORD_FALLBACK=true` 並同時填入強隨機 `ADMIN_USERNAME` / `ADMIN_PASSWORD`；兩者皆空時 admin 會 fail closed。`embed-proxy` 的 HTTP 容器埠固定為 `7100`，Triton gRPC 埠由 `EMBED_GRPC_PORT` 設定。
 
----
+   本專案目前採受控內網與 port 直連，可維持 `ALLOW_INTRANET_MODE=true`；本次修正不要求設定 RAG API key。
 
-## 🚀 部署流程（一鍵腳本）
+3. 啟動完整 stack：
 
-系統設計為內網離線部署工作流：先在內網維運機準備 `images/` 映像檔，再搬移到目標內網主機執行部署。
+   ```bash
+   ./deploy.sh
+   ```
 
-### 階段一：內網部署包準備
+   `deploy.sh` 專為離線現場設計，會使用 `--no-build --pull never`，不會臨場 build 或 pull。乾淨 checkout 必須先放入完整 `images/*.tar`，或先在可建置的機器執行 `make_update_package.sh`；缺任一核定 image 時腳本會直接結束。Compose `--wait` 只會等有 healthcheck 的服務成為 healthy，沒有 healthcheck 的服務只能確認容器處於 running；這不等同端到端 RAG 查詢或上游模型已驗證就緒。
 
-在內網維運機執行，此步驟會建置本專案 images、拉取已核定的固定版本基礎 images，並匯出為 `.tar` 檔。
+### 部署強化
+
+主 Compose 保留開發可用性；正式內網交付應合併 hardening override：
 
 ```bash
-chmod +x save_images.sh
+docker compose \
+  -f docker-compose.yaml \
+  -f docker-compose.hardening.yml \
+  up -d --wait
+```
+
+hardening 會將 DB、RAG、Embedding、OpenWebUI、Keycloak、Jupyter、code-server、monitoring 與 `admin:8300` 的 direct ports 限制為 loopback。`admin` 具有 Docker 控制與 `.env` 維護能力，不可對不可信網路暴露。完整風險與驗證步驟見 `RAG/docs/governance/DEPLOYMENT_HARDENING.md`。
+
+### TLS 私鑰原則
+
+本次工作樹已將曾被追蹤的 `nginx/ssl/cert.key` / `cert.crt` / `cert.csr` 標記刪除；這份刪除必須納入交付 commit，新 revision 才不會再夾帶它們。舊私鑰仍存在 Git history，必須視為已洩漏：不可再用於任何環境，下次部署須以 `nginx/generate_certs.sh` 或正式機密配發流程產生新憑證並完成輪替。若對外分享含歷史的 repository clone，還需另行評估歷史清理；本次不主張 Git history 已乾淨。
+
+## 離線包
+
+```bash
 ./save_images.sh
+./make_update_package.sh
 ```
-執行完畢後，所有所需映像檔將打包至 `images/` 目錄下；大小依 image 版本而定。
 
-### 階段二：內網目標主機部署
+離線輸出包含 10 個服務所需的 images，並包含 `admin_console/`、Compose、hardening override、`tests/`、設定範本與文件。Compose project/image 名固定為 `iso42001rag`，`MANIFEST.txt` 對實際交付的 zip/tar 記錄 SHA-256，因此可辨識與驗證某一份具體成品。這不代表任意時間重建都會產生相同 bytes：`pgvector/pgvector:pg17` 與 `nginx:alpine` 等浮動 tag 可能在日後指向不同內容，若要達成 rebuild 級別的可重現性，必須改用受控 mirror 或 digest pin。`.env`、TLS 私鑰、稽核日誌與其他執行期資料一律排除。
 
-將整個 `ISO42001Deploy/` 資料夾（包含 `images/` 目錄）複製到目標內網主機。
-**只需執行一鍵部署腳本**：
+## 驗證
+
+不啟停容器、不讀取或印出 `.env` 機密的本機驗證入口：
 
 ```bash
-chmod +x deploy.sh
-./deploy.sh
+./scripts/verify_project.sh
 ```
 
-**`deploy.sh` 的自動化行為包含：**
-- **自動偵測 UID/GID**：自動抓取當前 Linux 使用者的 UID 與 GID 並更新至 `.env`，確保所有 Docker 產生的檔案您都有讀寫權限。
-- **偵測 Docker Socket GID**：自動對應主機的 docker 群組，讓容器內也可以擁有正當權限。
-- **離線影像載入**：自動從 `images/` 載入所有的 `.tar` 映像檔。
-- **智慧判斷**：如果偵測到已經有現成的 RAG 與 Jupyter images，會自動套用 **「離線模式」**，不觸發會失敗的 build 動作。
-- **等待健康檢查**：啟動後會等待（約 15-30 秒），直到所有核心服務被標記為 `healthy`。
+它會檢查：
 
----
+- base 與 hardening Compose 可解析，且服務集合為預期的 10 個；
+- 版控中沒有 nginx TLS 私鑰；
+- 專案 shell scripts 通過 `bash -n`；
+- 部署契約測試 `tests/` 涵蓋固定 image 名、admin hardening、離線包與憑證權限，並會在無 Git metadata 的離線包中照常執行；
+- `RAG/tests`、`monitoring_addon/tests`、`admin_console/tests` 三套 pytest。
 
-## 🌐 服務存取與使用
+若只想手動檢查 Compose：
 
-部署完成後，可透過瀏覽器存取以下連結（請將 `<主機IP>` 替換為實際的伺服器 IP）：
-
-- **Nginx / Open WebUI**: `https://aimla.ai.example.com:8443/`
-- **Open WebUI direct**: `http://<主機IP>:18088/`
-- **Keycloak**: `http://<主機IP>:18080/`
-- **Code Server**: `http://<主機IP>:18443/`
-- **RAG API 狀態**: `http://<主機IP>:8043/health`
-- **開發環境 (Jupyter)**: `http://<主機IP>:25678/`
-
-*附註：由於 Nginx 使用的是本地自簽憑證，在首次存取 HTTPS (Open WebUI) 時，瀏覽器會跳出「您的連線不是私人連線」的警告。請點擊「進階」並選擇「繼續前往」即可。*
-
----
-
-## 🧹 系統清理
-
-如需停止並移除所有容器與網路設定，請執行：
 ```bash
-docker compose down
+ADMIN_CARD_SERIALS=0000000 docker compose --env-file .env.example config --quiet
+ADMIN_CARD_SERIALS=0000000 docker compose --env-file .env.example \
+  -f docker-compose.yaml -f docker-compose.hardening.yml config --quiet
 ```
 
-如需移除包含資料庫、Open WebUI 對話紀錄在內的所有長效資料（**請謹慎執行**）：
-```bash
-docker compose down -v
-```
+`scripts_md2html.py` 會將 Markdown 批次產生自包含 HTML；Markdown 是版控來源，發佈前應重生 HTML 鏡像並將其與同一 revision 一併驗證。
+
+## 資料清理
+
+`reset_data.sh` 會刪除稽核日誌、對話與監測執行期資料。它只能在正式測試開始前使用；測試開始後，這些資料屬稽核證據，不得重置。

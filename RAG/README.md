@@ -27,7 +27,9 @@
 - **混合檢索（Hybrid Retrieval）**：BM25 關鍵字搜尋 ＋ 向量語意搜尋，結果 Round-Robin 合併。
 - **LLM Reranking**：以 LLM 對候選 chunks 重新排名，優先選出語意最相關內容。
 - **階層式文件索引（Parent-Child）**：小 chunk 做向量搜尋，命中後取回完整父文件。
-- **代理工作流（Agentic Workflow）**：使用 ReAct 代理拆解問題、多次搜尋、綜合回答。
+- **Classic LangGraph（生產預設）**：`classify → retrieve → generate → verify`，保留可稽核 actions 軌跡與有限重試。
+- **ReAct（opt-in）**：僅在明確設定 `REACT_MODE=true` 時啟用；未設定時不會自動走原型路徑。
+- **Citation provenance gate**：classic verify 先將回答中的條號與 `retrieved_sources` 比對，未被檢索證據支持的條文引用會觸發重試；若重試額度已耗盡，節點以 fail-safe 訊息取代原回答，不回傳無據條號。
 - **智慧記憶（Intelligent Memory）**：混合摘要壓縮長對話，Token-Aware 上下文管理（約 3000 tokens）。
 - **OpenAI 相容 API**：標準 `/v1/chat/completions` 端點，可直接對接 Open WebUI 或任何 OpenAI 客戶端。
 
@@ -36,6 +38,7 @@
 - **速率限制（A.8）**：每 API Key 每分鐘 60 次請求（滑動視窗），超過回傳 HTTP 429。
 - **輸入消毒（A.8）**：七類攻擊偵測：Prompt Injection、系統資訊探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換攻擊；超過 2000 字元自動拒絕。
 - **輸出過濾（A.8）**：自動遮蔽連線字串、伺服器路徑、API Key、Base64 Token 等敏感資訊。
+- **安全串流邊界**：`stream=true` 保留 OpenAI SSE 格式，但會先完整緩衝並過濾答案，再送出內容 chunk；不承諾模型 token 級即時延遲。
 - **異常分析（A.6）**：滑動視窗分析延遲突增、拒絕率突升、安全事件叢集、連續重試。
 - **稽核日誌（A.6）**：每日 JSONL 滾動記錄所有查詢、安全事件、認證事件。
 - **偏誤評估（A.5）**：成對問題一致性檢查，確保不因用詞差異產生歧視性回答。
@@ -83,6 +86,9 @@ Stage 3: 取回 Parent Document（完整條文段落）
 LangGraph Agent → 組合回答
    │
    ▼
+[Citation provenance gate] → 無據條號 → 重試 → 額度耗盡時以 fail-safe 訊息取代回答
+   │ 通過
+   ▼
 [輸出過濾]  →  遮蔽連線字串 / 路徑 / Token → 回傳用戶
 ```
 
@@ -99,19 +105,23 @@ LangGraph Agent → 組合回答
 ### 啟動
 
 ```bash
-# 在 ISO42001Deploy/ 目錄下
+# 在 ISO42001RAG/ 專案根目錄下
 ./deploy.sh
 ```
 
 ### 離線部署（內網）
 
 ```bash
-# 在內網維運機上打包
-./save_images.sh       # 輸出到 images/*.tar（共約 5.3GB）
+# 在可建置且可取得核定 images 的機器上打包
+./save_images.sh       # 輸出到 images/*.tar，包含 admin image
 
-# 複製整個 ISO42001Deploy/ 到內網後執行
+# 複製整個 ISO42001RAG/ 到內網後執行
 ./deploy.sh
 ```
+
+`deploy.sh` 固定使用 `--no-build --pull never`，不會在內網現場臨時建置或拉取。乾淨 checkout 必須先擁有完整 `images/*.tar`，或在可建置機器上先執行 `make_update_package.sh`；缺少任一必要 image 會 fail closed。`docker compose --wait` 只會等有 healthcheck 的服務成為 healthy，對無 healthcheck 的服務只確認容器 running，不代表已通過端到端查詢驗證。
+
+交付包會固定 Compose project 與專案 image 名，並在 `MANIFEST.txt` 對具體 zip/tar 成品記錄 SHA-256。但 `pgvector/pgvector:pg17`、`nginx:alpine` 等浮動 tag 若日後重新拉取，內容可能改變；需要 rebuild 級可重現性時，應改用受控 mirror 或 digest pin。
 
 ---
 
@@ -119,13 +129,20 @@ LangGraph Agent → 組合回答
 
 ### 容器化部署
 
-所有設定集中在上層 `ISO42001Deploy/.env`，**無需修改本目錄下任何檔案**。
+所有部署設定集中在專案根目錄 `.env`，**無需修改本目錄下任何檔案**。
+管理台修改設定後，只會把 13 個非秘密白名單鍵同步到 `admin_console/data/rag-runtime.env`：`CHAT_MODEL_NAME`、`TOP_K`、`RERANK_TOP_N`、`REASONING_EFFORT`、`REACT_MODE`、`CHUNK_SIZE`、`MAX_RETRIEVAL_TOKENS`、`RATE_LIMIT_PER_MINUTE`、`RAG_LOG_LEVEL`、`RAG_LOG_VERBOSE`、`LLM_API_BASE`、`EMBED_API_BASE`、`EMBED_MODEL_NAME`。容器 restart 時由 `RAG_ENV_FILE` 載入，不會把整份根 `.env` 掛進 rag-api；`rag-effective.env` 的實際生效快照也只包含同一組 13 鍵。
+
+法律問題的領域涵蓋採來源分流檢索，不使用霸凌、騷擾、申訴等意圖關鍵詞，也不替原問題附加軍中用語。檢索器會以原始問題先做全域混合搜尋，再以同一原句分別搜尋 `data/converted_md` 中每個已索引法規來源，並對既有 HyDE 法條草稿執行同樣的來源分流，合併去重後才重排；因此未預想到的自然語句也能取得各部軍事法規候選。若重排器拒絕全部候選，仍保留來源分流候選交由生成階段依證據判斷，不會因單次重排判斷而清空整批結果。這不代表使用者一定是軍人，原始提問、對話／稽核記錄與所有生成 prompt 均不變；條文僅能條件適用時，回答必須明示適用前提。
+
+若回答一方面引用已檢索條文，一方面又宣稱知識庫完全沒有相關資料，驗證節點會以邏輯矛盾觸發既有重試；此判斷不綁定特定問題關鍵詞、法規名稱或條號。若條文確實不適用，重答時應說明原因並移除不具支持力的引用。
+
+上述 runtime sync 與 effective snapshot 均不含 `API_KEYS`、`LLM_API_KEY`、`EMBED_API_KEY` 或管理密碼。不過，rag-api 連接上游推論服務的 `LLM_API_KEY` / `EMBED_API_KEY` 仍由 Compose `environment` 單獨注入；runtime 檔不含 API key 不等於容器環境不含上游連線金鑰。
 
 ```ini
 # ── 模型連線 ──────────────────────────────────────────
 LLM_HOST=<GPU 伺服器 IP>       # 搬遷時唯一需要修改的設定
 LLM_PORT=7000                  # LLM HTTP port
-EMBED_PORT=9000                # Triton gRPC port（供 embed-proxy 使用）
+EMBED_GRPC_PORT=9001           # embed-proxy 連 Triton 的 gRPC port
 CHAT_MODEL_NAME=openai/gpt-oss-20b
 EMBED_MODEL_NAME=nvidia/nv-embed-v2
 LLM_API_KEY=<JWT Token>
@@ -145,8 +162,8 @@ RATE_LIMIT_PER_MINUTE=60       # 每 Key 每分鐘最大請求數（預設 60）
 **Embedding 連線架構**：
 
 ```
-RAG API → embed-proxy:8100 (HTTP/OpenAI格式)
-              └→ Triton:9001 (gRPC)
+RAG API → embed-proxy:7100 (HTTP/OpenAI 格式)
+              └→ Triton:${EMBED_GRPC_PORT} (gRPC)
 ```
 
 > Triton 使用 gRPC 協定，`embed-proxy` 負責格式轉換，RAG API 只看到標準 OpenAI 介面。
@@ -155,7 +172,7 @@ RAG API → embed-proxy:8100 (HTTP/OpenAI格式)
 
 ```ini
 PGVECTOR_URL=postgresql://postgres:postgres@localhost:15432/Judge
-EMBED_API_BASE=http://localhost:8100/v1
+EMBED_API_BASE=http://localhost:17100/v1
 EMBED_API_KEY=<Token>
 EMBED_MODEL_NAME=nvidia/nv-embed-v2
 LLM_API_BASE=http://<GPU IP>:7000/v1
@@ -163,7 +180,7 @@ CHAT_MODEL_NAME=openai/gpt-oss-20b
 TOP_K=5
 CHUNK_SIZE=1000
 API_KEYS=dev-key-1234          # 開發用 Token；或留空並設 ALLOW_INTRANET_MODE=true
-ALLOW_INTRANET_MODE=true       # 本機開發時可開啟，省去 Token（切勿用於生產）
+ALLOW_INTRANET_MODE=true       # 受控內網可開啟，省去 Token；需配合可信代理與網路來源限制
 TRUSTED_PROXIES=127.0.0.1     # 本機 nginx proxy IP
 VERIFY_SSL=false               # 本機測試時可關閉
 ```
@@ -306,7 +323,7 @@ RAG/
 └── tests/
     ├── unit/
     │   ├── test_anomaly_detector.py    # 異常偵測（15 cases）
-    │   └── test_auth.py                # 認證 / 速率限制（12 cases）
+    │   └── test_auth.py                # 認證 / CIDR proxy / 速率限制（13 cases）
     └── evaluation/
         ├── test_prompt_security.py     # Prompt injection 安全（79 cases）
         ├── test_bias_fairness.py       # 偏誤公平性（8 cases）
@@ -560,7 +577,7 @@ ls data/versions/backup_*.tar.gz
 **步驟 2：停止 API 服務**
 
 ```bash
-cd ISO42001Deploy
+cd ISO42001RAG
 docker compose stop rag-api
 ```
 
@@ -649,7 +666,13 @@ docker exec -w /home/jovyan/work ISO42001_jupyter \
 
 ## 🧪 測試
 
-所有測試需在 **`ISO42001_jupyter` 容器內**執行（host 環境缺少 `langchain_classic` 等相依套件）。
+若本機已安裝專案測試相依，從專案根目錄執行唯讀驗證入口；它還會檢查 Compose 與 shell 語法，不讀取 `.env` 機密。離線程式碼包會包含根目錄 `tests/`，即使沒有 Git metadata，此腳本仍會執行部署契約測試：
+
+```bash
+./scripts/verify_project.sh
+```
+
+亦可在 **`ISO42001_jupyter` 容器內**單獨執行 RAG 測試：
 
 ### 執行全部測試
 
@@ -687,11 +710,11 @@ docker exec -w /home/jovyan/work ISO42001_jupyter \
 | 測試檔案 | Cases | 測試對象 |
 |----------|-------|----------|
 | `test_anomaly_detector.py` | 15 | 延遲突增、拒絕率突升、安全叢集、連續重試偵測、日誌分析 |
-| `test_auth.py` | 12 | Bearer Token 驗證、Fail-Closed（503）、內網 IP 模式、TRUSTED_PROXIES 防偽造、速率限制 |
+| `test_auth.py` | 13 | Bearer Token、Fail-Closed、內網模式、TRUSTED_PROXIES IP/CIDR 防偽造、速率限制 |
 | `test_prompt_security.py` | 79 | Prompt injection（中英文）、系統探測、SQL Injection、LDAP Injection、SSRF、CSRF、角色切換、長度限制、輸出過濾 |
 | `test_bias_fairness.py` | 8 | 成對問題一致性、中性回答評分、語意相似度 |
 | `test_vv_pipeline.py` | 28 | Hit Rate / Precision@K / MRR 計算、答案評分、資料集載入 |
-| **合計** | **142** | |
+| `test_verify_grounding.py` | 以當前測試收集為準 | citation provenance gate：無據引用重試、額度耗盡時 fail-safe 取代、有據引用通過 |
 
 ---
 

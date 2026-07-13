@@ -163,13 +163,16 @@ class ComponentFactory:
                                        a partial ranking and rejects)
             medium → content "1,2,3"  ✓
             high   → content "1,3,2"  ✓ (slower, no quality gain here)
-        We pin `medium` as the default; override with REASONING_EFFORT env.
+        The retrieval service preserves source-scoped candidates when a
+        low-effort rerank is incomplete. Interactive requests therefore
+        default to `low` to stay within the 15-second response target;
+        operators can still override this with REASONING_EFFORT.
         """
         model = self.config.chat_model
         extra: dict = {}
         if model.startswith("gpt-oss") or model.startswith("o1") or model.startswith("o3"):
             import os
-            effort = os.environ.get("REASONING_EFFORT", "medium")
+            effort = os.environ.get("REASONING_EFFORT", "low")
             extra["reasoning_effort"] = effort
         return ChatOpenAI(
             model=model,

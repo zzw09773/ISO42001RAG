@@ -1,7 +1,7 @@
 # AI 風險評估（AI Risk Assessment）— ISO 42001 RAG 法律文件查詢系統
 
 > ISO 42001 條文 6.1.2 / 8.2（AI 風險評估）證據。
-> 狀態：v1.1.0（2026-07-02 編製）。
+> 狀態：v1.1.0（2026-07-13 復核）。
 > 風險識別與現有控制為工程盤點結果；**風險等級（可能性×衝擊）與接受決定
 > 必須由稽核負責人／單位主管評定**，AI 不代為決策。
 
@@ -12,7 +12,7 @@
 | R1 | 幻覺／誤引條文 | 生成內容與實際條文不符，承辦人誤信 | verify 節點查證、引用標註、人工原文查證、輸出定位為「AI 輔助非法律建議」 | ☐ | ☐ | ☐ |
 | R2 | 檢索遺漏關鍵條文 | 應引用的條文未被檢索到 | Hit Rate ≥ 0.90 gating（v1.1.0 實測 0.9355）、Article-Aware Chunking、HyDE + Self-Query | ☐ | ☐ | ☐ |
 | R3 | Prompt 注入／越權使用 | 惡意輸入誘導系統輸出範圍外內容 | SAFETY_CONTROLS 9 道守則、8 種威脅偵測、`test_prompt_security.py` 34 案例、security_alert 事件記錄 | ☐ | ☐ | ☐ |
-| R4 | 個資／敏感資料外洩 | 查詢內容含個資，日誌外流 | 內網部署、日誌 chmod 0o640、API 認證 + TRUSTED_PROXIES、來源 IP 溯源 | ☐ | ☐ | ☐ |
+| R4 | 個資／敏感資料外洩 | 查詢內容含個資，日誌外流 | 內網部署、日誌 chmod 0o640、TRUSTED_PROXIES IP/CIDR、來源 IP 溯源、串流完整緩衝後輸出過濾 | ☐ | ☐ | ☐ |
 | R5 | 使用分布改變 | 實際查詢偏離設計假設，品質劣化未被察覺 | 定期 V&V、稽核日誌抽查、需求單位回饋 | ☐ | ☐ | ☐ |
 | R6 | 後端推論服務中斷 | LLM／embedding 伺服器不可用 | 降級 fallback（regex 分類、top-3 重排）、audit log 記錄 fallback 行為、健康檢查 | ☐ | ☐ | ☐ |
 | R7 | 偏誤輸出 | 對特定族群回答品質或拒絕率不一致 | `test_bias_fairness.py` 8 案例、ETHICS_CHECKLIST 每季審查 | ☐ | ☐ | ☐ |
@@ -22,7 +22,7 @@
 
 ## 架構面技術風險（2026-06-11 架構分析發現，經證據交叉覆核）
 
-下列風險來自 `SYSTEM_ARCHITECTURE_ANALYSIS.md` §7 的逐元件盤點，均附 file:line 證據。
+下列風險來自 `SYSTEM_ARCHITECTURE_ANALYSIS.md` §7 的逐元件盤點，均附 file/symbol 證據。
 與 R1–R10（AI 行為風險）互補，偏部署組態與安全機制面。**多數高影響項可在內網部署
 層處置，不需解凍 RAG/ 程式碼。** 等級與接受決定同樣由稽核負責人評定。
 
@@ -31,7 +31,8 @@
 | R-INFRA-1 | 內網部署明文 HTTP/TCP，無傳輸加密 | high | 部署層：啟用 nginx 反代 RAG/OpenWebUI，或內網 IPsec/防火牆隔離 | ☐ |
 | R-INFRA-2 | Jupyter 無認證 + sudo + rw 掛載原始碼，可改寫凍結程式與稽核日誌 | high | 部署層：生產不啟動 jupyter，或設 token + 移除 sudo + 唯讀掛載 | ☐ |
 | R-INFRA-3 | DB 預設帳密 postgres/postgres 且埠對宿主開放 | high | 部署層：.env 設強帳密、限制 15432 綁定 127.0.0.1 | ☐ |
-| R-SEC-1 | 串流路徑繞過輸出過濾（PII 不遮罩） | high | 稽核後：串流套用 filter_output | ☐ |
+| R-SEC-1r | API 與 ReAct SSE 已在送出前完成 post-verify、citation fail-safe 與輸出過濾；ReAct actions 稽核與完整 golden gating 尚未補齊 | medium | 維持 `REACT_MODE=false`；啟用前補齊治理閘 | ☐ |
+| R-INFRA-7 | Admin 掛載 Docker socket 與 `.env`，權限影響面高 | high | 憑證卡白名單；hardening 將 8300 綁 loopback；break-glass 預設關閉 | ☐ |
 | R-SEC-2 | session_id 未綁 API key，可載入他人對話歷史 | high | 稽核後：session 綁定認證身分 | ☐ |
 | R-DATA-1~4 | 保留政策無自動化、對話無 TTL、刪除不稽核、整日日誌刪除不可偵測 | medium | 部署層+稽核後混合（見架構分析 §7.3） | ☐ |
 

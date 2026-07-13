@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from ...services.retrieval import RetrievalService
 from ...core.config import RAGConfig
+from ..nodes import _expand_query
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class RAGRetrieveTool(BaseTool):
     max_retrieval_tokens: int = 3000
 
     def _run(self, query: str) -> str:
-        docs = self.rag_service.query(query)
+        docs = self.rag_service.query(_expand_query(query))
         if not docs:
             return "No relevant documents found."
         

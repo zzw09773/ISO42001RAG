@@ -86,6 +86,13 @@ def test_login_required(client):
     assert fresh.get("/login").status_code == 200
 
 
+def test_health_is_public(client):
+    fresh = TestClient(client.app, follow_redirects=False)
+    response = fresh.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy"}
+
+
 def test_card_login_success(client):
     fresh = TestClient(client.app, follow_redirects=False)
     r = _card_login(fresh)

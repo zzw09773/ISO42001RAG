@@ -64,7 +64,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
   </div>
   <div class="content">
 <h1 id="iso-42001-audit-evidence-index">ISO 42001 稽核證據索引（Audit Evidence Index）</h1>
-<p><strong>編製日期</strong>：2026-07-02　<strong>系統版本</strong>：v1.1.0 外部稽核準備基線<br>
+<p><strong>編製日期</strong>：2026-07-13　<strong>系統版本</strong>：v1.1.0 內網 10-service 復核基線
 <strong>用途</strong>：稽核應對總導覽，列 ISO42001 RAG 主系統證據。</p>
 <p>本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。</p>
 <hr>
@@ -95,7 +95,15 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>部署與內網入口</td>
-<td><code>docker-compose.yaml</code>、<code>nginx/nginx.conf</code>、<code>keycloak/import/iso42001-realm.json</code></td>
+<td><code>docker-compose.yaml</code>、<code>docker-compose.hardening.yml</code>、<code>nginx/nginx.conf</code>、<code>keycloak/import/iso42001-realm.json</code></td>
+</tr>
+<tr>
+<td>維運管理與憑證卡認證</td>
+<td><code>admin_console/</code>、<code>admin_console/tests/</code>、<code>docker-compose.yaml</code> <code>admin:8300</code></td>
+</tr>
+<tr>
+<td>系統監測與 V&amp;V</td>
+<td><code>monitoring_addon/</code>、<code>monitoring_addon/tests/</code>、<code>monitoring_addon/data/reports/</code></td>
 </tr>
 <tr>
 <td>安全控制與人為監督</td>
@@ -164,6 +172,16 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>已建立</td>
 </tr>
 <tr>
+<td>引用溯源</td>
+<td><code>RAG/rag_system/agent/nodes.py</code>、<code>RAG/tests/unit/test_verify_grounding.py</code></td>
+<td>classic graph 已建立 deterministic gate</td>
+</tr>
+<tr>
+<td>整合驗證</td>
+<td><code>scripts/verify_project.sh</code></td>
+<td>Compose / shell / RAG / monitoring / admin 唯讀驗證入口</td>
+</tr>
+<tr>
 <td>人為監督</td>
 <td><code>RAG/docs/governance/HUMAN_OVERSIGHT.md</code></td>
 <td>草案待核定</td>
@@ -178,7 +196,10 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <h2 id="3">3. 稽核前待辦</h2>
 <ol>
 <li>建立 <code>.env</code>，填入強密碼、Keycloak/OpenWebUI 設定與內網推論後端。</li>
-<li>啟動內網 stack 後，確認 <code>rag-api</code>、<code>openwebui</code>、<code>keycloak</code>、<code>nginx</code>、<code>db</code>、<code>embed-proxy</code>、<code>jupyter</code>、<code>code-server</code> 狀態。</li>
+<li>啟動內網 stack 後，確認 <code>db</code>、<code>embed-proxy</code>、<code>rag-api</code>、<code>openwebui</code>、<code>keycloak</code>、<code>nginx</code>、<code>jupyter</code>、<code>code-server</code>、<code>monitoring</code>、<code>admin</code> 10 個服務。</li>
+<li>生產環境確認 classic graph 為預設（<code>REACT_MODE=false</code>），並保留 citation provenance gate 測試結果。</li>
+<li>確認 <code>ADMIN_CARD_SERIALS</code> 已設定；若使用 break-glass，需有啟用與關閉記錄。</li>
+<li>執行 <code>./scripts/verify_project.sh</code>，保留三套 pytest 與 Compose/hardening 檢查結果。</li>
 <li>重新建立法規索引，並保留 reindex 操作紀錄。</li>
 <li>由權責人員完成 <code>ETHICS_CHECKLIST.md</code>、<code>RACI_MATRIX.md</code>、<code>AI_RISK_ASSESSMENT.md</code>、<code>AI_IMPACT_ASSESSMENT.md</code> 簽核欄位。</li>
 <li>正式測試開始後，不再清空稽核日誌；需要證明完整性時，以 <code>AUDIT_LOG_SCHEMA.md</code> 所述雜湊鏈驗證。</li>
@@ -206,7 +227,11 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>使用者如何登入？</td>
-<td><code>keycloak/import/iso42001-realm.json</code>、<code>docker-compose.yaml</code> OpenWebUI/Keycloak 設定</td>
+<td>OpenWebUI：<code>keycloak/import/iso42001-realm.json</code>；Admin：<code>admin_console/admincore/cardauth.py</code></td>
+</tr>
+<tr>
+<td>回答引用如何回溯檢索證據？</td>
+<td><code>RAG/rag_system/agent/nodes.py</code> citation provenance gate 與 <code>test_verify_grounding.py</code></td>
 </tr>
 <tr>
 <td>管理入口如何降低暴露面？</td>

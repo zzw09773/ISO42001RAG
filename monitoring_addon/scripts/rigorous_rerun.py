@@ -19,7 +19,7 @@ ADDON = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ADDON / "scripts"))
 from run_online_vv import ask_rag, extract_cited_articles, normalize_article  # noqa: E402
 
-PROMPTS_DEST = "/home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy/RAG/rag_system/core/prompts.py"
+PROMPTS_DEST = ADDON.parent / "RAG" / "rag_system" / "core" / "prompts.py"
 RAG_URL = "http://localhost:8043"
 RUNS = 3
 TIMEOUT = 300

@@ -1,9 +1,11 @@
 # =============================================================
 # ISO42001 系統 — 外部稽核準備 Docker Compose
 # 主要服務：rag-api, embed-proxy, jupyter, openwebui, keycloak,
-#           code-server, nginx, monitoring
+#           code-server, nginx, monitoring, admin
 # 基礎依賴：db / pgvector
 # =============================================================
+
+name: iso42001rag
 
 services:
   # ---------- 1. PostgreSQL + pgvector ----------
@@ -28,6 +30,7 @@ services:
 
   # ---------- 2. Embedding Proxy (OpenAI ↔ Triton) ----------
   embed-proxy:
+    image: iso42001rag-embed-proxy:latest
     build:
       context: ./embed_proxy
     container_name: ISO42001_embed_proxy
@@ -48,6 +51,7 @@ services:
 
   # ---------- 3. RAG Agent API ----------
   rag-api:
+    image: iso42001rag-rag-api:latest
     build:
       context: ./RAG
       dockerfile: Dockerfile.api
@@ -62,13 +66,15 @@ services:
         condition: service_healthy
     environment:
       TZ: "Asia/Taipei"
+      RAG_ENV_FILE: /runtime_config/rag-runtime.env
+      RAG_EFFECTIVE_ENV_FILE: /app/data/processed/rag-effective.env
       # DB — 使用 service name
       PGVECTOR_URL: "postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Judge}"
       # Embedding：經 embed-proxy（OpenAI HTTP → Triton gRPC 轉換）
       EMBED_API_KEY: ${EMBED_API_KEY}
       EMBED_API_BASE: ${EMBED_API_BASE:-http://embed-proxy:7100/v1}
       EMBED_MODEL_NAME: ${EMBED_MODEL_NAME:-nvidia/NV-embed-V2}
-      # LLM：http://10.53.100.12:7000/v1（由 .env 的 LLM_API_BASE 設定）
+      # LLM：由 .env 的 LLM_API_BASE 指向受控內網推論服務。
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_API_BASE: ${LLM_API_BASE}
       CHAT_MODEL_NAME: ${CHAT_MODEL_NAME:-gpt-oss-20b}
@@ -83,7 +89,9 @@ services:
       # 空＝無人豁免。內網填 OpenWebUI 容器/反代 IP。見 SAFETY_CONTROLS 守則③。
       WRAPPER_TRUSTED_PEERS: ${WRAPPER_TRUSTED_PEERS:-}
     volumes:
-      - ./RAG:/app 
+      - ./RAG:/app
+      # Admin 只同步 13 個非秘密白名單設定；rag-api 不掛載整份根 .env。
+      - ./admin_console/data:/runtime_config:ro
       - ./RAG/data:/app/data
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1" ]
@@ -168,6 +176,7 @@ services:
 
   # ---------- 7. Jupyter Notebook ----------
   jupyter:
+    image: iso42001rag-jupyter:latest
     build:
       context: ./RAG
       dockerfile: Dockerfile
@@ -205,6 +214,7 @@ services:
 
   # ---------- 8. Code Server（掛載整個 ISO42001 專案） ----------
   code-server:
+    image: iso42001rag-code-server:latest
     build:
       context: ./code-server
     container_name: ISO42001_code_server
@@ -229,6 +239,7 @@ services:
 
   # ---------- 9. Monitoring Addon (ISO 42001 A.6.2.4 儀表板) ----------
   monitoring:
+    image: iso42001rag-monitoring:latest
     build:
       context: ./monitoring_addon
     container_name: ISO42001_monitoring
@@ -290,12 +301,13 @@ services:
 
   # ---------- 10. Admin console（維運管理台；內網開發者/管理員入口，憑證卡登入，不進 nginx） ----------
   admin:
+    image: iso42001rag-admin:latest
     build:
       context: ./admin_console
     container_name: ISO42001_admin
     restart: unless-stopped
     ports:
-      - "8300:8300"
+      - "${ADMIN_PORT:-8300}:8300"
     environment:
       TZ: "Asia/Taipei"
       MONITORING_URL: "http://monitoring:8200"
@@ -303,6 +315,7 @@ services:
       ENV_FILE: /host_env/.env
       REPORTS_DIR: /mon_data/reports
       ADMIN_DATA_DIR: /app/data
+      RAG_RUNTIME_ENV_FILE: /app/data/rag-runtime.env
       # 憑證卡白名單與 break-glass：值只存在 gitignored .env，不寫死在此。
       # 注意：dev-only 的 nonce 驗證旁路變數嚴禁在此設定（僅限 E2E 臨時 override）。
       ADMIN_CARD_SERIALS: ${ADMIN_CARD_SERIALS}

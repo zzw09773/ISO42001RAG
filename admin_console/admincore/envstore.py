@@ -5,7 +5,9 @@
 """
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -67,10 +69,34 @@ def validate(key: str, value: str) -> str:
 _LINE_RE = re.compile(r"^([A-Z_0-9]+)=(.*)$")
 
 
+def _write_private_atomic(path: Path, content: str) -> None:
+    """Atomically replace *path* without ever creating a world-readable file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        path.chmod(0o600)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 class EnvStore:
-    def __init__(self, env_path: Path, backup_dir: Path):
+    def __init__(self, env_path: Path, backup_dir: Path,
+                 runtime_env_path: Path | None = None):
         self.env_path = Path(env_path)
         self.backup_dir = Path(backup_dir)
+        self.runtime_env_path = Path(runtime_env_path) if runtime_env_path else None
 
     def _lines(self) -> list[str]:
         return self.env_path.read_text(encoding="utf-8").splitlines()
@@ -82,6 +108,18 @@ class EnvStore:
             if m and m.group(1) in WHITELIST:
                 found[m.group(1)] = m.group(2)
         return found
+
+    def _sync_runtime_env(self) -> None:
+        """Write only admin-managed, non-secret keys for rag-api reloads."""
+        if self.runtime_env_path is None:
+            return
+        values = self.read()
+        content = "".join(
+            f"{key}={values[key]}\n"
+            for key in sorted(WHITELIST)
+            if values[key] is not None
+        )
+        _write_private_atomic(self.runtime_env_path, content)
 
     def apply(self, updates: dict[str, str]) -> list[tuple[str, str | None, str]]:
         current = self.read()
@@ -95,8 +133,9 @@ class EnvStore:
 
         original = self.env_path.read_text(encoding="utf-8")
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        (self.backup_dir / f"env-{stamp}.bak").write_text(original, encoding="utf-8")
+        self.backup_dir.chmod(0o700)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        _write_private_atomic(self.backup_dir / f"env-{stamp}.bak", original)
 
         lines = original.splitlines()
         seen: set[str] = set()
@@ -112,4 +151,5 @@ class EnvStore:
             out.append(f"{k}={todo[k]}")
         # 原地覆寫（同 inode）：.env 是單檔 bind mount，rename 會讓容器看不到新值
         self.env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        self._sync_runtime_env()
         return [(k, current.get(k), v) for k, v in sorted(todo.items())]

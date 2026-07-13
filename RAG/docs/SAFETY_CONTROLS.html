@@ -135,9 +135,10 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
                      │  ⑦ Output Filter         → 6 種敏感樣式遮蔽         │
                      │      output_filter.filter_output                  │
                      │                                                   │
-                     │  ⑧ Verify                → 引用完整性判定          │
+                     │  ⑧ Verify                → citation provenance      │
                      │      verify_node          ├ verified → END         │
-                     │                            └ needs_retry → ⑤ (上限 N)│
+                     │                            ├ needs_retry → ⑤ (上限 N)│
+                     │                            └ 耗盡仍無據 → fail-safe 取代│
                      │                                                   │
                      │  ⑨ Audit Log Append      → query / security_alert  │
                      │      audit_logger._write(雜湊鏈 + UTC+8)           │
@@ -217,8 +218,8 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>Verify (Citation)</td>
 <td><code>rag_system/agent/nodes.py:create_verify_node</code></td>
 <td>LLM 後</td>
-<td>regex 偵測「第N條」，缺失則 retry</td>
-<td><code>citation_count</code>、<code>retry_count</code></td>
+<td>將回答條號與 <code>retrieved_sources</code> 比對；無據則 retry，額度耗盡則 fail-safe 取代</td>
+<td><code>citation_count</code>、<code>retry_count</code>、<code>actions</code></td>
 <td>A.6</td>
 </tr>
 <tr>
@@ -258,7 +259,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>防偽</td>
-<td><code>X-Forwarded-For</code> 僅信任 <code>TRUSTED_PROXIES</code>（預設 <code>127.0.0.1</code>）發來的 header</td>
+<td><code>X-Forwarded-For</code> 僅信任 <code>TRUSTED_PROXIES</code> 所列 IP/CIDR（預設 <code>127.0.0.1</code>）發來的 header；無效條目 fail closed</td>
 </tr>
 <tr>
 <td>失敗動作</td>
@@ -480,7 +481,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </table>
 <p><strong>LLM-based</strong> 路由（已啟用）：<code>CLASSIFY_PROMPT_TEMPLATE</code> + JSON 結構化判定，regex 為 fallback。</p>
 <h3 id="35-6-output-filteroutput_filterpy">3.5 ⑥ Output Filter（<code>output_filter.py</code>）</h3>
-<p>6 種敏感樣式（LLM 回覆寫入串流前掃過）：</p>
+<p>6 種敏感樣式。非串流回覆在回傳前掃描；<code>stream=true</code> 會先完整緩衝答案、掃描與遮蔽後再送 SSE，因此不會先送出未過濾 token：</p>
 <table>
 <thead>
 <tr>
@@ -533,15 +534,15 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <tbody>
 <tr>
 <td>演算法</td>
-<td>regex 偵測 <code>第[0-9一二三四五六七八九十百零兩]+條</code> 引用</td>
+<td>以 regex 擷取回答的「第 N 條」，並與 <code>retrieved_sources</code> 可擷取的條號做確定性交集檢查；完成 provenance gate 後才做結構 regex 判定</td>
 </tr>
 <tr>
 <td>通過條件</td>
-<td>citation_count &gt; 0 且不含明顯失敗訊號（「無法找到」、「無相關資料」）</td>
+<td>回答條號均可回溯至檢索來源，且結構檢查通過；回答有條號但無 <code>retrieved_sources</code> 時視為無據引用</td>
 </tr>
 <tr>
 <td>失敗動作</td>
-<td><code>scope=needs_retry</code> → 回到 <code>retrieve</code>，上限 <code>retry_count &lt;= MAX_RETRIES</code></td>
+<td>額度未耗盡：<code>scope=needs_retry</code> → 回到 <code>retrieve</code>。額度耗盡仍有無據引用：以不含原條號的安全訊息取代 <code>generation</code>，並記錄 <code>verify=failed_safe(ungrounded_citation)</code></td>
 </tr>
 <tr>
 <td>LLM 版本（已實驗回退）</td>

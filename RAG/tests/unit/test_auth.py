@@ -125,6 +125,21 @@ class TestGetApiKey:
         # Must use real peer IP, not the spoofed header
         assert result == "intranet:10.5.5.5"
 
+    def test_forwarded_for_trusted_when_peer_matches_cidr(self, monkeypatch):
+        """An explicitly configured CIDR must match proxy peers."""
+        monkeypatch.setenv("API_KEYS", "")
+        monkeypatch.setenv("ALLOW_INTRANET_MODE", "true")
+        monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1,172.16.0.0/12")
+        _reset_auth_cache()
+
+        req = MagicMock(spec=Request)
+        req.headers = {"X-Forwarded-For": "10.20.30.40"}
+        req.client = MagicMock()
+        req.client.host = "172.19.0.8"
+
+        from rag_system.core.auth import get_api_key
+        assert get_api_key(req, None) == "intranet:10.20.30.40"
+
     def test_key_prefix_truncates(self):
         from rag_system.core.auth import key_prefix
         assert len(key_prefix("intranet:192.168.1.100")) <= 24

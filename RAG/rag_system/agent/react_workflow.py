@@ -29,8 +29,10 @@ Activation:
 Default (REACT_MODE unset/false) uses graph.py — production-safe rollback.
 """
 from __future__ import annotations
+import asyncio
 import logging
 import os
+from threading import RLock
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from langchain_core.messages import (
@@ -57,11 +59,44 @@ from ..core.prompts import (
 from ..core.input_sanitizer import sanitize
 from ..core.output_filter import filter_output
 from ..core.audit_logger import AuditLogger
+from ..core.retrieval_generation import current_retrieval_generation
 from ..services.retrieval import RetrievalService
+from .nodes import _article_nums, _expand_query, _retrieved_article_nums
 
 logger = logging.getLogger(__name__)
 
 MAX_REACT_RETRIES = 2
+_UNGROUNDED_FAIL_SAFE = (
+    "目前無法從已檢索資料確認回答中的條文引用，為避免提供無據內容，"
+    "本次不提供該回答；請重新查詢或由人工查證原文。"
+)
+
+
+def _react_retrieved_sources(messages: List[BaseMessage]) -> List[str]:
+    """Extract stable source ids from ReAct tool observations."""
+    import re as _re
+    sources: List[str] = []
+    for message in messages:
+        if not isinstance(message, ToolMessage):
+            continue
+        for match in _re.finditer(
+            r"來源: ([^\s]+\.md)(?:\s*\(([^)]+)\))?",
+            message.content or "",
+        ):
+            src = match.group(1)
+            article = (match.group(2) or "").strip()
+            src_id = (
+                f"{src}#{article}"
+                if article and article not in ("preamble", "whole_document")
+                else src
+            )
+            if src_id not in sources:
+                sources.append(src_id)
+    return sources
+
+
+def _ungrounded_react_citations(answer: str, sources: List[str]) -> set[int]:
+    return _article_nums(answer) - _retrieved_article_nums(sources)
 
 
 def _classify_pre_check(question: str, llm) -> str:
@@ -155,8 +190,11 @@ def _build_react_tool(config: RAGConfig) -> BaseTool:
                    "第46條" or general concepts like "復審期限").
         """
         logger.info(f"[ReAct] retrieve_legal_docs invoked: {query[:80]}")
+        search_query = _expand_query(query)
+        if search_query != query:
+            logger.info("[ReAct] short article-reference query expanded")
         try:
-            docs = rag_service.query(query)
+            docs = rag_service.query(search_query)
         except Exception as e:
             logger.error(f"[ReAct] retrieval failed: {e}")
             return f"檢索失敗：{e}"
@@ -193,6 +231,13 @@ def _build_react_tool(config: RAGConfig) -> BaseTool:
 # ──────────────────────────────────────────────────────────────────────
 
 _REACT_CACHE: dict = {}
+_REACT_CACHE_LOCK = RLock()
+
+
+def invalidate_react_workflow_cache() -> None:
+    """Drop ReAct agents that close over stale retrieval indexes."""
+    with _REACT_CACHE_LOCK:
+        _REACT_CACHE.clear()
 
 
 def _create_factory(config: RAGConfig) -> ComponentFactory:
@@ -211,9 +256,14 @@ def create_react_workflow(
     """
     from langgraph.prebuilt import create_react_agent
 
-    cache_key = hash(config)
-    if llm is None and cache_key in _REACT_CACHE:
-        return _REACT_CACHE[cache_key]
+    use_cache = llm is None
+    generation = current_retrieval_generation()
+    cache_key = (hash(config), generation)
+    if use_cache:
+        with _REACT_CACHE_LOCK:
+            cached = _REACT_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
 
     if llm is None:
         factory = _create_factory(config)
@@ -227,9 +277,11 @@ def create_react_workflow(
         prompt=AGENT_SYSTEM_PROMPT,
     )
 
-    if llm is not None:
-        _REACT_CACHE[cache_key] = agent
-    logger.info("Compiled and cached ReAct workflow")
+    if use_cache:
+        with _REACT_CACHE_LOCK:
+            if current_retrieval_generation() == generation:
+                _REACT_CACHE[cache_key] = agent
+                logger.info("Compiled and cached ReAct workflow")
     return agent
 
 
@@ -352,9 +404,24 @@ def run_react_query(
                 answer = m.content
                 break
 
+        # Deterministic provenance must run before short-answer/LLM fast paths.
+        retrieved_sources = _react_retrieved_sources(out_messages)
+        ungrounded = sorted(_ungrounded_react_citations(answer, retrieved_sources))
+        if ungrounded:
+            if retry_count >= MAX_REACT_RETRIES:
+                logger.warning("[ReAct] ungrounded citation at retry limit; failing safe")
+                answer = _UNGROUNDED_FAIL_SAFE
+                break
+            retry_count += 1
+            last_feedback = (
+                f"答案引用第{'、第'.join(str(n) for n in ungrounded)}條，"
+                "但檢索結果未含這些條文；請僅依工具回傳來源作答"
+            )
+            continue
+
         # Post-verify
         if retry_count >= MAX_REACT_RETRIES:
-            logger.info(f"[ReAct] retry budget exhausted, accepting answer")
+            logger.info("[ReAct] retry budget exhausted, accepting grounded answer")
             break
         verdict = _verify_post_check(question, answer, llm)
         if not verdict["needs_retry"]:
@@ -370,7 +437,7 @@ def run_react_query(
         logger.warning(f"[ReAct] output filter redacted: {filtered.findings}")
 
     # Audit fields — derive from message stream
-    retrieved_sources: List[str] = []
+    retrieved_sources = _react_retrieved_sources(out_messages)
     tokens_used = 0
     tool_calls = 0
     import re as _re
@@ -379,14 +446,6 @@ def run_react_query(
     for m in out_messages:
         if isinstance(m, ToolMessage):
             tool_calls += 1
-            # ToolMessage content has "[N] 來源: 軍人權益事件處理法.md (第3條)\n..."
-            # Pull "<filename>.md (第N條)" → "<filename>.md#第N條"
-            for match in _re.finditer(r"來源: ([^\s]+\.md)(?:\s*\(([^)]+)\))?", m.content or ""):
-                src = match.group(1)
-                article = (match.group(2) or "").strip()
-                src_id = f"{src}#{article}" if article and article not in ("preamble", "whole_document") else src
-                if src_id not in retrieved_sources:
-                    retrieved_sources.append(src_id)
         if isinstance(m, AIMessage):
             usage = getattr(m, "usage_metadata", None) or {}
             if isinstance(usage, dict):
@@ -423,7 +482,7 @@ async def astream_react_query(
     audit_context: Optional[Dict[str, Any]] = None,
     wrapper_mode: bool = False,
 ) -> AsyncIterator[str]:
-    """Streaming version (token-level)."""
+    """Buffered ReAct response; emit only the final post-verify answer."""
     # Security check (same as sync path) — log alert with session_id
     # wrapper_mode 由 graph.astream_query 傳入，與同步路徑保持一致。
     san = sanitize(question, is_wrapper=bool(wrapper_mode))
@@ -446,20 +505,20 @@ async def astream_react_query(
         yield SECURITY_MSG
         return
 
-    agent = create_react_workflow(config, llm=llm)
-
-    initial_messages = messages or [HumanMessage(content=question)]
-    if not initial_messages or not isinstance(initial_messages[-1], HumanMessage):
-        initial_messages = list(initial_messages) + [HumanMessage(content=question)]
-
     try:
-        async for event in agent.astream_events(
-            {"messages": initial_messages}, version="v2"
-        ):
-            if event["event"] == "on_chat_model_stream":
-                chunk = event["data"]["chunk"]
-                if getattr(chunk, "content", None):
-                    yield chunk.content
+        result = await asyncio.to_thread(
+            run_react_query,
+            question,
+            config,
+            llm=llm,
+            messages=messages,
+            session_id=session_id,
+            client_ip=client_ip,
+            audit_context=audit_context,
+            wrapper_mode=wrapper_mode,
+        )
+        if result.get("generation"):
+            yield result["generation"]
     except Exception as e:
         logger.error(f"[ReAct] streaming failed: {e}")
         yield f"抱歉，ReAct 流程錯誤：{e}"
@@ -467,6 +526,7 @@ async def astream_react_query(
 
 __all__ = [
     "create_react_workflow",
+    "invalidate_react_workflow_cache",
     "run_react_query",
     "astream_react_query",
 ]
