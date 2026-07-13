@@ -142,6 +142,77 @@ class ReleaseScriptContractTests(unittest.TestCase):
             self.assertIn("公開範本值", result.stdout)
             self.assertIn("CODESERVER_PASSWORD", result.stdout)
 
+    def test_deploy_rejects_quoted_placeholder_with_spaced_assignment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            shutil.copy2(ROOT / "deploy.sh", temp_path / "deploy.sh")
+            (temp_path / ".env").write_text(
+                " ADMIN_CARD_SERIALS = '1234567'  \n"
+                " POSTGRES_PASSWORD = \"postgres\"  \n"
+                "WEBUI_SECRET_KEY=strong-webui-secret\n"
+                "KEYCLOAK_ADMIN_PASSWORD=strong-keycloak-secret\n"
+                "OAUTH_CLIENT_SECRET=strong-oauth-secret\n"
+                "CODESERVER_PASSWORD=strong-code-secret\n"
+                "CODESERVER_SUDO_PASSWORD=strong-sudo-secret\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                ["bash", "deploy.sh"],
+                cwd=temp_path,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("公開範本值", result.stdout)
+            self.assertIn("POSTGRES_PASSWORD", result.stdout)
+
+    def test_deploy_normalizes_quoted_runtime_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            shutil.copy2(ROOT / "deploy.sh", temp_path / "deploy.sh")
+            (temp_path / ".env").write_text(
+                "ADMIN_CARD_SERIALS=1234567\n"
+                "POSTGRES_PASSWORD=strong-postgres-secret\n"
+                "WEBUI_SECRET_KEY=strong-webui-secret\n"
+                "KEYCLOAK_ADMIN_PASSWORD=strong-keycloak-secret\n"
+                "OAUTH_CLIENT_SECRET=strong-oauth-secret\n"
+                "CODESERVER_PASSWORD=strong-code-secret\n"
+                "CODESERVER_SUDO_PASSWORD=strong-sudo-secret\n"
+                " CHAT_MODEL_NAME = \"o3\"  \n"
+                "REASONING_EFFORT = 'low'\n",
+                encoding="utf-8",
+            )
+            ssl_dir = temp_path / "nginx" / "ssl"
+            ssl_dir.mkdir(parents=True)
+            (ssl_dir / "cert.crt").touch()
+            (ssl_dir / "cert.key").touch()
+            bin_dir = temp_path / "bin"
+            bin_dir.mkdir()
+            docker_stub = bin_dir / "docker"
+            docker_stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            docker_stub.chmod(0o755)
+            env = os.environ.copy()
+            env["PATH"] = f"{bin_dir}:{env['PATH']}"
+
+            result = subprocess.run(
+                ["bash", "deploy.sh"],
+                cwd=temp_path,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            runtime_env = (
+                temp_path / "admin_console" / "data" / "rag-runtime.env"
+            ).read_text(encoding="utf-8")
+            self.assertIn("CHAT_MODEL_NAME=o3\n", runtime_env)
+            self.assertIn("REASONING_EFFORT=low\n", runtime_env)
+            self.assertNotIn('"o3"', runtime_env)
+            self.assertNotIn("'low'", runtime_env)
+
     def test_image_scripts_include_admin(self) -> None:
         save_script = (ROOT / "save_images.sh").read_text(encoding="utf-8")
         package_script = (ROOT / "make_update_package.sh").read_text(encoding="utf-8")

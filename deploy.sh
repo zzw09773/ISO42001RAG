@@ -33,7 +33,20 @@ echo "✅ .env 已存在"
 
 # Admin 掛載 Docker socket，必須先有憑證卡白名單或明確啟用 break-glass。
 env_value() {
-    sed -n "s/^${1}=//p" .env | tail -1
+    local value
+    value=$(sed -n "s/^[[:space:]]*${1}[[:space:]]*=[[:space:]]*//p" .env | tail -1)
+    value=$(printf '%s' "$value" | sed 's/[[:space:]]*$//')
+    case "$value" in
+        \"*\")
+            value="${value#\"}"
+            value="${value%\"}"
+            ;;
+        \'*\')
+            value="${value#\'}"
+            value="${value%\'}"
+            ;;
+    esac
+    printf '%s\n' "$value"
 }
 
 ADMIN_CARD_SERIALS_VALUE=$(env_value ADMIN_CARD_SERIALS | tr -d '[:space:]')
@@ -116,7 +129,7 @@ for key in \
     CHUNK_SIZE MAX_RETRIEVAL_TOKENS RATE_LIMIT_PER_MINUTE \
     RAG_LOG_LEVEL RAG_LOG_VERBOSE LLM_API_BASE EMBED_API_BASE EMBED_MODEL_NAME
 do
-    if grep -q "^${key}=" .env; then
+    if grep -Eq "^[[:space:]]*${key}[[:space:]]*=" .env; then
         printf '%s=%s\n' "$key" "$(env_value "$key")" >> "$RAG_RUNTIME_TMP"
     fi
 done
@@ -189,13 +202,13 @@ echo "=========================================="
 docker compose ps
 
 LOCAL_IP=$(hostname -I | awk '{print $1}')
-NGINX_HTTP_PORT=$(grep '^NGINX_HTTP_PORT=' .env | tail -1 | cut -d= -f2-)
-NGINX_HTTPS_PORT=$(grep '^NGINX_HTTPS_PORT=' .env | tail -1 | cut -d= -f2-)
-OPENWEBUI_PORT=$(grep '^OPENWEBUI_PORT=' .env | tail -1 | cut -d= -f2-)
-KEYCLOAK_PORT=$(grep '^KEYCLOAK_PORT=' .env | tail -1 | cut -d= -f2-)
-CODESERVER_PORT=$(grep '^CODESERVER_PORT=' .env | tail -1 | cut -d= -f2-)
-JUPYTER_PORT=$(grep '^JUPYTER_PORT=' .env | tail -1 | cut -d= -f2-)
-ADMIN_PORT=$(grep '^ADMIN_PORT=' .env | tail -1 | cut -d= -f2-)
+NGINX_HTTP_PORT=$(env_value NGINX_HTTP_PORT)
+NGINX_HTTPS_PORT=$(env_value NGINX_HTTPS_PORT)
+OPENWEBUI_PORT=$(env_value OPENWEBUI_PORT)
+KEYCLOAK_PORT=$(env_value KEYCLOAK_PORT)
+CODESERVER_PORT=$(env_value CODESERVER_PORT)
+JUPYTER_PORT=$(env_value JUPYTER_PORT)
+ADMIN_PORT=$(env_value ADMIN_PORT)
 POSTGRES_USER_VALUE=$(env_value POSTGRES_USER)
 POSTGRES_DB_VALUE=$(env_value POSTGRES_DB)
 

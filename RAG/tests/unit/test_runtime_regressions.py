@@ -170,8 +170,8 @@ def test_stream_exposes_reasoning_summary_as_collapsible_think(monkeypatch):
     import api
 
     async def answer_stream(**kwargs):
-        yield "**思考過程**  \n引用第58條，因其規範申訴程序。\n\n"
-        yield "## **問題答案**\n可向申訴管轄機關提出申訴。"
+        yield "**思考過程：**  \n引用第58條，因其規範申訴程序。\n\n"
+        yield "## **問題答案：**\n可向申訴管轄機關提出申訴。"
 
     monkeypatch.setattr(api, "astream_query", answer_stream)
     api, client = _intranet_client(monkeypatch)
@@ -204,8 +204,8 @@ def test_stream_exposes_reasoning_summary_as_collapsible_think(monkeypatch):
     assert reasoning.startswith(api.STREAM_REASONING_PROGRESS)
     assert "引用第58條，因其規範申訴程序。" in reasoning
     assert "<think>" not in content
-    assert "**思考過程**" not in content
-    assert "## **問題答案**" in content
+    assert "思考過程" not in content
+    assert "## **問題答案：**" in content
     assert content.endswith(api.ANSWER_DISCLAIMER)
     assert content.count("問題答案") == 1
     assert content.count("本回答由 AI") == 1
@@ -218,7 +218,7 @@ def test_nonstream_exposes_reasoning_summary_as_collapsible_think(monkeypatch):
         api,
         "run_query",
         lambda **kwargs: {
-            "generation": "**思考過程**\n引用第58條。\n\n**問題答案**\n提出申訴。",
+            "generation": "**思考過程**：\n引用第58條。\n\n**問題答案**:\n提出申訴。",
             "actions": [],
         },
     )
@@ -236,7 +236,7 @@ def test_nonstream_exposes_reasoning_summary_as_collapsible_think(monkeypatch):
     content = response.json()["choices"][0]["message"]["content"]
     assert response.status_code == 200
     assert content.startswith("<think>\n引用第58條。\n</think>")
-    assert "**思考過程**" not in content
+    assert "思考過程" not in content
 
 
 def test_verify_retry_reuses_retrieved_documents():
