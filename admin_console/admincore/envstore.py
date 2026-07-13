@@ -45,7 +45,10 @@ def validate(key: str, value: str) -> str:
     spec = _BY_KEY.get(key)
     if spec is None:
         raise SettingError(f"{key} 不在可管理的白名單內")
-    v = str(value).strip()
+    raw = str(value)
+    if "\n" in raw or "\r" in raw:
+        raise SettingError(f"{key} 不可包含換行字元")
+    v = raw.strip()
     if spec["type"] == "int":
         if not re.fullmatch(r"-?\d+", v):
             raise SettingError(f"{key} 需為整數，收到 {value!r}")

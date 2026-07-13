@@ -598,6 +598,19 @@ def create_generate_node(llm: ChatOpenAI, config: RAGConfig) -> Callable:
 # ---------------------------------------------------------------------------
 
 _NO_INFO_PHRASES = ["尚未收錄", "無法提供", "未發現", "未檢索到", "沒有相關"]
+_CLAUSE_BOUNDARY_RE = re.compile(r"(?:[。！？；;，,\n]+|但是|但|然而)")
+
+
+def _reported_missing_article_nums(text: str) -> set[int]:
+    """Article numbers explicitly tied to a no-information clause."""
+    missing: set[int] = set()
+    asserted: set[int] = set()
+    for clause in _CLAUSE_BOUNDARY_RE.split(text or ""):
+        if any(phrase in clause for phrase in _NO_INFO_PHRASES):
+            missing |= _article_nums(clause)
+        else:
+            asserted |= _article_nums(clause)
+    return missing - asserted
 
 
 def _parse_verify_verdict(raw: str) -> dict:
@@ -639,7 +652,15 @@ def create_verify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
         # Deeper claim-vs-content grounding is covered offline by
         # monitoring_addon RAGAS faithfulness.
         retrieved_sources = state.get("retrieved_sources", []) or []
-        ungrounded = sorted(_article_nums(generation) - _retrieved_article_nums(retrieved_sources))
+        answer_articles = _article_nums(generation)
+        retrieved_articles = _retrieved_article_nums(retrieved_sources)
+        reports_no_info = any(phrase in generation for phrase in _NO_INFO_PHRASES)
+        honestly_missing = (
+            _reported_missing_article_nums(generation)
+            & _article_nums(question)
+            & (answer_articles - retrieved_articles)
+        )
+        ungrounded = sorted(answer_articles - retrieved_articles - honestly_missing)
         if ungrounded:
             arts = "、第".join(str(n) for n in ungrounded)
             logger.info("VERIFY: ungrounded citation 第%s條 (retrieved=%s)",
@@ -671,11 +692,10 @@ def create_verify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
         # it without inferring the user's intent from keywords or hard-coding a
         # specific statute/article. If the evidence is only conditionally
         # applicable, the regenerated answer must say so explicitly.
-        reports_no_info = any(phrase in generation for phrase in _NO_INFO_PHRASES)
         if (
             retry_count < MAX_RETRIES
             and reports_no_info
-            and bool(_CITATION_PATTERN.search(generation))
+            and bool(answer_articles & retrieved_articles)
             and bool(retrieved_sources)
         ):
             logger.info(

@@ -338,6 +338,39 @@ def test_workflow_cache_invalidation_clears_classic_and_react_caches(monkeypatch
     assert current_retrieval_generation() != before
 
 
+def test_react_stream_populates_audit_trace(monkeypatch):
+    from rag_system.agent import graph, react_workflow
+    from rag_system.core.config import RAGConfig
+
+    monkeypatch.setenv("REACT_MODE", "true")
+    monkeypatch.setattr(
+        react_workflow,
+        "run_react_query",
+        lambda *args, **kwargs: {
+            "generation": "依第6條辦理。",
+            "scope": "verified",
+            "retrieved_sources": ["甲法.md#第6條"],
+            "retry_count": 1,
+        },
+    )
+    trace = {"actions": [], "retrieved_sources": []}
+
+    async def collect():
+        return [
+            chunk
+            async for chunk in graph.astream_query(
+                "第6條如何辦理？",
+                RAGConfig(),
+                trace=trace,
+            )
+        ]
+
+    assert asyncio.run(collect()) == ["依第6條辦理。"]
+    assert trace["retrieved_sources"] == ["甲法.md#第6條"]
+    assert trace["final_generation"] == "依第6條辦理。"
+    assert trace["actions"] == ["react(scope=verified,sources=1,retry=1)"]
+
+
 def test_retrieval_generation_marker_is_shared_across_processes(monkeypatch, tmp_path):
     from rag_system.core.retrieval_generation import (
         bump_retrieval_generation,

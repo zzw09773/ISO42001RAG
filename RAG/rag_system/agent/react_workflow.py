@@ -481,12 +481,17 @@ async def astream_react_query(
     client_ip: str = "",
     audit_context: Optional[Dict[str, Any]] = None,
     wrapper_mode: bool = False,
+    trace: Optional[dict] = None,
 ) -> AsyncIterator[str]:
     """Buffered ReAct response; emit only the final post-verify answer."""
     # Security check (same as sync path) — log alert with session_id
     # wrapper_mode 由 graph.astream_query 傳入，與同步路徑保持一致。
     san = sanitize(question, is_wrapper=bool(wrapper_mode))
     if san.blocked:
+        if trace is not None:
+            trace["actions"] = ["security_block(input_sanitizer)"]
+            trace["retrieved_sources"] = []
+            trace["final_generation"] = SECURITY_MSG
         try:
             AuditLogger(config.audit_log_dir).log_security_alert(
                 session_id=session_id or "unknown",
@@ -517,8 +522,20 @@ async def astream_react_query(
             audit_context=audit_context,
             wrapper_mode=wrapper_mode,
         )
-        if result.get("generation"):
-            yield result["generation"]
+        generation = result.get("generation", "")
+        retrieved_sources = list(result.get("retrieved_sources") or [])
+        if trace is not None:
+            trace["actions"] = list(result.get("actions") or [
+                (
+                    f"react(scope={result.get('scope', 'unknown')},"
+                    f"sources={len(retrieved_sources)},"
+                    f"retry={int(result.get('retry_count') or 0)})"
+                )
+            ])
+            trace["retrieved_sources"] = retrieved_sources
+            trace["final_generation"] = generation
+        if generation:
+            yield generation
     except Exception as e:
         logger.error(f"[ReAct] streaming failed: {e}")
         yield f"抱歉，ReAct 流程錯誤：{e}"

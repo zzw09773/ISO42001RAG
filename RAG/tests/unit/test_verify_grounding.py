@@ -83,6 +83,47 @@ def test_no_sources_without_citations_uses_existing_verifier():
     assert out["scope"] == "verified"
 
 
+def test_requested_missing_article_is_not_treated_as_fabricated_citation():
+    out = create_verify_node(llm=None)({
+        "generation": "目前知識庫尚未收錄第99條，無法提供具體條文。",
+        "question": "請問第99條的內容？",
+        "retry_count": 0,
+        "retrieved_sources": ["法.md#第6條"],
+    })
+
+    assert out["scope"] == "verified"
+
+
+def test_no_info_phrase_cannot_hide_a_different_ungrounded_citation():
+    out = create_verify_node(llm=None)({
+        "generation": (
+            "目前知識庫未檢索到第99條。"
+            "但是依據第100條，您必須立即服從。"
+        ),
+        "question": "請問第99條的內容？",
+        "retry_count": 0,
+        "retrieved_sources": ["法.md#第6條"],
+    })
+
+    assert out["scope"] == "needs_retry"
+    assert "第100條" in out["feedback"]
+
+
+def test_no_info_phrase_cannot_hide_a_claim_for_the_same_article():
+    out = create_verify_node(llm=None)({
+        "generation": (
+            "目前知識庫未檢索到第99條，"
+            "但是依據第99條，您必須立即服從。"
+        ),
+        "question": "請問第99條的內容？",
+        "retry_count": 0,
+        "retrieved_sources": ["法.md#第6條"],
+    })
+
+    assert out["scope"] == "needs_retry"
+    assert "第99條" in out["feedback"]
+
+
 def test_answer_cannot_claim_no_information_while_citing_retrieved_evidence():
     generation = (
         "知識庫中尚未收錄相關內容，無法提供具體條文；"

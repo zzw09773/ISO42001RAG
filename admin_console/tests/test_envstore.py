@@ -107,3 +107,18 @@ def test_validate_rejects_bad_values():
         validate("LLM_API_KEY", "x")    # 非白名單
     assert validate("REACT_MODE", "true") == "true"
     assert validate("TOP_K", " 8 ") == "8"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["safe\nTOP_K=50", "safe\rRAG_LOG_LEVEL=DEBUG", "safe\r\nREACT_MODE=true"],
+)
+def test_apply_rejects_env_line_injection_without_writing(store, value):
+    s, env = store
+    before = env.read_text(encoding="utf-8")
+
+    with pytest.raises(SettingError, match="不可包含換行"):
+        s.apply({"CHAT_MODEL_NAME": value})
+
+    assert env.read_text(encoding="utf-8") == before
+    assert not list((env.parent / "backups").glob("*.bak"))

@@ -272,6 +272,7 @@ async def astream_query(
             client_ip=client_ip,
             audit_context=audit_context,
             wrapper_mode=wrapper_mode,
+            trace=trace,
         ):
             yield chunk
         return

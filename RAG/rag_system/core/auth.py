@@ -137,13 +137,18 @@ def _get_client_ip(request: Request) -> str:
 
     X-Forwarded-For is only honoured when the immediate TCP peer is a known
     trusted proxy (TRUSTED_PROXIES env var, default: 127.0.0.1 for nginx
-    running on the same host). Direct clients cannot set their own audit
-    identity by forging the header.
+    running on the same host). The rightmost hop is the address appended by
+    that proxy, so a client-supplied prefix cannot replace its audit identity.
     """
     peer_ip = request.client.host if request.client else None
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for and peer_ip and _is_trusted_proxy(peer_ip):
-        return forwarded_for.split(",")[0].strip()
+        candidate = forwarded_for.rsplit(",", 1)[-1].strip()
+        try:
+            ip_address(candidate)
+        except ValueError:
+            return peer_ip
+        return candidate
     if peer_ip:
         return peer_ip
     return "unknown"
