@@ -18,6 +18,7 @@ import logging
 import re
 import os
 import glob
+from copy import copy
 from typing import List, Optional, Set
 
 from langchain_core.documents import Document
@@ -64,6 +65,8 @@ class RetrievalService:
 
     def _init_components(self):
         """Initialize retrieval components."""
+        self.corpus_sources: tuple[str, ...] = ()
+
         # LLM for Reranking
         self.llm = self.factory.create_llm(temperature=0)
 
@@ -92,6 +95,7 @@ class RetrievalService:
         )
 
         md_files = glob.glob(os.path.join(md_dir, "*.md"))
+        self.corpus_sources = tuple(sorted(os.path.basename(path) for path in md_files))
         if not md_files:
             logger.warning(f"No markdown files found in {md_dir}, BM25 disabled")
             return None
@@ -212,11 +216,11 @@ class RetrievalService:
             return []
 
         try:
-            # Use higher k to widen the BM25 candidate pool
-            original_k = self.bm25_retriever.k
-            self.bm25_retriever.k = MAX_BM25_K
-            candidates = self.bm25_retriever.invoke(question)
-            self.bm25_retriever.k = original_k
+            # Use a request-local shallow copy. Mutating the shared retriever's
+            # k races with concurrent hybrid searches and article fast paths.
+            article_retriever = copy(self.bm25_retriever)
+            article_retriever.k = MAX_BM25_K
+            candidates = article_retriever.invoke(question)
         except Exception as e:
             logger.error(f"BM25 article search failed: {e}")
             return []
@@ -253,7 +257,8 @@ class RetrievalService:
             search before reranking. Skipped for article-number queries
             because Stage 0 already handles them precisely.
 
-        Stage 1: Hybrid search — merge BM25 + Vector results (deduplicated).
+        Stage 1: Hybrid search plus per-source vector searches using the
+                 unchanged question; merge all candidates (deduplicated).
         Stage 2: Use LLM to select the top-N most relevant summaries.
         Stage 3: Retrieve the full content (Parent Documents) for the winners.
 
@@ -279,8 +284,20 @@ class RetrievalService:
                         f"for article(s) {sorted(article_numbers)} — skipping LLM rerank"
                     )
 
-            # ── Stage 1: Hybrid search (with optional HyDE expansion) ────────
+            # ── Stage 1: Hybrid + source-scoped search ──────────────────────
             summaries = self._hybrid_search(question)
+            source_summaries = self._source_scoped_search(question)
+            source_fallback_candidates = source_summaries
+            if source_summaries:
+                before = len(summaries)
+                # Source-scoped results come first so each corpus source remains
+                # represented even if the LLM reranker returns an invalid list
+                # and the deterministic top-N fallback is used.
+                summaries = self._merge_summary_lists(source_summaries, summaries)
+                logger.info(
+                    "Source-scoped search: %d sources, added %d candidates",
+                    len(self.corpus_sources), len(summaries) - before,
+                )
 
             # Stage 0.5 — HyDE only for queries WITHOUT explicit article numbers
             if not article_numbers:
@@ -288,6 +305,15 @@ class RetrievalService:
                 if hyde_text:
                     hyde_summaries = self._hybrid_search(hyde_text)
                     summaries = self._merge_summary_lists(summaries, hyde_summaries)
+                    hyde_source_summaries = self._source_scoped_search(hyde_text)
+                    if hyde_source_summaries:
+                        summaries = self._merge_summary_lists(
+                            summaries, hyde_source_summaries
+                        )
+                        # For abstract language, the statute-style HyDE path is
+                        # a better deterministic safety net than unrelated raw
+                        # query neighbours if the reranker rejects everything.
+                        source_fallback_candidates = hyde_source_summaries
                     logger.info(
                         f"HyDE expansion: query→{len(summaries)} merged candidates "
                         f"(was {len(summaries) - len(hyde_summaries)} before)"
@@ -339,8 +365,19 @@ class RetrievalService:
                         question, summaries, top_n
                     )
                     if not best_summaries:
-                        logger.warning("Reranking returned no valid summaries")
-                        return []
+                        fallback_limit = max(
+                            top_n,
+                            len(self.corpus_sources) * self.config.rerank_top_n,
+                        )
+                        best_summaries = source_fallback_candidates[:fallback_limit]
+                        if not best_summaries:
+                            logger.warning("Reranking returned no valid summaries")
+                            return []
+                        logger.warning(
+                            "Reranker rejected all candidates; preserving %d "
+                            "source-scoped candidates for generation-time review",
+                            len(best_summaries),
+                        )
 
                     # ── Stage 3: Fetch parent documents ──────────────────────
                     parent_docs = self._fetch_multiple_parent_docs(best_summaries)
@@ -395,19 +432,45 @@ class RetrievalService:
             logger.warning(f"Self-query extraction failed: {e}")
             return {"law_names": [], "article_ids": [], "cross_reference": False}
 
-    def _filtered_vector_search(self, query: str, law_name: str) -> List[Document]:
-        """Run vector search restricted to a single law (via metadata filter)."""
+    def _source_scoped_search(self, query: str) -> List[Document]:
+        """Search every indexed source with the original query unchanged.
+
+        This provides deterministic domain coverage without intent keywords,
+        query rewriting, or assumptions about the user's identity.
+        """
+        candidates: List[Document] = []
+        per_source_k = max(1, self.config.rerank_top_n)
+        for source in self.corpus_sources:
+            candidates.extend(
+                self._filtered_vector_search_by_source(
+                    query, source, k=per_source_k
+                )
+            )
+        return self._merge_results(candidates, []) if candidates else []
+
+    def _filtered_vector_search_by_source(
+        self, query: str, source: str, *, k: int
+    ) -> List[Document]:
+        """Run vector search restricted to one corpus source."""
         try:
             results = self.vectorstore.similarity_search(
                 query,
-                k=self.config.summary_top_k,
-                filter={"source": f"{law_name}.md"},
+                k=k,
+                filter={"source": source},
             )
-            logger.info(f"Filtered vector search [{law_name}]: {len(results)} results")
+            logger.info("Filtered vector search [%s]: %d results", source, len(results))
             return results
         except Exception as e:
-            logger.warning(f"Filtered vector search failed for {law_name}: {e}")
+            logger.warning("Filtered vector search failed for %s: %s", source, e)
             return []
+
+    def _filtered_vector_search(self, query: str, law_name: str) -> List[Document]:
+        """Compatibility wrapper for structured law-name filters."""
+        return self._filtered_vector_search_by_source(
+            query,
+            f"{law_name}.md",
+            k=self.config.summary_top_k,
+        )
 
     def _generate_hyde_document(self, question: str) -> Optional[str]:
         """Ask the LLM to draft a hypothetical statute fragment.

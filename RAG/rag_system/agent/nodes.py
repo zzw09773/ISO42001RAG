@@ -64,13 +64,34 @@ _CHAT_KEYWORDS = re.compile(
 )
 
 # Pattern to detect legal article citations in generated text
-_CITATION_PATTERN = re.compile(r'第\s*\d+\s*條|article\s*\d+', re.IGNORECASE)
-_ARTICLE_NUM_RE = re.compile(r'第\s*(\d+)\s*條')
+_ZH_NUM = {"零": 0, "〇": 0, "一": 1, "二": 2, "兩": 2, "三": 3,
+           "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+_ZH_UNIT = {"十": 10, "百": 100, "千": 1000}
+_ARTICLE_TOKEN = r"[0-9零〇一二兩三四五六七八九十百千]+"
+_CITATION_PATTERN = re.compile(rf'第\s*{_ARTICLE_TOKEN}\s*條|article\s*\d+', re.IGNORECASE)
+_ARTICLE_NUM_RE = re.compile(rf'第\s*({_ARTICLE_TOKEN})\s*條')
+
+
+def _parse_article_number(token: str) -> int | None:
+    if token.isdigit():
+        return int(token)
+    total = 0
+    current = 0
+    for char in token:
+        if char in _ZH_NUM:
+            current = _ZH_NUM[char]
+        elif char in _ZH_UNIT:
+            total += (current or 1) * _ZH_UNIT[char]
+            current = 0
+        else:
+            return None
+    return total + current
 
 
 def _article_nums(text: str) -> set:
-    """Arabic 第N條 numbers found in a string (answer text or a source id)."""
-    return {int(n) for n in _ARTICLE_NUM_RE.findall(text or "")}
+    """Arabic or Chinese 第N條 numbers found in answer text or source ids."""
+    values = (_parse_article_number(token) for token in _ARTICLE_NUM_RE.findall(text or ""))
+    return {value for value in values if value is not None}
 
 
 def _retrieved_article_nums(sources) -> set:
@@ -326,25 +347,21 @@ _CN_NUMS = {
 
 def _expand_query(question: str) -> str:
     """
-    Expand short legal article queries for better vector search recall.
+    Expand only short article references for better vector search recall.
 
     Short queries like "第8條" lack semantic context for embeddings.
-    This expands them to include more keywords so the embedding model
-    can match the correct chunk.
+    Domain routing is intentionally not performed here: RetrievalService sends
+    every legal query, unchanged, through global and per-source searches.
     """
     q = question.strip()
-    if len(q) > 15:
-        return question
-
     m = _ARTICLE_REF_PATTERN.match(q)
-    if not m:
-        return question
+    if m and len(q) <= 15:
+        num = m.group(1)
+        if num in _CN_NUMS:
+            num = _CN_NUMS[num]
+        return f"第 {num} 條 法律條文規定內容 第{num}條"
 
-    num = m.group(1)
-    if num in _CN_NUMS:
-        num = _CN_NUMS[num]
-
-    return f"第 {num} 條 法律條文規定內容 第{num}條"
+    return question
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +381,8 @@ def create_retrieve_node(config: RAGConfig) -> Callable:
         retry_count = state.get("retry_count", 0)
         logger.info(f"--- RETRIEVE NODE --- (attempt {retry_count + 1})")
 
-        # Query expansion for short article references
+        # Only short article references are expanded. Domain coverage happens
+        # inside RetrievalService with the original question unchanged.
         search_query = _expand_query(question)
         if search_query != question:
             logger.info(f"Query expanded: '{question}' -> '{search_query}'")
@@ -380,7 +398,7 @@ def create_retrieve_node(config: RAGConfig) -> Callable:
             return {
                 "retrieved_docs": [],
                 "retrieved_sources": [],
-                "actions": ["retrieve=empty"],
+                "actions": ["retrieve=empty(domain_search=source_scoped)"],
             }
 
         # Format with token budget + collect source identifiers for audit log
@@ -423,10 +441,17 @@ def create_retrieve_node(config: RAGConfig) -> Callable:
             len(formatted_parts), len(retrieved_sources), tokens_used,
         )
 
+        action = (
+            f"retrieve(docs={len(formatted_parts)},sources={len(retrieved_sources)},"
+            "domain_search=source_scoped)"
+        )
+        if search_query != question:
+            action = action[:-1] + ",article_query_expanded=true)"
+
         return {
             "retrieved_docs": formatted_parts,
             "retrieved_sources": retrieved_sources,
-            "actions": [f"retrieve(docs={len(formatted_parts)},sources={len(retrieved_sources)})"],
+            "actions": [action],
         }
 
     return retrieve_node
@@ -569,10 +594,23 @@ def create_generate_node(llm: ChatOpenAI, config: RAGConfig) -> Callable:
 # Fast-path safety nets remain to avoid wasting an LLM call:
 #   - Empty / very short answers → auto-PASS (caller already handled)
 #   - "尚未收錄" / "無法提供" honest-rejection → PASS (no retry needed)
-#   - retry_count ≥ MAX_RETRIES → PASS (loop protection)
+#   - retry_count ≥ MAX_RETRIES → PASS only after citation provenance passes
 # ---------------------------------------------------------------------------
 
 _NO_INFO_PHRASES = ["尚未收錄", "無法提供", "未發現", "未檢索到", "沒有相關"]
+_CLAUSE_BOUNDARY_RE = re.compile(r"(?:[。！？；;，,\n]+|但是|但|然而)")
+
+
+def _reported_missing_article_nums(text: str) -> set[int]:
+    """Article numbers explicitly tied to a no-information clause."""
+    missing: set[int] = set()
+    asserted: set[int] = set()
+    for clause in _CLAUSE_BOUNDARY_RE.split(text or ""):
+        if any(phrase in clause for phrase in _NO_INFO_PHRASES):
+            missing |= _article_nums(clause)
+        else:
+            asserted |= _article_nums(clause)
+    return missing - asserted
 
 
 def _parse_verify_verdict(raw: str) -> dict:
@@ -606,24 +644,6 @@ def create_verify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
         retry_count = state.get("retry_count", 0)
         logger.info(f"--- VERIFY NODE (LLM) --- retry={retry_count}")
 
-        # ── Fast-path 1: empty / non-substantive answer → PASS ──────────────
-        if len(generation) < 50 or REJECTION_MSG in generation:
-            logger.info("VERIFY: PASSED (non-substantive, skip retry)")
-            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(non_substantive)"]}
-
-        # ── Fast-path 2: honest "no info found" → PASS ──────────────────────
-        # Only fast-path when the answer ALSO cites nothing — an answer that
-        # claims "no info" yet still cites an article is contradictory and must
-        # still face the provenance gate below.
-        if any(p in generation for p in _NO_INFO_PHRASES) and not _CITATION_PATTERN.search(generation):
-            logger.info("VERIFY: PASSED (model honestly reports no info)")
-            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(no_info)"]}
-
-        # ── Fast-path 3: retry budget exhausted → PASS ──────────────────────
-        if retry_count >= MAX_RETRIES:
-            logger.warning(f"VERIFY: Max retries ({MAX_RETRIES}) reached, accepting answer")
-            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(retry_limit)"]}
-
         # ── Evidence-grounded gate: citation provenance (deterministic) ─────
         # Catch FABRICATED citations — an article number cited in the answer that
         # was NOT in the retrieved context = ungrounded (hallucinated) citation.
@@ -632,19 +652,82 @@ def create_verify_node(llm: Optional["ChatOpenAI"] = None) -> Callable:
         # Deeper claim-vs-content grounding is covered offline by
         # monitoring_addon RAGAS faithfulness.
         retrieved_sources = state.get("retrieved_sources", []) or []
-        if retrieved_sources:
-            ungrounded = sorted(_article_nums(generation) - _retrieved_article_nums(retrieved_sources))
-            if ungrounded:
-                arts = "、第".join(str(n) for n in ungrounded)
-                logger.info("VERIFY: ungrounded citation 第%s條 (retrieved=%s)",
-                            arts, sorted(_retrieved_article_nums(retrieved_sources)))
+        answer_articles = _article_nums(generation)
+        retrieved_articles = _retrieved_article_nums(retrieved_sources)
+        reports_no_info = any(phrase in generation for phrase in _NO_INFO_PHRASES)
+        honestly_missing = (
+            _reported_missing_article_nums(generation)
+            & _article_nums(question)
+            & (answer_articles - retrieved_articles)
+        )
+        ungrounded = sorted(answer_articles - retrieved_articles - honestly_missing)
+        if ungrounded:
+            arts = "、第".join(str(n) for n in ungrounded)
+            logger.info("VERIFY: ungrounded citation 第%s條 (retrieved=%s)",
+                        arts, sorted(_retrieved_article_nums(retrieved_sources)))
+            if retry_count >= MAX_RETRIES:
+                logger.warning(
+                    "VERIFY: retry budget exhausted with ungrounded citation; "
+                    "replacing answer with a fail-safe response"
+                )
                 return {
-                    "scope": "needs_retry",
-                    "retry_count": retry_count + 1,
-                    "feedback": (f"答案引用第{arts}條，但檢索結果未含這些條文（疑似無據引用），"
-                                 "請僅依檢索到的條文作答"),
-                    "actions": ["verify=needs_retry(ungrounded_citation)"],
+                    "scope": "verified",
+                    "generation": (
+                        "目前無法從已檢索資料確認回答中的條文引用，為避免提供無據內容，"
+                        "本次不提供該回答；請重新查詢或由人工查證原文。"
+                    ),
+                    "feedback": "",
+                    "actions": ["verify=failed_safe(ungrounded_citation)"],
                 }
+            return {
+                "scope": "needs_retry",
+                "retry_count": retry_count + 1,
+                "feedback": (f"答案引用第{arts}條，但檢索結果未含這些條文（疑似無據引用），"
+                             "請僅依檢索到的條文作答"),
+                "actions": ["verify=needs_retry(ungrounded_citation)"],
+            }
+
+        # A response that cites grounded evidence while claiming the knowledge
+        # base has no relevant information is internally contradictory. Retry
+        # it without inferring the user's intent from keywords or hard-coding a
+        # specific statute/article. If the evidence is only conditionally
+        # applicable, the regenerated answer must say so explicitly.
+        if (
+            retry_count < MAX_RETRIES
+            and reports_no_info
+            and bool(answer_articles & retrieved_articles)
+            and bool(retrieved_sources)
+        ):
+            logger.info(
+                "VERIFY: retrying answer that cites retrieved evidence while "
+                "claiming no information is available"
+            )
+            return {
+                "scope": "needs_retry",
+                "retry_count": retry_count + 1,
+                "feedback": (
+                    "回答一方面引用已檢索條文，一方面宣稱知識庫沒有相關資料，兩者矛盾。"
+                    "請重新檢視已檢索內容：若條文可提供條件式說明，明確交代適用前提後"
+                    "回答；若確實不適用，則說明原因且不要把該條文列為支持答案的參考資料。"
+                    "不得延伸條文未記載的事實或替使用者認定身分。"
+                ),
+                "actions": ["verify=needs_retry(contradictory_no_info)"],
+            }
+
+        # ── Fast-path 1: empty / non-substantive answer → PASS ──────────────
+        if len(generation) < 50 or REJECTION_MSG in generation:
+            logger.info("VERIFY: PASSED (non-substantive, skip retry)")
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(non_substantive)"]}
+
+        # ── Fast-path 2: honest "no info found" → PASS ──────────────────────
+        if any(p in generation for p in _NO_INFO_PHRASES) and not _CITATION_PATTERN.search(generation):
+            logger.info("VERIFY: PASSED (model honestly reports no info)")
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(no_info)"]}
+
+        # ── Fast-path 3: retry budget exhausted after provenance → PASS ─────
+        if retry_count >= MAX_RETRIES:
+            logger.warning(f"VERIFY: Max retries ({MAX_RETRIES}) reached, accepting grounded answer")
+            return {"scope": "verified", "feedback": "", "actions": ["verify=passed(retry_limit)"]}
 
         # ── LLM verdict (or fallback to regex if llm not provided) ──────────
         if llm is None:

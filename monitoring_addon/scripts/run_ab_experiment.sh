@@ -2,7 +2,8 @@
 # A/B 效能驗證編排：改進前(舊prompt) → 重啟 → 改進後(新prompt) → 回歸gate → 歸因
 # 一次跑到底，以報告檔存在為完成訊號（不靠 pgrep，避免自我匹配）。
 set -u
-cd /home/c1147259/桌面/ISO42001/ISO42001RAG/ISO42001Deploy/monitoring_addon
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}/.."
 LOG=/tmp/ab_experiment.log
 RAG=http://localhost:8043
 TIMEOUT=180

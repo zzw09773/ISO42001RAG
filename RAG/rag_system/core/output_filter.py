@@ -49,6 +49,17 @@ _REDACT_RULES: List[tuple[str, re.Pattern, str]] = [
 ]
 
 
+_REASONING_HEADING = re.compile(
+    r"(?im)^[ \t]*(?:#{1,6}[ \t]+)?(?:\*\*|__)?思考過程[:：]?"
+    r"(?:\*\*|__)?[:：]?[ \t]*\r?\n"
+)
+_ANSWER_SECTION_HEADING = re.compile(
+    r"(?im)^[ \t]*(?:#{1,6}[ \t]+)?(?:\*\*|__)?"
+    r"(?:問題答案|具體條文|結論|參考資料)[:：]?"
+    r"(?:\*\*|__)?[:：]?[ \t]*\r?$"
+)
+
+
 @dataclass
 class FilterResult:
     """Result of output filtering."""
@@ -78,3 +89,41 @@ def filter_output(text: str) -> FilterResult:
         redacted=len(findings) > 0,
         findings=findings,
     )
+
+
+def split_reasoning_summary(text: str) -> tuple[str, str]:
+    """Split the public reasoning summary from the answer body.
+
+    The first item is empty when the canonical heading structure is absent.
+    Raw model chain-of-thought is never supplied to this function; it only
+    handles the short evidence rationale required by ``AGENT_SYSTEM_PROMPT``.
+    """
+    if not text or "<think>" in text.lower():
+        return "", text
+
+    heading = _REASONING_HEADING.search(text)
+    if not heading or text[: heading.start()].strip():
+        return "", text
+
+    next_section = _ANSWER_SECTION_HEADING.search(text, heading.end())
+    if not next_section:
+        return "", text
+
+    reasoning = text[heading.end() : next_section.start()].strip()
+    if not reasoning:
+        return "", text
+
+    answer = text[next_section.start() :].lstrip()
+    return reasoning, answer
+
+
+def fold_reasoning_for_openwebui(text: str) -> str:
+    """Convert the prompt's reasoning summary to a collapsible UI block.
+
+    Non-streaming clients receive ``<think>...</think>``. Streaming clients
+    use OpenAI-compatible ``reasoning_content`` deltas instead.
+    """
+    reasoning, answer = split_reasoning_summary(text)
+    if not reasoning:
+        return text
+    return f"<think>\n{reasoning}\n</think>\n\n{answer}"

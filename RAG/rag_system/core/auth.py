@@ -14,6 +14,7 @@ app directly cannot inject arbitrary source IPs into audit trails or evade
 per-key rate limits by rotating fake addresses.
 """
 import os
+from ipaddress import ip_address, ip_network
 from typing import Optional
 
 from fastapi import HTTPException, Request, Security, status
@@ -23,7 +24,7 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 _VALID_KEYS: Optional[set] = None
 _ALLOW_INTRANET: Optional[bool] = None
-_TRUSTED_PROXIES: Optional[set] = None
+_TRUSTED_PROXIES: Optional[tuple] = None
 
 
 def _get_valid_keys() -> set:
@@ -41,12 +42,29 @@ def _intranet_mode_allowed() -> bool:
     return _ALLOW_INTRANET
 
 
-def _get_trusted_proxies() -> set:
+def _get_trusted_proxies() -> tuple:
     global _TRUSTED_PROXIES
     if _TRUSTED_PROXIES is None:
         raw = os.environ.get("TRUSTED_PROXIES", "127.0.0.1")
-        _TRUSTED_PROXIES = {ip.strip() for ip in raw.split(",") if ip.strip()}
+        networks = []
+        for value in (item.strip() for item in raw.split(",")):
+            if not value:
+                continue
+            try:
+                networks.append(ip_network(value, strict=False))
+            except ValueError:
+                # Invalid entries fail closed: they never make a peer trusted.
+                continue
+        _TRUSTED_PROXIES = tuple(networks)
     return _TRUSTED_PROXIES
+
+
+def _is_trusted_proxy(peer_ip: str) -> bool:
+    try:
+        address = ip_address(peer_ip)
+    except ValueError:
+        return False
+    return any(address in network for network in _get_trusted_proxies())
 
 
 def get_api_key(
@@ -119,13 +137,18 @@ def _get_client_ip(request: Request) -> str:
 
     X-Forwarded-For is only honoured when the immediate TCP peer is a known
     trusted proxy (TRUSTED_PROXIES env var, default: 127.0.0.1 for nginx
-    running on the same host). Direct clients cannot set their own audit
-    identity by forging the header.
+    running on the same host). The rightmost hop is the address appended by
+    that proxy, so a client-supplied prefix cannot replace its audit identity.
     """
     peer_ip = request.client.host if request.client else None
     forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for and peer_ip in _get_trusted_proxies():
-        return forwarded_for.split(",")[0].strip()
+    if forwarded_for and peer_ip and _is_trusted_proxy(peer_ip):
+        candidate = forwarded_for.rsplit(",", 1)[-1].strip()
+        try:
+            ip_address(candidate)
+        except ValueError:
+            return peer_ip
+        return candidate
     if peer_ip:
         return peer_ip
     return "unknown"

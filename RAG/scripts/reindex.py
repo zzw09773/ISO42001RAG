@@ -23,12 +23,13 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from rag_system.core.config import RAGConfig
+from rag_system.core.retrieval_generation import bump_retrieval_generation
 from rag_system.services.ingestion import IngestionService
 
 
 def build_config() -> RAGConfig:
     """Load and validate configuration from environment."""
-    # .env 放在 ISO42001Deploy/，即 repo_root 的上一層
+    # .env 放在 ISO42001RAG 專案根目錄，即 repo_root 的上一層
     dotenv_path = repo_root.parent / ".env"
     load_dotenv(dotenv_path=dotenv_path, override=True)
     try:
@@ -155,6 +156,9 @@ def main():
         # Full reindex mode (default)
         data_dir = repo_root / "data/converted_md"
         cmd_full_reindex(service, data_dir)
+
+    generation = bump_retrieval_generation()
+    print(f"🔄 Retrieval cache generation 已更新：{generation[:12]}")
 
 
 if __name__ == "__main__":

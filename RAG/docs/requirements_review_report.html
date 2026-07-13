@@ -291,7 +291,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <h3 id="33">3.3 部署拓樸</h3>
 <ul>
 <li>容器化：Docker Compose 統一管理。</li>
-<li>離線：<code>save_images.sh</code> 打包所有映像為 <code>.tar</code>，可搬運至內網。</li>
+<li>離線：<code>save_images.sh</code> 在可建置機器將所有映像打包為 <code>.tar</code>，再搬運至內網。<code>deploy.sh</code> 以 <code>--no-build --pull never</code> 啟動，乾淨 checkout 若沒有完整 image tar 或預先載入的 images 會拒絕部署。</li>
 <li>推論後端依賴：僅 Triton GPU 主機，透過內網 IP 連線。</li>
 <li>持久化：pgvector volume、<code>data/audit_logs/</code>、<code>data/versions/</code>、<code>data/converted_md/</code>。</li>
 </ul>
@@ -344,9 +344,9 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>FR-R-06</td>
-<td>系統<strong>應</strong>在回答產生後執行 <code>verify_node</code> 檢查引用格式與條文存在性；驗證失敗<strong>應</strong>重試（上限 <code>MAX_RETRIES=2</code>）。</td>
+<td>系統<strong>應</strong>在回答產生後執行 <code>verify_node</code> 檢查引用格式與 citation provenance；驗證失敗<strong>應</strong>重試（上限 <code>MAX_RETRIES=2</code>）。若無據條號在重試耗盡後仍存在，系統<strong>應</strong>以 fail-safe 訊息取代原回答。</td>
 <td>✅</td>
-<td>整合測試：強制注入錯誤條號驗證重試行為。</td>
+<td>整合測試：強制注入錯誤條號，驗證重試與額度耗盡後的安全取代。</td>
 </tr>
 <tr>
 <td>FR-R-07</td>
@@ -405,9 +405,9 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>FR-A-06</td>
-<td>Streaming 回應<strong>應</strong>遵循 SSE（<code>text/event-stream</code>）格式，每個 token 一個 <code>data:</code> chunk，並以 <code>data: [DONE]</code> 結束。</td>
+<td>Streaming 回應<strong>應</strong>遵循 SSE（<code>text/event-stream</code>）格式；系統先完整緩衝並過濾模型回答，再送出一個或多個 content <code>data:</code> chunk，最後以 <code>data: [DONE]</code> 結束。不要求每 token 一個 chunk。</td>
 <td>✅</td>
-<td>SSE 串流整合測試。</td>
+<td>SSE 整合測試：驗證 envelope、過濾後 content 與 <code>[DONE]</code>。</td>
 </tr>
 </tbody>
 </table>
@@ -492,19 +492,19 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <tbody>
 <tr>
 <td>FR-O-01</td>
-<td>系統<strong>應</strong>完全容器化；內網使用者僅需 <code>docker compose up -d</code> 即可啟動全部服務。</td>
+<td>系統<strong>應</strong>完全容器化；內網部署機已載入 10 個核定 images 後，以 <code>deploy.sh</code> 啟動全部服務。腳本不得在離線現場 build 或 pull。</td>
 <td>✅</td>
-<td>CI smoke test：乾淨環境啟動 + <code>/health</code> 200。</td>
+<td>部署契約測試 + 內網 smoke test：缺 image 時拒絕；images 齊備時啟動並檢查 <code>/health</code>。</td>
 </tr>
 <tr>
 <td>FR-O-02</td>
-<td>系統<strong>應</strong>提供 <code>save_images.sh</code> 將所有映像匯出為 tar 檔，總大小 ≤ 6 GB，便於離線搬運。</td>
+<td>系統<strong>應</strong>提供 <code>save_images.sh</code> 將所有映像匯出為 tar 檔，便於離線搬運。交付成品<strong>應</strong>在 <code>MANIFEST.txt</code> 記錄 SHA-256。</td>
 <td>✅</td>
-<td>打包後檔案大小檢查。</td>
+<td>打包演練：核對所有 tar、大小與 manifest hash；容量上限由交付媒體另行驗收。</td>
 </tr>
 <tr>
 <td>FR-O-03</td>
-<td>所有設定<strong>應</strong>集中於 <code>ISO42001Deploy/.env</code>，搬遷時僅需修改 <code>LLM_HOST</code> 一項。</td>
+<td>所有設定<strong>應</strong>集中於 <code>ISO42001RAG/.env</code>，搬遷時僅需修改 <code>LLM_HOST</code> 一項。</td>
 <td>◐</td>
 <td>文件審查 + 部署演練。</td>
 </tr>
@@ -531,7 +531,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <tbody>
 <tr>
 <td>NFR-S-01</td>
-<td>系統<strong>應</strong>對所有非健康檢查端點強制 Bearer Token 認證；驗證失敗回 HTTP 401。</td>
+<td>系統<strong>應</strong>對所有非健康檢查端點執行已配置的存取模式：<code>API_KEYS</code> 存在時強制 Bearer Token；驗證失敗回 HTTP 401。受控內網可依 NFR-S-02 明確啟用 intranet mode。</td>
 <td>✅</td>
 <td><code>tests/unit/test_auth.py</code></td>
 </tr>
@@ -727,9 +727,9 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>NFR-P-02</td>
-<td>串流查詢的首 token 延遲（TTFT）<strong>應</strong> ≤ 2 秒。</td>
-<td>✅</td>
-<td>SSE 計時測試。</td>
+<td>串流查詢的首 content chunk 延遲目標為 ≤ 2 秒。現行實作為先完整緩衝與過濾再送 SSE，因此此 TTFT 目標<strong>目前不成立，且尚未在部署環境驗證</strong>。</td>
+<td>◌</td>
+<td>待安全串流設計改版後執行端到端 SSE 計時；現階段不得列為通過指標。</td>
 </tr>
 <tr>
 <td>NFR-P-03</td>
@@ -930,8 +930,8 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>離線部署</td>
-<td>🟢 無</td>
-<td>全離線打包（<code>save_images.sh</code>）</td>
+<td>🟡 受管理</td>
+<td><code>save_images.sh</code> / <code>make_update_package.sh</code> 須在可建置機器先製作完整 images；內網 <code>deploy.sh</code> 不 build/pull</td>
 </tr>
 </tbody>
 </table>
@@ -1407,7 +1407,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <tr>
 <td>TTFT</td>
 <td>Time To First Token</td>
-<td>首個 token 出現延遲</td>
+<td>傳統 token 串流的首 token 延遲；本系統現行緩衝式 SSE 應改量「首 content chunk」延遲</td>
 </tr>
 <tr>
 <td>SSE</td>

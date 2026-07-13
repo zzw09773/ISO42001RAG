@@ -92,8 +92,8 @@ class TestGetApiKey:
         result = get_api_key(_mock_request("172.16.0.1"), None)
         assert result == "intranet:172.16.0.1"
 
-    def test_forwarded_for_trusted_when_peer_is_proxy(self, monkeypatch):
-        """X-Forwarded-For honoured only when peer IP is a trusted proxy."""
+    def test_forwarded_for_uses_rightmost_untrusted_hop(self, monkeypatch):
+        """A client-supplied XFF prefix cannot replace its audit identity."""
         monkeypatch.setenv("API_KEYS", "")
         monkeypatch.setenv("ALLOW_INTRANET_MODE", "true")
         monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1")
@@ -106,7 +106,38 @@ class TestGetApiKey:
 
         from rag_system.core.auth import get_api_key
         result = get_api_key(req, None)
-        assert result == "intranet:10.1.2.3"
+        assert result == "intranet:172.16.0.1"
+
+    def test_forwarded_for_broad_proxy_cidr_does_not_trust_client_prefix(
+        self, monkeypatch
+    ):
+        """Only the immediate peer trust check affects the chosen XFF hop."""
+        monkeypatch.setenv("API_KEYS", "")
+        monkeypatch.setenv("ALLOW_INTRANET_MODE", "true")
+        monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1,172.16.0.0/12")
+        _reset_auth_cache()
+
+        req = MagicMock(spec=Request)
+        req.headers = {"X-Forwarded-For": "10.1.2.3, 172.16.0.1"}
+        req.client = MagicMock()
+        req.client.host = "127.0.0.1"
+
+        from rag_system.core.auth import get_api_key
+        assert get_api_key(req, None) == "intranet:172.16.0.1"
+
+    def test_forwarded_for_invalid_nearest_hop_fails_closed(self, monkeypatch):
+        monkeypatch.setenv("API_KEYS", "")
+        monkeypatch.setenv("ALLOW_INTRANET_MODE", "true")
+        monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1")
+        _reset_auth_cache()
+
+        req = MagicMock(spec=Request)
+        req.headers = {"X-Forwarded-For": "1.2.3.4, not-an-ip"}
+        req.client = MagicMock()
+        req.client.host = "127.0.0.1"
+
+        from rag_system.core.auth import get_api_key
+        assert get_api_key(req, None) == "intranet:127.0.0.1"
 
     def test_forwarded_for_ignored_when_peer_is_not_proxy(self, monkeypatch):
         """X-Forwarded-For must be ignored from untrusted peers."""
@@ -124,6 +155,21 @@ class TestGetApiKey:
         result = get_api_key(req, None)
         # Must use real peer IP, not the spoofed header
         assert result == "intranet:10.5.5.5"
+
+    def test_forwarded_for_trusted_when_peer_matches_cidr(self, monkeypatch):
+        """An explicitly configured CIDR must match proxy peers."""
+        monkeypatch.setenv("API_KEYS", "")
+        monkeypatch.setenv("ALLOW_INTRANET_MODE", "true")
+        monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1,172.16.0.0/12")
+        _reset_auth_cache()
+
+        req = MagicMock(spec=Request)
+        req.headers = {"X-Forwarded-For": "10.20.30.40"}
+        req.client = MagicMock()
+        req.client.host = "172.19.0.8"
+
+        from rag_system.core.auth import get_api_key
+        assert get_api_key(req, None) == "intranet:10.20.30.40"
 
     def test_key_prefix_truncates(self):
         from rag_system.core.auth import key_prefix

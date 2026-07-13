@@ -26,6 +26,10 @@ class FakeContainer:
         self.status = "running"
         self.restarted = False
 
+    def exec_run(self, cmd):
+        assert cmd == ["cat", "/app/data/processed/rag-effective.env"]
+        return (0, b"TOP_K=8\nRAG_LOG_LEVEL=WARNING\n")
+
     def restart(self, timeout=30):
         self.restarted = True
 
@@ -59,8 +63,13 @@ def test_restart_and_effective_env():
     ops = DockerOps(client=c)
     ops.restart("ISO42001_rag_api")
     assert c._container.restarted
-    env = ops.effective_env("ISO42001_rag_api")
-    assert env["TOP_K"] == "5" and env["LLM_API_KEY"] == "zzz"
+    env = ops.effective_env(
+        "ISO42001_rag_api",
+        runtime_env_file="/app/data/processed/rag-effective.env",
+    )
+    assert env["TOP_K"] == "8"
+    assert env["RAG_LOG_LEVEL"] == "WARNING"
+    assert env["LLM_API_KEY"] == "zzz"
 
 
 def test_container_state_absent():

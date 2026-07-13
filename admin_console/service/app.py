@@ -119,7 +119,7 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
     sessions: set[str] = set()   # 記憶體 session：容器重啟即全登出（可接受）
     challenges = ChallengeStore()
 
-    _PUBLIC = {"/login", "/api/auth/card/challenge", "/api/auth/card/verify"}
+    _PUBLIC = {"/health", "/login", "/api/auth/card/challenge", "/api/auth/card/verify"}
 
     def _new_session_response(target: str = "/"):
         token = secrets.token_urlsafe(32)
@@ -135,6 +135,10 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
         if request.url.path.startswith("/api/"):
             return JSONResponse({"error": "未登入"}, status_code=401)
         return RedirectResponse("/login", status_code=303)
+
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy"}
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page():
@@ -188,7 +192,10 @@ def create_app(env_store: EnvStore, job_manager: JobManager, dockerops: DockerOp
     @app.get("/", response_class=HTMLResponse)
     async def index(saved: int = 0, error: str = ""):
         env_vals = env_store.read()
-        eff = dockerops.effective_env(RAG_CONTAINER)
+        eff = dockerops.effective_env(
+            RAG_CONTAINER,
+            runtime_env_file="/app/data/processed/rag-effective.env",
+        )
         rows = []
         for s in SETTINGS:
             ev, fv = env_vals.get(s["key"]), eff.get(s["key"])
@@ -314,7 +321,13 @@ def create_app_from_env() -> FastAPI:
         raise RuntimeError("啟用帳密 fallback 但 ADMIN_USERNAME/ADMIN_PASSWORD 未設定")
     ops = DockerOps()
     return create_app(
-        EnvStore(env_file, data_dir / "env-backups"),
+        EnvStore(
+            env_file,
+            data_dir / "env-backups",
+            runtime_env_path=Path(
+                os.environ.get("RAG_RUNTIME_ENV_FILE", data_dir / "rag-runtime.env")
+            ),
+        ),
         JobManager(data_dir, ops.exec_stream),
         ops,
         Path(os.environ.get("REPORTS_DIR", "/mon_data/reports")),

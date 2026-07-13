@@ -151,7 +151,7 @@
 ### 3.3 部署拓樸
 
 - 容器化：Docker Compose 統一管理。
-- 離線：`save_images.sh` 打包所有映像為 `.tar`，可搬運至內網。
+- 離線：`save_images.sh` 在可建置機器將所有映像打包為 `.tar`，再搬運至內網。`deploy.sh` 以 `--no-build --pull never` 啟動，乾淨 checkout 若沒有完整 image tar 或預先載入的 images 會拒絕部署。
 - 推論後端依賴：僅 Triton GPU 主機，透過內網 IP 連線。
 - 持久化：pgvector volume、`data/audit_logs/`、`data/versions/`、`data/converted_md/`。
 
@@ -171,7 +171,7 @@
 | FR-R-03 | 系統**應**對候選 chunks 執行 LLM Reranker，取 Top-3 進入後續流程。 | ✅ | 整合測試：黃金資料集 Top-3 命中率。 |
 | FR-R-04 | 系統**應**採用 Parent-Child 階層式索引；以小 chunk 做向量搜尋，命中後**取回完整父文件段落**作為上下文。 | ✅ | 單元測試：驗證父文件 ID 一致性。 |
 | FR-R-05 | 系統**應**以 LangGraph 實作 Agent 工作流，節點包含：`classify → retrieve → generate → verify` 主流程，與 `reject / security_block / passthrough` 分支。 | ✅ | 圖結構單元測試 + 路由測試。 |
-| FR-R-06 | 系統**應**在回答產生後執行 `verify_node` 檢查引用格式與條文存在性；驗證失敗**應**重試（上限 `MAX_RETRIES=2`）。 | ✅ | 整合測試：強制注入錯誤條號驗證重試行為。 |
+| FR-R-06 | 系統**應**在回答產生後執行 `verify_node` 檢查引用格式與 citation provenance；驗證失敗**應**重試（上限 `MAX_RETRIES=2`）。若無據條號在重試耗盡後仍存在，系統**應**以 fail-safe 訊息取代原回答。 | ✅ | 整合測試：強制注入錯誤條號，驗證重試與額度耗盡後的安全取代。 |
 | FR-R-07 | 系統**應**支援多輪對話：以 `x-session-id` HTTP header 識別會話，並透過摘要壓縮控制上下文長度（目標 ≤ 3000 tokens）。 | ✅ | 單元測試：模擬 10 輪對話的記憶壓縮輸出 token 數。 |
 | FR-R-08 | 系統**應**對非法律領域之查詢由 `classify_node` 判定為 out-of-scope 並以 `reject_node` 回應標準拒絕訊息。 | ✅ | 黃金資料集 `category=out_of_scope` 案例。 |
 
@@ -184,7 +184,7 @@
 | FR-A-03 | 系統**應**提供 `POST /v1/upload`、`POST /v1/upload/batch`、`DELETE /v1/documents/{filename}`、`GET /v1/documents`、`POST /v1/reindex`。 | ✅ | API 契約測試。 |
 | FR-A-04 | 系統**應**提供無認證 `GET /health` 端點供健康檢查使用。 | ✅ | API 契約測試。 |
 | FR-A-05 | 系統**應**支援 CORS，且允許來源透過 `ALLOWED_ORIGINS` 環境變數控制（逗號分隔白名單；預設不應為 `*` 於生產環境）。 | ✅ | CORS pre-flight 整合測試。 |
-| FR-A-06 | Streaming 回應**應**遵循 SSE（`text/event-stream`）格式，每個 token 一個 `data:` chunk，並以 `data: [DONE]` 結束。 | ✅ | SSE 串流整合測試。 |
+| FR-A-06 | Streaming 回應**應**遵循 SSE（`text/event-stream`）格式；系統先完整緩衝並過濾模型回答，再送出一個或多個 content `data:` chunk，最後以 `data: [DONE]` 結束。不要求每 token 一個 chunk。 | ✅ | SSE 整合測試：驗證 envelope、過濾後 content 與 `[DONE]`。 |
 
 ### 4.3 文件攝取管線（FR-I）
 
@@ -207,9 +207,9 @@
 
 | ID | 需求描述 | 可驗證性 | 驗證方法 |
 |---|---|---|---|
-| FR-O-01 | 系統**應**完全容器化；內網使用者僅需 `docker compose up -d` 即可啟動全部服務。 | ✅ | CI smoke test：乾淨環境啟動 + `/health` 200。 |
-| FR-O-02 | 系統**應**提供 `save_images.sh` 將所有映像匯出為 tar 檔，總大小 ≤ 6 GB，便於離線搬運。 | ✅ | 打包後檔案大小檢查。 |
-| FR-O-03 | 所有設定**應**集中於 `ISO42001Deploy/.env`，搬遷時僅需修改 `LLM_HOST` 一項。 | ◐ | 文件審查 + 部署演練。 |
+| FR-O-01 | 系統**應**完全容器化；內網部署機已載入 10 個核定 images 後，以 `deploy.sh` 啟動全部服務。腳本不得在離線現場 build 或 pull。 | ✅ | 部署契約測試 + 內網 smoke test：缺 image 時拒絕；images 齊備時啟動並檢查 `/health`。 |
+| FR-O-02 | 系統**應**提供 `save_images.sh` 將所有映像匯出為 tar 檔，便於離線搬運。交付成品**應**在 `MANIFEST.txt` 記錄 SHA-256。 | ✅ | 打包演練：核對所有 tar、大小與 manifest hash；容量上限由交付媒體另行驗收。 |
+| FR-O-03 | 所有設定**應**集中於 `ISO42001RAG/.env`，搬遷時僅需修改 `LLM_HOST` 一項。 | ◐ | 文件審查 + 部署演練。 |
 | FR-O-04 | 系統**應**提供版本追蹤腳本 `scripts/version_tracker.py`，支援 `snapshot / diff / verify / list` 四個子命令，並可選 `--backup` 同步輸出 tar.gz。 | ✅ | CLI 行為測試。 |
 
 ---
@@ -220,7 +220,7 @@
 
 | ID | 需求描述 | 可驗證性 | 驗證方法 |
 |---|---|---|---|
-| NFR-S-01 | 系統**應**對所有非健康檢查端點強制 Bearer Token 認證；驗證失敗回 HTTP 401。 | ✅ | `tests/unit/test_auth.py` |
+| NFR-S-01 | 系統**應**對所有非健康檢查端點執行已配置的存取模式：`API_KEYS` 存在時強制 Bearer Token；驗證失敗回 HTTP 401。受控內網可依 NFR-S-02 明確啟用 intranet mode。 | ✅ | `tests/unit/test_auth.py` |
 | NFR-S-02 | 系統**應**提供「內網信任模式」：當 `API_KEYS` 未設定且 `ALLOW_INTRANET_MODE=true` 時，以 Client IP 作為稽核身分。 | ✅ | 認證測試案例。 |
 | NFR-S-03 | 系統**應 Fail-Closed**：當 `API_KEYS` 與 `ALLOW_INTRANET_MODE` 皆未設定時，回傳 HTTP 503，**絕不靜默暴露未受保護端點**。 | ✅ | 認證測試案例。 |
 | NFR-S-04 | 系統**應**僅對列於 `TRUSTED_PROXIES` 的 immediate peer 信任 `X-Forwarded-For` header，防止 IP 偽造。 | ✅ | 認證測試案例（偽造 XFF）。 |
@@ -264,7 +264,7 @@
 | ID | 需求描述 | 可驗證性 | 驗證方法 |
 |---|---|---|---|
 | NFR-P-01 | 在標準硬體（內網 GPU；本機 4 vCPU / 8 GB）下，非串流查詢的 P95 延遲**應** ≤ 8 秒。 | ✅ | 負載測試（locust / k6）。 |
-| NFR-P-02 | 串流查詢的首 token 延遲（TTFT）**應** ≤ 2 秒。 | ✅ | SSE 計時測試。 |
+| NFR-P-02 | 串流查詢的首 content chunk 延遲目標為 ≤ 2 秒。現行實作為先完整緩衝與過濾再送 SSE，因此此 TTFT 目標**目前不成立，且尚未在部署環境驗證**。 | ◌ | 待安全串流設計改版後執行端到端 SSE 計時；現階段不得列為通過指標。 |
 | NFR-P-03 | 在 60 rpm 速率限制下，系統**應**穩定運行不出現記憶體洩漏（24 hr soak test）。 | ◐ | 24 小時壓測。 |
 
 ### 5.6 可靠性與可維運需求（NFR-R）
@@ -315,7 +315,7 @@
 |---|---|---|
 | GPU 主機 / Triton | 🔴 致命 | 提供 `/health` 健康檢查 + 5xx 明確錯誤；運維協議（SLA）約定 |
 | pgvector | 🔴 致命 | 容器內建；資料 volume 持久化；版本鎖定 |
-| 離線部署 | 🟢 無 | 全離線打包（`save_images.sh`） |
+| 離線部署 | 🟡 受管理 | `save_images.sh` / `make_update_package.sh` 須在可建置機器先製作完整 images；內網 `deploy.sh` 不 build/pull |
 
 ### 7.3 開發工作量估算
 
@@ -492,7 +492,7 @@ Pre-0: 清理失效測試（tests/unit/test_sources.py）
 | RAG | Retrieval-Augmented Generation | 檢索增強生成 |
 | BM25 | Best Matching 25 | 經典詞頻關鍵字檢索演算法 |
 | MRR | Mean Reciprocal Rank | 平均倒數排名（IR 指標） |
-| TTFT | Time To First Token | 首個 token 出現延遲 |
+| TTFT | Time To First Token | 傳統 token 串流的首 token 延遲；本系統現行緩衝式 SSE 應改量「首 content chunk」延遲 |
 | SSE | Server-Sent Events | 伺服器推送事件（HTTP 串流） |
 | V&V | Verification & Validation | 驗證與確認 |
 | SRS | Software Requirements Specification | 軟體需求規格書 |

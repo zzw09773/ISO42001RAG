@@ -35,12 +35,30 @@ class DockerOps:
     def restart(self, container: str, timeout: int = 30) -> None:
         self._c.containers.get(container).restart(timeout=timeout)
 
-    def effective_env(self, container: str) -> dict[str, str]:
-        env_list = self._c.containers.get(container).attrs["Config"]["Env"] or []
+    def effective_env(self, container: str,
+                      runtime_env_file: str | None = None) -> dict[str, str]:
+        target = self._c.containers.get(container)
+        env_list = target.attrs["Config"]["Env"] or []
         out: dict[str, str] = {}
         for item in env_list:
             k, _, v = item.partition("=")
             out[k] = v
+        if runtime_env_file:
+            try:
+                result = target.exec_run(["cat", runtime_env_file])
+                exit_code, raw = result if isinstance(result, tuple) else (
+                    result.exit_code, result.output
+                )
+                if exit_code == 0:
+                    text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+                    for item in text.splitlines():
+                        key, sep, value = item.partition("=")
+                        if sep:
+                            out[key] = value
+            except Exception:
+                # Older images do not create the snapshot; keep Config.Env as
+                # a backwards-compatible fallback until they are restarted.
+                pass
         return out
 
     def container_state(self, container: str) -> str:

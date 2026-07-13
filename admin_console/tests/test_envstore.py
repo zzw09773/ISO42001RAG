@@ -1,4 +1,5 @@
 from pathlib import Path
+import stat
 
 import pytest
 
@@ -56,6 +57,23 @@ def test_apply_preserves_comments_and_foreign_keys(store):
     assert "# 註解要活著" in text
 
 
+def test_apply_syncs_runtime_whitelist_without_secrets(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(SAMPLE, encoding="utf-8")
+    runtime = tmp_path / "runtime" / "rag-runtime.env"
+    store = EnvStore(env, tmp_path / "backups", runtime_env_path=runtime)
+
+    store.apply({"TOP_K": "8", "RERANK_TOP_N": "10"})
+
+    runtime_text = runtime.read_text(encoding="utf-8")
+    assert "TOP_K=8" in runtime_text
+    assert "RERANK_TOP_N=10" in runtime_text
+    assert "CHAT_MODEL_NAME=gpt-oss-20b" in runtime_text
+    assert "LLM_API_KEY" not in runtime_text
+    assert "secret-do-not-touch" not in runtime_text
+    assert stat.S_IMODE(runtime.stat().st_mode) == 0o600
+
+
 def test_apply_writes_in_place_same_inode(store):
     s, env = store
     ino = env.stat().st_ino
@@ -68,6 +86,8 @@ def test_apply_creates_timestamped_backup(store):
     s.apply({"TOP_K": "7"})
     baks = list((env.parent / "backups").glob("env-*.bak"))
     assert len(baks) == 1 and "TOP_K=5" in baks[0].read_text(encoding="utf-8")
+    assert stat.S_IMODE(baks[0].stat().st_mode) == 0o600
+    assert stat.S_IMODE(baks[0].parent.stat().st_mode) == 0o700
 
 
 def test_apply_noop_writes_nothing(store):
@@ -87,3 +107,18 @@ def test_validate_rejects_bad_values():
         validate("LLM_API_KEY", "x")    # 非白名單
     assert validate("REACT_MODE", "true") == "true"
     assert validate("TOP_K", " 8 ") == "8"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["safe\nTOP_K=50", "safe\rRAG_LOG_LEVEL=DEBUG", "safe\r\nREACT_MODE=true"],
+)
+def test_apply_rejects_env_line_injection_without_writing(store, value):
+    s, env = store
+    before = env.read_text(encoding="utf-8")
+
+    with pytest.raises(SettingError, match="不可包含換行"):
+        s.apply({"CHAT_MODEL_NAME": value})
+
+    assert env.read_text(encoding="utf-8") == before
+    assert not list((env.parent / "backups").glob("*.bak"))

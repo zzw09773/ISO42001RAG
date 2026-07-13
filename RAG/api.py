@@ -1,8 +1,11 @@
+import asyncio
 import time
 import uuid
 import json
 import re
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Security
@@ -14,6 +17,66 @@ from pydantic import BaseModel, Field
 import uvicorn
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from dotenv import load_dotenv
+
+# Load the mounted runtime .env before importing local modules that cache
+# environment-backed settings at import time (for example, rate_limiter).
+_runtime_env_override = os.environ.get("RAG_ENV_FILE")
+_runtime_env = (
+    Path(_runtime_env_override)
+    if _runtime_env_override
+    else Path(__file__).with_name(".env")
+)
+if not _runtime_env_override and not _runtime_env.exists():
+    # Host-side development keeps .env one level above RAG/; the container
+    # mounts that same file at /app/.env, so both paths share one contract.
+    _runtime_env = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=_runtime_env, override=True)
+
+# Admin-managed runtime settings are loaded with ``override=True`` above, so
+# Docker's static Config.Env is not sufficient to report what this process is
+# actually using.  Persist a non-secret snapshot for the admin container to
+# inspect through Docker exec after each process start.
+_ADMIN_RUNTIME_KEYS = (
+    "CHAT_MODEL_NAME", "TOP_K", "RERANK_TOP_N", "REASONING_EFFORT",
+    "REACT_MODE", "CHUNK_SIZE", "MAX_RETRIEVAL_TOKENS",
+    "RATE_LIMIT_PER_MINUTE", "RAG_LOG_LEVEL", "RAG_LOG_VERBOSE",
+    "LLM_API_BASE", "EMBED_API_BASE", "EMBED_MODEL_NAME",
+)
+
+
+def _write_effective_runtime_snapshot(raw_path: str) -> None:
+    path = Path(raw_path)
+    content = "".join(
+        f"{key}={os.environ[key]}\n"
+        for key in _ADMIN_RUNTIME_KEYS
+        if key in os.environ
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        path.chmod(0o600)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+_effective_env_file = os.environ.get("RAG_EFFECTIVE_ENV_FILE", "").strip()
+if _effective_env_file:
+    try:
+        _write_effective_runtime_snapshot(_effective_env_file)
+    except OSError as exc:
+        print(f"Warning: unable to persist effective runtime settings: {exc}")
 
 from rag_system.core.config import RAGConfig
 from rag_system.core.audit_logger import AuditLogger, QueryTimer
@@ -27,8 +90,12 @@ from rag_system.core.version import (
     SYSTEM_VERSION,
     SYSTEM_VERSION_LABEL,
 )
-from rag_system.agent.graph import run_query, astream_query
-from rag_system.core.output_filter import filter_output
+from rag_system.agent.graph import run_query, astream_query, invalidate_workflow_cache
+from rag_system.core.output_filter import (
+    filter_output,
+    fold_reasoning_for_openwebui,
+    split_reasoning_summary,
+)
 from rag_system.core.input_sanitizer import sanitize
 from rag_system.core.canonicalize import clean_text_for_downstream
 from rag_system.services.converter import FileConverter, ConversionPipeline, ConversionError
@@ -65,8 +132,20 @@ ANSWER_DISCLAIMER = (
     "重要決策請諮詢專業法律人員。"
 )
 
+# Streaming keeps the security boundary intact: model output is filtered and
+# citation-verified first, then delivered in small deltas. OpenWebUI renders
+# ``reasoning_content`` as a live collapsible block and closes it when normal
+# ``content`` begins.
+STREAM_REASONING_PROGRESS = "正在分析問題、檢索並核對知識庫資料…\n\n"
+_STREAM_DELTA_CHARS = 8
+_STREAM_DELTA_DELAY_SECONDS = 0.01
+
+
+def _stream_text_chunks(text: str, size: int = _STREAM_DELTA_CHARS):
+    for start in range(0, len(text), size):
+        yield text[start : start + size]
+
 # Load Config globally to avoid reloading on every request
-load_dotenv(override=True)
 config = None
 audit = None
 conv_store = None
@@ -263,6 +342,8 @@ class ChatCompletionResponse(BaseModel):
 
 @app.get("/health")
 async def health_check():
+    if config is None:
+        raise HTTPException(status_code=503, detail="Server configuration invalid.")
     return {
         "status": "healthy",
         "model_loaded": config is not None,
@@ -454,7 +535,8 @@ async def chat_completions(
         # =====================================================================
         if request.stream:
             async def event_generator():
-                # First chunk: role
+                # Start the SSE response immediately. The fixed progress message
+                # is safe to expose before model generation completes.
                 first_chunk = {
                     "id": chat_id,
                     "object": "chat.completion.chunk",
@@ -470,7 +552,26 @@ async def chat_completions(
                 }
                 yield f"data: {json.dumps(first_chunk)}\n\n"
 
-                # Stream tokens from the LangGraph workflow
+                progress_chunk = {
+                    "id": chat_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_time,
+                    "model": request.model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "reasoning_content": STREAM_REASONING_PROGRESS
+                            },
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(progress_chunk, ensure_ascii=False)}\n\n"
+
+                # Buffer model output until filtering and citation verification
+                # complete. Afterwards the verified reasoning summary and answer
+                # are sent as separate incremental delta streams.
                 full_response = []
                 stream_trace = {"actions": [], "retrieved_sources": []}
                 stream_timer = QueryTimer()
@@ -487,70 +588,16 @@ async def chat_completions(
                     ):
                         if token:
                             full_response.append(token)
-                            content_chunk = {
-                                "id": chat_id,
-                                "object": "chat.completion.chunk",
-                                "created": created_time,
-                                "model": request.model,
-                                "choices": [
-                                    {
-                                        "index": 0,
-                                        "delta": {"content": token},
-                                        "finish_reason": None
-                                    }
-                                ]
-                            }
-                            yield f"data: {json.dumps(content_chunk, ensure_ascii=False)}\n\n"
 
-                # A.9 使用聲明：程式保證附加（見 ANSWER_DISCLAIMER 註解），
-                # 只在有實際內容時附加，避免空回覆只剩一句聲明。
-                if full_response:
-                    disclaimer_chunk = {
-                        "id": chat_id,
-                        "object": "chat.completion.chunk",
-                        "created": created_time,
-                        "model": request.model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {"content": ANSWER_DISCLAIMER},
-                                "finish_reason": None
-                            }
-                        ]
-                    }
-                    yield f"data: {json.dumps(disclaimer_chunk, ensure_ascii=False)}\n\n"
-
-                # Final chunk
-                final_chunk = {
-                    "id": chat_id,
-                    "object": "chat.completion.chunk",
-                    "created": created_time,
-                    "model": request.model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {},
-                            "finish_reason": "stop"
-                        }
-                    ]
-                }
-                yield f"data: {json.dumps(final_chunk)}\n\n"
-                yield "data: [DONE]\n\n"
-
-                # Post-stream: persist and audit.
-                # Streaming emits RAW LLM tokens (the generate node's output filter
-                # runs AFTER generation), so a sensitive span could have been
-                # streamed unfiltered. We can't un-send it, but we (a) DETECT it
-                # and flag an anomaly, and (b) persist the FILTERED text (not the
-                # raw leaked span) to the conversation store + audit so the STORED
-                # record never retains it. The per-node action trail + retrieved
-                # sources are reconstructed from stream events via `stream_trace`.
-                streamed_content = "".join(full_response)
+                streamed_content = stream_trace.get("final_generation", "".join(full_response))
                 _post = filter_output(streamed_content)
-                _persist = _post.text if _post.redacted else streamed_content
-                # 入庫文字＝使用者實際收到的文字（含程式附加的聲明）
-                if full_response:
-                    _persist = _persist + ANSWER_DISCLAIMER
+                reasoning_summary, answer_content = split_reasoning_summary(_post.text)
+                presented_content = fold_reasoning_for_openwebui(_post.text)
+                if streamed_content:
+                    presented_content = presented_content + ANSWER_DISCLAIMER
+                    answer_content = answer_content + ANSWER_DISCLAIMER
+                # 入庫文字＝使用者實際收到的完整文字。
+                _persist = presented_content
                 _anomaly = ["stream_output_redacted"] if _post.redacted else None
                 if _post.redacted:
                     logger.warning("STREAM output filter redacted before persist: %s", _post.findings)
@@ -586,12 +633,61 @@ async def chat_completions(
                             **audit_ctx,
                         )
 
+                for reasoning_part in _stream_text_chunks(reasoning_summary):
+                    reasoning_chunk = {
+                        "id": chat_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_time,
+                        "model": request.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"reasoning_content": reasoning_part},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(reasoning_chunk, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(_STREAM_DELTA_DELAY_SECONDS)
+
+                for answer_part in _stream_text_chunks(answer_content):
+                    content_chunk = {
+                        "id": chat_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_time,
+                        "model": request.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": answer_part},
+                                "finish_reason": None
+                            }
+                        ]
+                    }
+                    yield f"data: {json.dumps(content_chunk, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(_STREAM_DELTA_DELAY_SECONDS)
+
+                final_chunk = {
+                    "id": chat_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_time,
+                    "model": request.model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "stop"
+                        }
+                    ]
+                }
+                yield f"data: {json.dumps(final_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+
             return StreamingResponse(event_generator(), media_type="text/event-stream")
 
         # =====================================================================
         # NON-STREAMING PATH: Run query in background thread to avoid blocking
         # =====================================================================
-        import asyncio
         with timer:
             result_state = await asyncio.to_thread(
                 run_query,
@@ -616,6 +712,10 @@ async def chat_completions(
                 response_content = str(last_msg)
         else:
             response_content = "Error: No response generated from the RAG agent."
+
+        # OpenWebUI 0.7.x recognizes <think> as a collapsible reasoning block.
+        # Keep this at the API boundary so the canonical prompt is unchanged.
+        response_content = fold_reasoning_for_openwebui(response_content)
 
         # A.9 使用聲明：程式保證附加（錯誤回覆不加）；置於入庫/稽核之前，
         # 使儲存紀錄＝使用者實際收到的文字。
@@ -770,6 +870,8 @@ async def upload_file(
                 'message': f"File converted successfully: {md_path.name}"
             }
 
+        invalidate_workflow_cache()
+
         # Audit log
         if audit:
             audit.log_upload(
@@ -827,6 +929,8 @@ async def delete_document(filename: str, api_key: str = Security(get_api_key)):
                 
         if deleted_chunks == 0 and not file_deleted:
             raise HTTPException(status_code=404, detail=f"Document '{filename}' not found.")
+
+        invalidate_workflow_cache()
             
         return {
             "status": "success",
@@ -922,6 +1026,9 @@ async def upload_files_batch(
 
     success_count = sum(1 for r in results if r['status'] == 'success')
 
+    if any(r["status"] in ("success", "partial") for r in results):
+        invalidate_workflow_cache()
+
     return {
         "total": len(files),
         "success": success_count,
@@ -986,6 +1093,8 @@ async def reindex_all(api_key: str = Security(get_api_key)):
 
         # Index all markdown files
         results = ingestion_service.index_directory(converted_dir, pattern="*.md")
+
+        invalidate_workflow_cache()
 
         # Audit log
         if audit:

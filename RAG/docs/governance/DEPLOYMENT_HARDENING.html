@@ -65,102 +65,97 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
   <div class="content">
 <h1 id="deployment-hardening-guide">部署強化指引（Deployment Hardening Guide）</h1>
 <blockquote>
-<p>ISO 42001 A.8（安全）/ 條文 8（運作控制）證據。
-對應 <code>SYSTEM_ARCHITECTURE_ANALYSIS.md</code> §7.1 的部署組態風險（R-INFRA-1~5）。
-狀態：外部稽核準備整理版（2026-07-02）。修正方案已提供，<strong>套用為系統管理者於維護窗口的決定</strong>。</p>
+<p>ISO 42001 A.8（安全）與條文 8（運作控制）證據。
+狀態：2026-07-13 內網 10-service stack 復核版。</p>
 </blockquote>
-<h2 id="1">1. 風險與修正對照</h2>
+<h2 id="1">1. 邊界與保護目標</h2>
+<p><code>docker-compose.yaml</code> 維持開發與維運可用性；正式交付應合併 <code>docker-compose.hardening.yml</code>。強化 override 將以下 direct ports 綁定到 <code>127.0.0.1</code>：</p>
+<ul>
+<li>DB <code>15432</code>、embed-proxy <code>17100</code>、RAG API <code>8043</code>；</li>
+<li>OpenWebUI <code>18088</code>、Keycloak <code>18080</code>、Jupyter <code>25678</code>；</li>
+<li>code-server <code>18443</code>、monitoring <code>8200</code>、admin <code>8300</code>。</li>
+</ul>
+<p>nginx <code>8088/8443</code> 是預期的網路入口。<code>admin</code> 不經 nginx，因具有 <code>.env</code> 維護、RAG 重啟與受限 Docker exec 能力，必須同時使用 loopback、跳板/VPN 或等效的來源限制。</p>
+<h2 id="2">2. 強化對照</h2>
 <table>
 <thead>
 <tr>
 <th>風險</th>
-<th>現況</th>
-<th>修正方案</th>
-<th>修正載體</th>
-<th>套用狀態</th>
+<th>Base Compose</th>
+<th>Hardening / 作業控制</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>R-INFRA-5</td>
-<td><code>.env.example</code> 缺失，部署 bootstrap 斷鏈</td>
-<td>補完整範本（含安全強化註解）</td>
-<td><code>.env.example</code>（已建，純新增）</td>
-<td>✅ <strong>已修正</strong></td>
+<td>多個明文 direct ports</td>
+<td>可對宿主網路發布</td>
+<td>所有非 nginx direct ports（含 <code>admin:8300</code>）綁定 loopback</td>
 </tr>
 <tr>
-<td>R-INFRA-3</td>
-<td>DB 預設帳密 + 宿主直連埠</td>
-<td>埠綁 127.0.0.1 + <code>.env</code> 強制強密碼</td>
-<td><code>docker-compose.hardening.yml</code> + <code>.env.example</code></td>
-<td>🔧 已提供，待套用</td>
+<td>DB 繞過應用層</td>
+<td><code>15432</code> 直連</td>
+<td>loopback + <code>.env</code> 強隨機密碼</td>
 </tr>
 <tr>
-<td>R-INFRA-1</td>
-<td>多個服務仍有 host direct port；nginx 只保護 OpenWebUI 路徑</td>
-<td>direct port 綁 127.0.0.1，對外經 nginx TLS 或跳板</td>
-<td><code>docker-compose.hardening.yml</code></td>
-<td>🔧 已提供，待套用</td>
+<td>Jupyter 開發能力</td>
+<td>可寫原始碼，開發 image 權限高</td>
+<td>loopback；正式環境建議關閉或設 token、移除 sudo</td>
 </tr>
 <tr>
-<td>R-INFRA-2</td>
-<td>Jupyter 無認證 + sudo + rw 掛載（索引維運需求）</td>
-<td>埠綁 127.0.0.1 + 移除 sudo（+ 建議設 token）</td>
-<td><code>docker-compose.hardening.yml</code></td>
-<td>🔧 已提供，待套用</td>
+<td>code-server + Docker socket</td>
+<td>影響整個專案與 Docker host</td>
+<td>loopback + 強密碼；必要時移除 socket</td>
 </tr>
 <tr>
-<td>R-INFRA-4</td>
-<td>無網段隔離</td>
-<td>見 §3 進階建議（需正式變更）</td>
-<td>本指引 §3</td>
-<td>📋 建議</td>
+<td>admin + Docker socket + <code>.env</code></td>
+<td>可改設定、重啟與執行白名單作業</td>
+<td>憑證卡白名單 + loopback；break-glass 帳密預設關閉</td>
 </tr>
 <tr>
-<td>R-INFRA-6</td>
-<td>code-server 掛載整個專案與 Docker socket</td>
-<td>direct port 綁 127.0.0.1 + 強密碼；必要時移除 Docker socket</td>
-<td><code>docker-compose.hardening.yml</code> + <code>.env.example</code></td>
-<td>🔧 已提供，待套用</td>
+<td>RAG 設定重載</td>
+<td>若掛整份 <code>.env</code> 會跨服務暴露管理密碼</td>
+<td>只同步 13 個非秘密鍵至 <code>admin_console/data/rag-runtime.env</code>，rag-api 唯讀掛載</td>
+</tr>
+<tr>
+<td>TLS 私鑰洩漏</td>
+<td>將私鑰帶入 Git/包裝會失去機密性</td>
+<td>工作樹刪除舊憑證並由部署機生成或配發；歷史 key 視為已洩漏且必須輪替</td>
 </tr>
 </tbody>
 </table>
-<h2 id="2-recreate">2. 套用步驟（需維護窗口，會 recreate 容器）</h2>
-<pre><code class="language-bash"># 0. 前置：確認 .env 已填入強密碼（R-INFRA-3）
-#    POSTGRES_PASSWORD 與 PGVECTOR_URL 內的密碼須一致且非預設值
-grep -E 'POSTGRES_PASSWORD|WEBUI_SECRET_KEY|KEYCLOAK_ADMIN_PASSWORD|CODESERVER_PASSWORD' .env
-# 確認非 postgres / your-secret-key-here / change-this-*，且 code-server/keycloak 為強密碼
+<h2 id="3">3. 部署前置</h2>
+<ol>
+<li>將 <code>.env.example</code> 複製為 <code>.env</code>，權限設為 <code>0600</code>，並透過授權的機密流程填入強隨機值。不要把密碼值輸出到終端紀錄。</li>
+<li>Admin 登入必須二擇一：
+   - 生產建議：設定 <code>ADMIN_CARD_SERIALS</code>；
+   - break-glass：明確設定 <code>ENABLE_PASSWORD_FALLBACK=true</code>，並同時設定強隨機 <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code>。</li>
+<li><code>deploy.sh</code> 會拒絕空值或公開範本值；確認 <code>POSTGRES_PASSWORD</code>、<code>WEBUI_SECRET_KEY</code>、<code>KEYCLOAK_ADMIN_PASSWORD</code>、OAuth client secret 與 code-server 密碼皆已改成強隨機值。若上游推論服務啟用 API key 驗證，再填入其正式金鑰。受控內網可維持 <code>ALLOW_INTRANET_MODE=true</code>，不強制新增 RAG API key。</li>
+<li><code>embed-proxy</code> 的 HTTP 容器埠是 <code>7100</code>；連到 Triton 的 gRPC 埠使用 <code>EMBED_GRPC_PORT</code>。</li>
+</ol>
+<h2 id="4">4. 套用與驗證</h2>
+<pre><code class="language-bash">docker compose \
+  -f docker-compose.yaml \
+  -f docker-compose.hardening.yml \
+  up -d --wait
 
-# 1. 套用強化 override
-docker compose -f docker-compose.yaml -f docker-compose.hardening.yml up -d
-
-# 2. 驗證 direct port 綁定（除 nginx 8088/8443 外，應只見 127.0.0.1）
-ss -tlnp | grep -E '15432|17100|8043|18088|18080|25678|18443|8088|8443'
-
-# 3. 驗證功能未受影響
-curl -fsS http://localhost:8043/health
+ss -tlnp | grep -E '15432|17100|8043|18088|18080|25678|18443|8200|8300|8088|8443'
 </code></pre>
-<p><strong>回退</strong>：移除 <code>-f docker-compose.hardening.yml</code> 重新 <code>up -d</code> 即還原。</p>
-<h2 id="3-roadmap">3. 進階建議（需正式變更，列為 roadmap）</h2>
+<p>除 nginx <code>8088/8443</code> 外，上述 direct ports 應只出現在 <code>127.0.0.1</code>。再執行不啟停容器、不讀取 <code>.env</code> 機密的本機驗證：</p>
+<pre><code class="language-bash">./scripts/verify_project.sh
+</code></pre>
+<p>該腳本檢查 base/hardening Compose、<code>iso42001rag</code> 的 10-service 集合、shell 語法、私鑰工作樹狀態，並執行部署契約、RAG、monitoring、admin pytest（含 runtime regression 與 citation provenance gate 測試）。</p>
+<h2 id="5">5. 離線包與回退</h2>
 <ul>
-<li><strong>R-INFRA-4 網段隔離</strong>：在主 compose 為服務定義多個 <code>networks</code>（如 <code>frontend</code>/
-  <code>backend</code>/<code>data</code>），使 jupyter/code-server 即使遭濫用也不能任意直連 db、
-  embed-proxy。屬拓撲級變更，建議下一個維護版本納入。</li>
-<li><strong>R-INFRA-2 jupyter 強化</strong>：jupyter 在 prod 運行（索引維運需求）。套用
-  <code>docker-compose.hardening.yml</code> 將其埠綁 127.0.0.1（僅本機可達）並移除 sudo；
-  建議另設 Jupyter token（改 <code>RAG/Dockerfile</code> 的 <code>--NotebookApp.token</code>）。
-  若索引維運可改用 <code>docker exec rag-api python3 scripts/reindex.py</code>，則可進一步停用 jupyter。</li>
-<li><strong>R-INFRA-6 code-server 強化</strong>：code-server 目前為內網維運便利性掛載整個專案與
-  <code>/var/run/docker.sock</code>。正式部署建議移除 Docker socket 掛載，或只在跳板/VPN 中開放。</li>
-<li><strong>R-INFRA-1 nginx 反代 rag-api / keycloak / code-server</strong>：若需要瀏覽器內網入口，
-  在 <code>nginx.conf</code> 增加明確路徑或子網域反代，並保留 direct ports 只綁本機。對管理入口
-  （Keycloak admin、code-server）應優先使用跳板或來源 IP allowlist。</li>
+<li><code>save_images.sh</code> / <code>make_update_package.sh</code> 的 project/image 名固定為 <code>iso42001rag</code>，包含 <code>admin</code> image 與 <code>admin_console/</code>。</li>
+<li>程式碼包排除 <code>.env</code>、<code>nginx/ssl/*</code>、稽核日誌、報告與其他執行期資料。</li>
+<li>回退 hardening 需在維護視窗移除 override 後重建容器；回退前應先記錄風險接受與替代網路控制。</li>
 </ul>
-<h2 id="4">4. 與稽核的關係</h2>
-<p>本指引將「已識別但未套用」的風險轉為「已提供修正方案、待維護窗口套用」的受控狀態——
-這本身即 ISO 42001 條文 6.1（風險處置規劃）與條文 8（運作控制）的證據：風險不僅被
-識別，且有具體、可回復、已驗證語法的處置方案。套用決定與時程由系統管理者依
-<code>AI_RISK_ASSESSMENT.md</code> 的風險評定排序。</p>
+<h2 id="6">6. 殘餘風險</h2>
+<ul>
+<li>同一 default bridge 仍使維運容器可連內部服務；網段分離與 Docker socket proxy 屬後續架構強化。</li>
+<li>自簽憑證僅適用於受控開發環境；正式交付應採信任的內部 CA、憑證輪替與安全私鑰權限。</li>
+<li>ReAct 仍是 opt-in 原型；其同步與 SSE 出口已共用 deterministic citation provenance 與 fail-safe，但生產預設仍應保持 <code>REACT_MODE=false</code>。</li>
+</ul>
   </div>
   <div class="docfoot">
     本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/governance/DEPLOYMENT_HARDENING.md</code> 產生 · 自包含，可離線開啟。

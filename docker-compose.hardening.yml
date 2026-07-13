@@ -40,6 +40,11 @@ services:
     ports: !override
       - "127.0.0.1:8200:8200"
 
+  # [R-INFRA-7] Admin 可操作 Docker socket 與 .env，只允許從本機維運。
+  admin:
+    ports: !override
+      - "127.0.0.1:${ADMIN_PORT:-8300}:8300"
+
   # [R-INFRA-2] Jupyter：生產環境最小化——僅綁本機 + 移除 sudo + 唯讀掛載原始碼
   #   完全停用更佳（reindex 可用 docker exec rag-api 執行）；若須保留開發能力，至少：
   jupyter:
@@ -59,5 +64,5 @@ services:
 
 # ── 套用後驗證 ──────────────────────────────────────────────────────────
 # 1. docker compose ps 確認完整 stack healthy
-# 2. ss -tlnp | grep -E '15432|17100|8043|18088|18080|8200|25678|18443' 應只見 127.0.0.1 綁定
+# 2. ss -tlnp | grep -E '15432|17100|8043|18088|18080|8200|8300|25678|18443' 應只見 127.0.0.1 綁定
 # 3. 跑 monitoring_addon/scripts/run_online_vv.py 確認功能未受影響

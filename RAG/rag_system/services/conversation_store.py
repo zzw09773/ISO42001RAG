@@ -88,10 +88,13 @@ class ConversationStore:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "SELECT role, content FROM conversations "
+                        "SELECT role, content FROM ("
+                        "SELECT id, role, content, created_at FROM conversations "
                         "WHERE session_id = %s "
-                        "ORDER BY created_at ASC "
-                        "LIMIT %s",
+                        "ORDER BY created_at DESC, id DESC "
+                        "LIMIT %s"
+                        ") AS recent "
+                        "ORDER BY created_at ASC, id ASC",
                         (session_id, limit),
                     )
                     return cur.fetchall()
