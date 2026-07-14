@@ -42,7 +42,8 @@ rm -f "$ZIP"
 zip -rq "$ZIP" \
   RAG monitoring_addon admin_console embed_proxy nginx code-server keycloak tests \
   docker-compose.yaml docker-compose.hardening.yml \
-  deploy.sh save_images.sh make_update_package.sh scripts_md2html.py scripts/verify_project.sh \
+  deploy.sh save_images.sh make_update_package.sh backup_runtime.sh restore_runtime.sh \
+  verify_runtime_migration.sh scripts_md2html.py scripts/verify_project.sh \
   .env.example reset_data.sh \
   README.md README.html AUDIT_EVIDENCE_INDEX.md AUDIT_EVIDENCE_INDEX.html \
   PROJECT_STRUCTURE.md PROJECT_STRUCTURE.html INDEX.html \
@@ -60,7 +61,7 @@ zip -rq "$ZIP" \
   -x 'admin_console/data/*' \
   -x 'nginx/ssl/*' \
   -x '*.env' '.env' '.env.bak' \
-  -x '*/images/*' '*.tar' '*.zip'
+  -x '*/images/*' 'runtime_backups/*' '*.tar' '*.zip'
 # 說明：保留 golden_dataset.json、drift_baseline.json（穩定證據/基線）、
 #       RAG/data/converted_md/*（法規語料，reindex 需要）、所有 .html 文件。
 

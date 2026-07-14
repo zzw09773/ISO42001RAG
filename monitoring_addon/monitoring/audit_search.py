@@ -10,9 +10,79 @@ from html import escape
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+import requests
+
 from .audit_loader import filter_by_window, list_audit_files
 
 _TPE_TZ = timezone(timedelta(hours=8))
+
+
+def fetch_current_prompt_version(
+    rag_api_url: Optional[str] = None,
+    *,
+    timeout: float = 2.0,
+) -> dict:
+    """Read the prompt version from the running RAG service.
+
+    The runtime `/health` response is the source of truth. Monitoring must not
+    import or duplicate the prompt registry because its image can otherwise
+    disagree with the independently deployed rag-api image.
+    """
+    base_url = (rag_api_url or os.environ.get("RAG_API_URL", "http://rag-api:8000")).rstrip("/")
+    source = f"{base_url}/health"
+    try:
+        response = requests.get(source, timeout=timeout)
+        response.raise_for_status()
+        payload = response.json()
+        baseline = str(payload.get("prompt_baseline") or "").strip()
+        version_hash = str(payload.get("prompt_version_hash") or "").strip()
+        if not baseline or not version_hash:
+            raise ValueError("RAG health response has no prompt version metadata")
+        return {
+            "available": True,
+            "prompt_baseline": baseline,
+            "prompt_version_hash": version_hash,
+            "source": source,
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "prompt_baseline": "",
+            "prompt_version_hash": "",
+            "source": source,
+            "error": str(exc)[:200],
+        }
+
+
+def attach_prompt_version_status(result: dict, current_prompt: dict) -> None:
+    """Compare each query log's prompt metadata with the running RAG state."""
+    counts: Counter = Counter()
+    current_available = bool(current_prompt.get("available"))
+    current_baseline = str(current_prompt.get("prompt_baseline") or "")
+    current_hash = str(current_prompt.get("prompt_version_hash") or "")
+
+    for event in result.get("events") or []:
+        if event.get("event_type") != "query":
+            status = "not_applicable"
+        elif not current_available:
+            status = "unavailable"
+        else:
+            log_baseline = str(event.get("prompt_baseline") or "")
+            log_hash = str(event.get("prompt_version_hash") or "")
+            if not log_hash:
+                status = "missing"
+            elif log_hash != current_hash or (log_baseline and log_baseline != current_baseline):
+                status = "mismatch"
+            elif not log_baseline:
+                status = "match_legacy"
+            else:
+                status = "match"
+        event["_prompt_version_status"] = status
+        counts[status] += 1
+
+    result["prompt_version"] = current_prompt
+    result.setdefault("summary", {})["by_prompt_version_status"] = dict(counts)
 
 
 def parse_time(value: Any) -> Optional[datetime]:
@@ -92,7 +162,8 @@ def _contains_text(event: dict, q: str) -> bool:
         "event_type", "session_id", "request_id", "openai_response_id",
         "client_ip", "source_app", "frontend_session_id", "frontend_user_id",
         "frontend_chat_id", "frontend_message_id", "user_query",
-        "model_response", "reason", "threat_type",
+        "model_response", "reason", "threat_type", "prompt_baseline",
+        "prompt_version_hash",
     ]
     for field in fields:
         value = event.get(field)
@@ -298,11 +369,20 @@ def attach_openwebui_matches(events: List[dict], correlator: Optional[OpenWebUIC
 def render_audit_page(result: dict, params: dict, *, openwebui_available: bool) -> str:
     events = result.get("events") or []
     summary = result.get("summary") or {}
+    current_prompt = result.get("prompt_version") or {}
 
     def val(name: str) -> str:
         return escape(str(params.get(name, "") or ""))
 
     rows = []
+    prompt_status_labels = {
+        "match": ("normal", "一致"),
+        "match_legacy": ("warning", "一致（舊 log 僅 hash）"),
+        "mismatch": ("critical", "版本漂移"),
+        "missing": ("warning", "log 未記錄"),
+        "unavailable": ("warning", "無法取得實際版本"),
+        "not_applicable": ("", "不適用"),
+    }
     for event in events:
         level = event.get("_danger_level", "normal")
         q = event.get("user_query") or event.get("message") or event.get("reason") or ""
@@ -328,6 +408,25 @@ def render_audit_page(result: dict, params: dict, *, openwebui_available: bool) 
                 f" · {escape(str(match.get('user_email') or match.get('user_name') or 'unknown'))}"
                 f"{delta_text}<br><span>{escape(str(match.get('title') or ''))}</span></div>"
             )
+        prompt_status = str(event.get("_prompt_version_status") or "not_applicable")
+        prompt_class, prompt_label = prompt_status_labels.get(
+            prompt_status, ("warning", prompt_status)
+        )
+        log_baseline = str(event.get("prompt_baseline") or "")
+        log_hash = str(event.get("prompt_version_hash") or "")
+        runtime_baseline = str(current_prompt.get("prompt_baseline") or "")
+        runtime_hash = str(current_prompt.get("prompt_version_hash") or "")
+        if prompt_status == "not_applicable":
+            prompt_bits = "<span class='muted'>不適用</span>"
+        else:
+            badge_class = f" {prompt_class}" if prompt_class else ""
+            prompt_bits = (
+                f"<span class='badge{badge_class}'>{escape(prompt_label)}</span>"
+                f"<div><b>Log</b> <code>{escape(log_baseline or '—')}</code><br>"
+                f"<code class='hash'>{escape(log_hash or '—')}</code></div>"
+                f"<div><b>Runtime</b> <code>{escape(runtime_baseline or '—')}</code><br>"
+                f"<code class='hash'>{escape(runtime_hash or '—')}</code></div>"
+            )
         rows.append(
             "<tr>"
             f"<td class='ts'>{escape(str(event.get('timestamp', ''))[:19]).replace('T', ' ')}</td>"
@@ -336,12 +435,26 @@ def render_audit_page(result: dict, params: dict, *, openwebui_available: bool) 
             f"<td>{ids}</td>"
             f"<td>{escape(str(q))[:600]}</td>"
             f"<td>{''.join(owui_bits) if owui_bits else '—'}</td>"
+            f"<td>{prompt_bits}</td>"
             f"<td><code>{escape(str(event.get('_log_file', '')))}:{event.get('_line_no', '')}</code></td>"
             "</tr>"
         )
 
     by_type = summary.get("by_event_type") or {}
     by_level = summary.get("by_danger_level") or {}
+    by_prompt = summary.get("by_prompt_version_status") or {}
+    if current_prompt.get("available"):
+        prompt_runtime_html = (
+            "<div class='prompt-runtime normal-box'><b>執行中 Prompt</b> "
+            f"baseline <code>{escape(str(current_prompt.get('prompt_baseline') or ''))}</code> "
+            f"hash <code class='hash'>{escape(str(current_prompt.get('prompt_version_hash') or ''))}</code> "
+            f"<span class='muted'>來源 {escape(str(current_prompt.get('source') or ''))}</span></div>"
+        )
+    else:
+        prompt_runtime_html = (
+            "<div class='prompt-runtime warning-box'><b>無法取得執行中 Prompt 版本</b> "
+            f"<span>{escape(str(current_prompt.get('error') or '未取得 RAG health'))}</span></div>"
+        )
     return f"""<!doctype html>
 <html lang="zh-Hant">
 <head>
@@ -363,6 +476,9 @@ button,.link{{display:inline-block;padding:9px 14px;border:1px solid #1e3a8a;bac
 .quick a:hover{{border-color:#1e3a8a}}
 .stats{{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;color:#4b5568;font-size:12px}}
 .stats code{{background:#eef2f7;padding:2px 5px}}
+.prompt-runtime{{margin:12px 0;padding:10px 12px;border:1px solid #c9d1dc;font-size:12px}}
+.normal-box{{border-left:4px solid #166534}}.warning-box{{border-left:4px solid #92400e}}
+.hash{{overflow-wrap:anywhere;word-break:break-all}}.muted{{color:#5b6578}}
 table{{width:100%;border-collapse:collapse;font-size:12.5px}}
 th{{text-align:left;padding:8px;font-weight:700;border-top:2px solid #1a1f2c;border-bottom:1px solid #1a1f2c}}
 td{{border-bottom:1px solid #e5eaf1;padding:8px;vertical-align:top;line-height:1.5}}
@@ -380,6 +496,7 @@ code{{font-family:"JetBrains Mono","Consolas",monospace}}
 <h1>稽核日誌搜尋<span class="title-en">Audit Log Search</span></h1>
 <hr class="report-rule">
 <div class="sub">查詢 RAG audit JSONL；danger 包含 security_alert、auth_failure、anomaly_flags 與 P95/單筆延遲異常。OpenWebUI DB：{"available" if openwebui_available else "not mounted"}</div>
+{prompt_runtime_html}
 <form method="get" action="audit">
 <div><label>關鍵字</label><input name="q" value="{val('q')}" placeholder="query/session/request/ip"></div>
 <div><label>事件類型</label><select name="event_type">
@@ -409,8 +526,9 @@ code{{font-family:"JetBrains Mono","Consolas",monospace}}
 <span>returned <code>{result.get('returned', 0)}</code></span>
 <span>event_type <code>{escape(json.dumps(by_type, ensure_ascii=False))}</code></span>
 <span>danger <code>{escape(json.dumps(by_level, ensure_ascii=False))}</code></span>
+<span>prompt <code>{escape(json.dumps(by_prompt, ensure_ascii=False))}</code></span>
 </div>
 <div class="note">OpenWebUI 未傳前端 session header 時，本頁會用 user_query 文字與時間窗嘗試配對 OpenWebUI chat DB；若之後前端能傳 <code>x-session-id</code> / <code>x-openwebui-chat-id</code>，後端 audit log 也會直接記錄。</div>
-<table><thead><tr><th>時間</th><th>危險</th><th>事件/IP</th><th>關聯 ID</th><th>內容</th><th>OpenWebUI 對應</th><th>檔案</th></tr></thead>
-<tbody>{''.join(rows) if rows else '<tr><td colspan="7">無符合資料。</td></tr>'}</tbody></table>
+<table><thead><tr><th>時間</th><th>危險</th><th>事件/IP</th><th>關聯 ID</th><th>內容</th><th>OpenWebUI 對應</th><th>Prompt 版本</th><th>檔案</th></tr></thead>
+<tbody>{''.join(rows) if rows else '<tr><td colspan="8">無符合資料。</td></tr>'}</tbody></table>
 </div></body></html>"""

@@ -46,6 +46,13 @@ deploy_packages/images/
 deploy_packages/*.zip
 deploy_packages/*.tar
 
+# 離線交付整理目錄（可由受控源碼與 images 重建）
+v1.1/
+/v1.1.zip
+
+# 內網 runtime 備份（含對話、帳號、稽核與私密設定，禁止進版控）
+runtime_backups/
+
 # 大型開發歸檔（一次性快照，非規制證據）
 _dev_archive/
 _dev_archive/*.tar.gz

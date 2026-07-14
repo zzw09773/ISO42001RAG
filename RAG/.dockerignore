@@ -1,0 +1,26 @@
+# Runtime state belongs to bind mounts or PostgreSQL, never to the image.
+data/
+
+# Local configuration and cryptographic material must be supplied at runtime.
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+certs/
+
+# Development-only and generated files.
+.git/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+tests/
+docs/
+*.log
+*.tar
+*.tar.gz
+*.zip

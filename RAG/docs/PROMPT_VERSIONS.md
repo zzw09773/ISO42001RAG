@@ -2,7 +2,7 @@
 
 > ISO/IEC 42001 A.4 — AI artifact versioning  
 > 對應實作：`rag_system/core/prompts.py:PROMPT_VERSIONS`  
-> 對應稽核欄位：`query` 事件的 `prompt_version_hash`  
+> 對應稽核欄位：`query` 事件的 `prompt_baseline` 與 `prompt_version_hash`<br>
 > 最後更新：2026-07-02
 
 ---
@@ -18,7 +18,7 @@
 |---|---|
 | Prompt 基線 | `SYSTEM_PROMPT_BASELINE` |
 | 目前版本 | `1.1.0` |
-| 稽核欄位 | `prompt_version_hash` |
+| 稽核欄位 | `prompt_baseline` 與 `prompt_version_hash` |
 | RAG API 系統版號 | `rag_system/core/version.py:SYSTEM_VERSION = "1.1.0"` |
 | 權責 | 龔修潁（RAG 相關後端） |
 

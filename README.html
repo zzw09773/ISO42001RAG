@@ -137,6 +137,11 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 OpenWebUI ─OIDC→ Keycloak
 維運人員 ─憑證卡→ admin:8300
 </code></pre>
+<h2 id="_2">使用者文件</h2>
+<ul>
+<li><a href="RAG/docs/OPENWEBUI_USER_GUIDE.html">OpenWebUI 一般使用者操作手冊</a>：登入、選擇 <code>rag-agent</code>、提問、閱讀引用、常見錯誤與安全使用守則。</li>
+<li><a href="RAG/docs/INTRANET_HISTORY_MIGRATION.html">內網歷史資料遷移手冊</a>：新服務驗證、完整 runtime 備份、整庫還原、驗證與回退。</li>
+</ul>
 <p><code>admin</code> 不經 nginx，以一次性 nonce 綁定的 PKCS#7/CMS 簽章、釘選 CA 憑證鏈與 <code>ADMIN_CARD_SERIALS</code> 白名單登入。帳密 fallback 預設關閉；若作為 break-glass 啟用，必須同時設定強密碼。</p>
 <p>Admin 儲存設定時仍維護根 <code>.env</code>，但只把 13 個可管理的非秘密鍵同步到 <code>admin_console/data/rag-runtime.env</code>；rag-api 以唯讀方式載入此白名單檔後 restart。<code>rag-effective.env</code> 也只記錄同一組 13 鍵的實際生效值。這兩份 runtime 檔均不含 <code>API_KEYS</code>、<code>LLM_API_KEY</code>、<code>EMBED_API_KEY</code> 或管理密碼；但 rag-api 連接上游推論服務所需的 <code>LLM_API_KEY</code> / <code>EMBED_API_KEY</code> 仍會由 Compose <code>environment</code> 單獨注入容器，不應解讀為 RAG 容器內永遠沒有 API key。</p>
 <h2 id="rag">RAG 執行模式與安全邊界</h2>
@@ -146,7 +151,7 @@ OpenWebUI ─OIDC→ Keycloak
 <li>classic <code>verify</code> 先執行確定性 citation provenance gate：回答中的「第 N 條」必須可回溯至 <code>retrieved_sources</code>；無據引用先重試，重試額度耗盡時以 fail-safe 訊息取代原回答，不會將無據條號送給使用者。</li>
 <li><code>stream=true</code> 保留 OpenAI SSE envelope，但答案會先完整緩衝並通過輸出過濾，再送給客戶端。</li>
 </ul>
-<h2 id="_2">部署</h2>
+<h2 id="_3">部署</h2>
 <ol>
 <li>建立設定，並將所有佔位密碼改為強隨機值：</li>
 </ol>
@@ -163,7 +168,7 @@ OpenWebUI ─OIDC→ Keycloak
 <p><code>bash
    ./deploy.sh</code></p>
 <p><code>deploy.sh</code> 專為離線現場設計，會使用 <code>--no-build --pull never</code>，不會臨場 build 或 pull。乾淨 checkout 必須先放入完整 <code>images/*.tar</code>，或先在可建置的機器執行 <code>make_update_package.sh</code>；缺任一核定 image 時腳本會直接結束。Compose <code>--wait</code> 只會等有 healthcheck 的服務成為 healthy，沒有 healthcheck 的服務只能確認容器處於 running；這不等同端到端 RAG 查詢或上游模型已驗證就緒。</p>
-<h3 id="_3">部署強化</h3>
+<h3 id="_4">部署強化</h3>
 <p>主 Compose 保留開發可用性；正式內網交付應合併 hardening override：</p>
 <pre><code class="language-bash">docker compose \
   -f docker-compose.yaml \
@@ -173,12 +178,13 @@ OpenWebUI ─OIDC→ Keycloak
 <p>hardening 會將 DB、RAG、Embedding、OpenWebUI、Keycloak、Jupyter、code-server、monitoring 與 <code>admin:8300</code> 的 direct ports 限制為 loopback。<code>admin</code> 具有 Docker 控制與 <code>.env</code> 維護能力，不可對不可信網路暴露。完整風險與驗證步驟見 <code>RAG/docs/governance/DEPLOYMENT_HARDENING.md</code>。</p>
 <h3 id="tls">TLS 私鑰原則</h3>
 <p>本次工作樹已將曾被追蹤的 <code>nginx/ssl/cert.key</code> / <code>cert.crt</code> / <code>cert.csr</code> 標記刪除；這份刪除必須納入交付 commit，新 revision 才不會再夾帶它們。舊私鑰仍存在 Git history，必須視為已洩漏：不可再用於任何環境，下次部署須以 <code>nginx/generate_certs.sh</code> 或正式機密配發流程產生新憑證並完成輪替。若對外分享含歷史的 repository clone，還需另行評估歷史清理；本次不主張 Git history 已乾淨。</p>
-<h2 id="_4">離線包</h2>
+<h2 id="_5">離線包</h2>
 <pre><code class="language-bash">./save_images.sh
 ./make_update_package.sh
 </code></pre>
+<p>若已確認本機 10 個核定 image 均存在，只需逐一 <code>docker save</code> 並產生單一壓縮總包，可執行 <code>./save_images.sh --use-local</code>。輸出包含 <code>images/*.tar</code>、<code>IMAGE_MANIFEST.txt</code>，以及 <code>deploy_packages/iso42001rag-images-&lt;時間&gt;.tar.gz</code> 與對應 <code>.sha256</code>；不包含 runtime 歷史、<code>.env</code> 或 TLS 私鑰。打包前還會以無網路暫存容器檢查 <code>rag-api</code> image；若舊 image 仍含 <code>/app/data</code>、環境檔或憑證檔，腳本會拒絕產包，必須先使用 <code>RAG/.dockerignore</code> 重建。</p>
 <p>離線輸出包含 10 個服務所需的 images，並包含 <code>admin_console/</code>、Compose、hardening override、<code>tests/</code>、設定範本與文件。Compose project/image 名固定為 <code>iso42001rag</code>，<code>MANIFEST.txt</code> 對實際交付的 zip/tar 記錄 SHA-256，因此可辨識與驗證某一份具體成品。這不代表任意時間重建都會產生相同 bytes：<code>pgvector/pgvector:pg17</code> 與 <code>nginx:alpine</code> 等浮動 tag 可能在日後指向不同內容，若要達成 rebuild 級別的可重現性，必須改用受控 mirror 或 digest pin。<code>.env</code>、TLS 私鑰、稽核日誌與其他執行期資料一律排除。</p>
-<h2 id="_5">驗證</h2>
+<h2 id="_6">驗證</h2>
 <p>不啟停容器、不讀取或印出 <code>.env</code> 機密的本機驗證入口：</p>
 <pre><code class="language-bash">./scripts/verify_project.sh
 </code></pre>
@@ -196,7 +202,19 @@ ADMIN_CARD_SERIALS=0000000 docker compose --env-file .env.example \
   -f docker-compose.yaml -f docker-compose.hardening.yml config --quiet
 </code></pre>
 <p><code>scripts_md2html.py</code> 會將 Markdown 批次產生自包含 HTML；Markdown 是版控來源，發佈前應重生 HTML 鏡像並將其與同一 revision 一併驗證。</p>
-<h2 id="_6">資料清理</h2>
+<h2 id="_7">內網歷史資料繼承</h2>
+<p>只複製專案資料夾不會帶走 Docker named volumes。正式遷移應使用：</p>
+<pre><code class="language-bash"># 舊內網來源機：建立完整冷備份
+./backup_runtime.sh
+
+# 新服務：先以空資料完成煙霧測試，再載入來源備份
+./restore_runtime.sh --backup &lt;runtime備份目錄&gt;
+
+# 單獨比對來源 snapshot 與目前資料筆數／稽核摘要
+./verify_runtime_migration.sh --compare &lt;runtime備份目錄&gt;/source-snapshot.json
+</code></pre>
+<p>還原採整庫替換，不合併兩套 OpenWebUI、Keycloak、PostgreSQL 或 audit JSONL。還原前工具會先建立目標機回退備份；目標新版 <code>.env</code>／TLS 始終保留，只調整內網 IP、主機名稱與端點。禁止使用 <code>docker compose down -v</code>、<code>docker volume prune</code> 或在真實資料產生後執行 <code>reset_data.sh</code>。詳細停機順序、新版設定保留方式與驗收方式見<a href="RAG/docs/INTRANET_HISTORY_MIGRATION.html">內網歷史資料遷移手冊</a>。</p>
+<h2 id="_8">資料清理</h2>
 <p><code>reset_data.sh</code> 會刪除稽核日誌、對話與監測執行期資料。它只能在正式測試開始前使用；測試開始後，這些資料屬稽核證據，不得重置。</p>
   </div>
   <div class="docfoot">

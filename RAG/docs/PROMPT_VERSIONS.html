@@ -67,7 +67,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <blockquote>
 <p>ISO/IEC 42001 A.4 — AI artifact versioning<br>
 對應實作：<code>rag_system/core/prompts.py:PROMPT_VERSIONS</code><br>
-對應稽核欄位：<code>query</code> 事件的 <code>prompt_version_hash</code><br>
+對應稽核欄位：<code>query</code> 事件的 <code>prompt_baseline</code> 與 <code>prompt_version_hash</code><br>
 最後更新：2026-07-02</p>
 </blockquote>
 <hr>
@@ -93,7 +93,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 </tr>
 <tr>
 <td>稽核欄位</td>
-<td><code>prompt_version_hash</code></td>
+<td><code>prompt_baseline</code> 與 <code>prompt_version_hash</code></td>
 </tr>
 <tr>
 <td>RAG API 系統版號</td>

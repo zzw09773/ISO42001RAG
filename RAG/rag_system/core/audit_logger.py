@@ -439,9 +439,11 @@ class AuditLogger:
         """
         # Lazy import to avoid circular dependencies at module load
         try:
-            from .prompts import prompt_version_hash
+            from .prompts import PROMPT_VERSIONS, prompt_version_hash
+            prompt_baseline = PROMPT_VERSIONS["SYSTEM_PROMPT_BASELINE"]
             phash = prompt_version_hash()
         except Exception:
+            prompt_baseline = ""
             phash = ""
         record = {
             "event_type": "query",
@@ -451,6 +453,7 @@ class AuditLogger:
             "model_response": model_response,
             "scope_check": scope_check,
             "model_name": model_name,
+            "prompt_baseline": prompt_baseline,
             "prompt_version_hash": phash,
             "retrieved_docs": retrieved_docs or [],
             "tokens_used": tokens_used,

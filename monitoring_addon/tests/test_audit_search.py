@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from monitoring.audit_search import (
     OpenWebUICorrelator,
     attach_openwebui_matches,
+    attach_prompt_version_status,
     danger_level,
+    fetch_current_prompt_version,
     render_audit_page,
     search_audit_events,
 )
@@ -107,6 +109,100 @@ def test_render_audit_page_report_style():
     assert "稽核日誌搜尋" in html          # 新報告書式頁首
     assert 'class="report-rule"' in html   # 與儀表板同語彙的頂部粗線
     assert not _EMOJI_RE.search(html)
+
+
+def test_fetch_current_prompt_version_uses_running_rag_health(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "prompt_baseline": "1.1.0",
+                "prompt_version_hash": "runtime-hash",
+            }
+
+    calls = []
+
+    def fake_get(url, timeout):
+        calls.append((url, timeout))
+        return Response()
+
+    monkeypatch.setattr("monitoring.audit_search.requests.get", fake_get)
+    result = fetch_current_prompt_version("http://rag-api:8000/", timeout=1.5)
+
+    assert result == {
+        "available": True,
+        "prompt_baseline": "1.1.0",
+        "prompt_version_hash": "runtime-hash",
+        "source": "http://rag-api:8000/health",
+        "error": "",
+    }
+    assert calls == [("http://rag-api:8000/health", 1.5)]
+
+
+def test_prompt_version_status_handles_match_drift_and_old_logs():
+    result = {
+        "events": [
+            {
+                "event_type": "query",
+                "prompt_baseline": "1.1.0",
+                "prompt_version_hash": "current-hash",
+            },
+            {"event_type": "query", "prompt_version_hash": "current-hash"},
+            {
+                "event_type": "query",
+                "prompt_baseline": "1.0.0",
+                "prompt_version_hash": "old-hash",
+            },
+            {"event_type": "query"},
+            {"event_type": "security_alert"},
+        ],
+        "summary": {},
+    }
+    current = {
+        "available": True,
+        "prompt_baseline": "1.1.0",
+        "prompt_version_hash": "current-hash",
+        "source": "http://rag-api:8000/health",
+        "error": "",
+    }
+
+    attach_prompt_version_status(result, current)
+
+    assert [event["_prompt_version_status"] for event in result["events"]] == [
+        "match", "match_legacy", "mismatch", "missing", "not_applicable",
+    ]
+    assert result["summary"]["by_prompt_version_status"] == {
+        "match": 1,
+        "match_legacy": 1,
+        "mismatch": 1,
+        "missing": 1,
+        "not_applicable": 1,
+    }
+    html = render_audit_page(
+        result,
+        {"window_days": 30, "limit": 200},
+        openwebui_available=False,
+    )
+    assert "執行中 Prompt" in html
+    assert "版本漂移" in html
+    assert "一致（舊 log 僅 hash）" in html
+    assert "current-hash" in html and "old-hash" in html
+
+
+def test_prompt_version_status_is_unavailable_when_rag_health_fails():
+    result = {"events": [{"event_type": "query", "prompt_version_hash": "old"}]}
+    current = {
+        "available": False,
+        "prompt_baseline": "",
+        "prompt_version_hash": "",
+        "source": "http://rag-api:8000/health",
+        "error": "connection refused",
+    }
+    attach_prompt_version_status(result, current)
+    assert result["events"][0]["_prompt_version_status"] == "unavailable"
+    assert result["prompt_version"]["error"] == "connection refused"
 
 
 def test_correlator_matches_cjk_query_stored_ascii_escaped(tmp_path):
