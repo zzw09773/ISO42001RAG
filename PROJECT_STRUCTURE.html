@@ -66,7 +66,7 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <h1 id="project-structure">專案結構導覽（Project Structure）</h1>
 <blockquote>
 <p>ISO 42001 RAG 法律文件查詢系統 — 目錄地圖。供稽核員、維運人員、新進開發者
-快速定位。最後更新：2026-07-13。</p>
+快速定位。最後更新：2026-07-14。</p>
 <p>稽核證據總入口見 <code>AUDIT_EVIDENCE_INDEX.md</code>；架構說明見
 <code>RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md</code>。
 本版由龔修潁（RAG 相關後端）與張丘（強密碼、憑證、OpenWebUI）整理維護。</p>
@@ -137,6 +137,11 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td>腳本</td>
 </tr>
 <tr>
+<td><code>backup_runtime.sh</code> / <code>restore_runtime.sh</code> / <code>verify_runtime_migration.sh</code></td>
+<td>內網歷史冷備份、整庫還原、非內容式資料摘要驗證；保留目標新版 <code>.env</code></td>
+<td>遷移腳本</td>
+</tr>
+<tr>
 <td><code>scripts/verify_project.sh</code></td>
 <td>不讀 <code>.env</code> 機密的 Compose、shell 與三套 pytest 本機驗證入口</td>
 <td>驗證腳本</td>
@@ -145,6 +150,11 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td><code>deploy_packages/</code></td>
 <td>部署包（images tar＋code zip，<strong>git 忽略</strong>，可重建）</td>
 <td>建置產物</td>
+</tr>
+<tr>
+<td><code>runtime_backups/</code></td>
+<td>對話、帳號、向量、稽核與回退備份（<strong>git 忽略</strong>，須加密控管）</td>
+<td>機敏執行期資料</td>
 </tr>
 <tr>
 <td><code>images/</code></td>
@@ -247,6 +257,14 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <tr>
 <td><code>INTRANET_DEPLOYMENT_RUNBOOK.html</code></td>
 <td>部署 runbook</td>
+</tr>
+<tr>
+<td><code>INTRANET_HISTORY_MIGRATION.{md,html}</code></td>
+<td>新服務驗證後載入既有內網歷史、驗證與回退</td>
+</tr>
+<tr>
+<td><code>OPENWEBUI_USER_GUIDE.{md,html}</code></td>
+<td>OpenWebUI 一般使用者操作手冊</td>
 </tr>
 <tr>
 <td><code>requirements_review_report.{md,html}</code></td>

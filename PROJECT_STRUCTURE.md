@@ -1,7 +1,7 @@
 # 專案結構導覽（Project Structure）
 
 > ISO 42001 RAG 法律文件查詢系統 — 目錄地圖。供稽核員、維運人員、新進開發者
-> 快速定位。最後更新：2026-07-13。
+> 快速定位。最後更新：2026-07-14。
 >
 > 稽核證據總入口見 `AUDIT_EVIDENCE_INDEX.md`；架構說明見
 > `RAG/docs/SYSTEM_ARCHITECTURE_ANALYSIS.md`。
@@ -22,8 +22,10 @@
 | `docker-compose.hardening.yml` | 部署強化 override，含 `admin:8300` 的 loopback 限制 | 設定 |
 | `.env.example` | 環境變數範本（佔位值＋安全強化註解） | 設定範本 |
 | `deploy.sh` / `save_images.sh` / `make_update_package.sh` | 包含 admin image/code 的離線部署管線 | 腳本 |
+| `backup_runtime.sh` / `restore_runtime.sh` / `verify_runtime_migration.sh` | 內網歷史冷備份、整庫還原、非內容式資料摘要驗證；保留目標新版 `.env` | 遷移腳本 |
 | `scripts/verify_project.sh` | 不讀 `.env` 機密的 Compose、shell 與三套 pytest 本機驗證入口 | 驗證腳本 |
 | `deploy_packages/` | 部署包（images tar＋code zip，**git 忽略**，可重建） | 建置產物 |
+| `runtime_backups/` | 對話、帳號、向量、稽核與回退備份（**git 忽略**，須加密控管） | 機敏執行期資料 |
 | `images/` | Docker tar 映像（**git 忽略**） | 建置產物 |
 | `_dev_archive/` | 舊開發快照已清除；未來若重建仍不作為稽核證據 | 開發歸檔 |
 | `AUDIT_EVIDENCE_INDEX.md` | 稽核證據總導覽 | 證據 |
@@ -53,6 +55,8 @@
 | `SAFETY_CONTROLS.md` | 安全縱深 9 守則（A.8） |
 | `PROMPT_VERSIONS.md` | Prompt 基線版控史（A.4） |
 | `INTRANET_DEPLOYMENT_RUNBOOK.html` | 部署 runbook |
+| `INTRANET_HISTORY_MIGRATION.{md,html}` | 新服務驗證後載入既有內網歷史、驗證與回退 |
+| `OPENWEBUI_USER_GUIDE.{md,html}` | OpenWebUI 一般使用者操作手冊 |
 | `requirements_review_report.{md,html}` | 需求審查報告（v1.0.0） |
 | `governance/` | 治理文件包（見下） |
 

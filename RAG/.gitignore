@@ -46,9 +46,6 @@ rag_system/documents/
 .~lock.*
 *.log
 
-# Docker
-.dockerignore
-
 # Database
 *.db
 *.sqlite3

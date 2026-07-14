@@ -95,3 +95,7 @@ def test_query_log_keeps_source_correlation_fields(tmp_path):
     assert rec["openai_response_id"] == "chatcmpl-req-123"
     assert rec["frontend_chat_id"] == "chat-abc"
     assert rec["frontend_metadata"]["headers"]["user-agent"] == "OpenWebUI"
+    assert rec["prompt_baseline"] == "1.1.0"
+    assert rec["prompt_version_hash"] == (
+        "e61133c0a264b08604706292ba2dbf59b3092e1d9208b1e5c1f971b88c79dc3c"
+    )

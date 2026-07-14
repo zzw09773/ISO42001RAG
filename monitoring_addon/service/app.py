@@ -43,6 +43,8 @@ from monitoring.dashboard_render import render_dashboard
 from monitoring.audit_search import (
     OpenWebUICorrelator,
     attach_openwebui_matches,
+    attach_prompt_version_status,
+    fetch_current_prompt_version,
     render_audit_page,
     search_audit_events,
 )
@@ -214,6 +216,8 @@ async def audit_search_page(
     )
     correlator = OpenWebUICorrelator(_OPENWEBUI_DB)
     attach_openwebui_matches(result["events"], correlator)
+    current_prompt = await asyncio.to_thread(fetch_current_prompt_version)
+    attach_prompt_version_status(result, current_prompt)
     params = {
         "window_days": window_days,
         "event_type": event_type,
@@ -279,6 +283,8 @@ async def audit_events(
     )
     if correlate_openwebui:
         attach_openwebui_matches(result["events"], OpenWebUICorrelator(_OPENWEBUI_DB))
+    current_prompt = await asyncio.to_thread(fetch_current_prompt_version)
+    attach_prompt_version_status(result, current_prompt)
     result["openwebui_db_available"] = _OPENWEBUI_DB.exists()
     return JSONResponse(result)
 

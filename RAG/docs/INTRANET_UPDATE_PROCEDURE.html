@@ -45,6 +45,11 @@ li{margin:.3em 0;}
   </div>
   <div class="content">
 
+    <div class="box danger">
+      <b>歷史資料遷移提醒</b>：本頁原有備份步驟不包含 PostgreSQL、OpenWebUI、Keycloak、monitoring 與 admin 的完整 runtime，不能單獨用於跨主機歷史資料繼承。請改用
+      <a href="INTRANET_HISTORY_MIGRATION.html">內網歷史資料遷移手冊</a>與 <code>backup_runtime.sh</code>／<code>restore_runtime.sh</code>。
+    </div>
+
     <div class="box info">
       <b>本文適用情境</b>：從外部稽核準備乾淨基線建立或更新完整 ISO42001 stack。
       目前專案已清空歷史稽核日誌、部署包、Docker tar、舊憑證與 <code>.env</code>。

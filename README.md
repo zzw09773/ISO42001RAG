@@ -30,6 +30,11 @@ OpenWebUI ─OIDC→ Keycloak
 維運人員 ─憑證卡→ admin:8300
 ```
 
+## 使用者文件
+
+- [OpenWebUI 一般使用者操作手冊](RAG/docs/OPENWEBUI_USER_GUIDE.md)：登入、選擇 `rag-agent`、提問、閱讀引用、常見錯誤與安全使用守則。
+- [內網歷史資料遷移手冊](RAG/docs/INTRANET_HISTORY_MIGRATION.md)：新服務驗證、完整 runtime 備份、整庫還原、驗證與回退。
+
 `admin` 不經 nginx，以一次性 nonce 綁定的 PKCS#7/CMS 簽章、釘選 CA 憑證鏈與 `ADMIN_CARD_SERIALS` 白名單登入。帳密 fallback 預設關閉；若作為 break-glass 啟用，必須同時設定強密碼。
 
 Admin 儲存設定時仍維護根 `.env`，但只把 13 個可管理的非秘密鍵同步到 `admin_console/data/rag-runtime.env`；rag-api 以唯讀方式載入此白名單檔後 restart。`rag-effective.env` 也只記錄同一組 13 鍵的實際生效值。這兩份 runtime 檔均不含 `API_KEYS`、`LLM_API_KEY`、`EMBED_API_KEY` 或管理密碼；但 rag-api 連接上游推論服務所需的 `LLM_API_KEY` / `EMBED_API_KEY` 仍會由 Compose `environment` 單獨注入容器，不應解讀為 RAG 容器內永遠沒有 API key。
@@ -86,6 +91,8 @@ hardening 會將 DB、RAG、Embedding、OpenWebUI、Keycloak、Jupyter、code-se
 ./make_update_package.sh
 ```
 
+若已確認本機 10 個核定 image 均存在，只需逐一 `docker save` 並產生單一壓縮總包，可執行 `./save_images.sh --use-local`。輸出包含 `images/*.tar`、`IMAGE_MANIFEST.txt`，以及 `deploy_packages/iso42001rag-images-<時間>.tar.gz` 與對應 `.sha256`；不包含 runtime 歷史、`.env` 或 TLS 私鑰。打包前還會以無網路暫存容器檢查 `rag-api` image；若舊 image 仍含 `/app/data`、環境檔或憑證檔，腳本會拒絕產包，必須先使用 `RAG/.dockerignore` 重建。
+
 離線輸出包含 10 個服務所需的 images，並包含 `admin_console/`、Compose、hardening override、`tests/`、設定範本與文件。Compose project/image 名固定為 `iso42001rag`，`MANIFEST.txt` 對實際交付的 zip/tar 記錄 SHA-256，因此可辨識與驗證某一份具體成品。這不代表任意時間重建都會產生相同 bytes：`pgvector/pgvector:pg17` 與 `nginx:alpine` 等浮動 tag 可能在日後指向不同內容，若要達成 rebuild 級別的可重現性，必須改用受控 mirror 或 digest pin。`.env`、TLS 私鑰、稽核日誌與其他執行期資料一律排除。
 
 ## 驗證
@@ -113,6 +120,23 @@ ADMIN_CARD_SERIALS=0000000 docker compose --env-file .env.example \
 ```
 
 `scripts_md2html.py` 會將 Markdown 批次產生自包含 HTML；Markdown 是版控來源，發佈前應重生 HTML 鏡像並將其與同一 revision 一併驗證。
+
+## 內網歷史資料繼承
+
+只複製專案資料夾不會帶走 Docker named volumes。正式遷移應使用：
+
+```bash
+# 舊內網來源機：建立完整冷備份
+./backup_runtime.sh
+
+# 新服務：先以空資料完成煙霧測試，再載入來源備份
+./restore_runtime.sh --backup <runtime備份目錄>
+
+# 單獨比對來源 snapshot 與目前資料筆數／稽核摘要
+./verify_runtime_migration.sh --compare <runtime備份目錄>/source-snapshot.json
+```
+
+還原採整庫替換，不合併兩套 OpenWebUI、Keycloak、PostgreSQL 或 audit JSONL。還原前工具會先建立目標機回退備份；目標新版 `.env`／TLS 始終保留，只調整內網 IP、主機名稱與端點。禁止使用 `docker compose down -v`、`docker volume prune` 或在真實資料產生後執行 `reset_data.sh`。詳細停機順序、新版設定保留方式與驗收方式見[內網歷史資料遷移手冊](RAG/docs/INTRANET_HISTORY_MIGRATION.md)。
 
 ## 資料清理
 

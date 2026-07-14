@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>內網歷史資料遷移手冊</title>
+<style>
+:root{--ink:#1a1f2c;--muted:#5b6578;--line:#c9d1dc;--hairline:#e5eaf1;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;
+      --mono:"JetBrains Mono","Consolas","Courier New",monospace;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+     margin:0;background:var(--soft);color:var(--ink);line-height:1.75;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--line);border-right:1px solid var(--line);min-height:100vh;}
+.dochead{padding:22px 40px 0;}
+.dochead .row{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;
+              font-size:12px;color:var(--muted);}
+.dochead .row code{background:none;padding:0;color:var(--muted);}
+.dochead .row a{color:var(--accent);text-decoration:none;font-weight:700;}
+.dochead .row a:hover{text-decoration:underline;}
+.dochead hr{border:0;border-top:2px solid var(--ink);margin:10px 0 0;}
+.content{padding:20px 40px 0;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:1px solid var(--ink);}
+h2{font-size:20px;font-weight:800;margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--hairline);}
+h2::before{content:"";display:inline-block;width:4px;height:.85em;background:var(--accent);
+           margin-right:10px;vertical-align:-.08em;}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;text-wrap:pretty;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:2px solid var(--ink);
+           background:var(--soft);color:#374151;}
+blockquote p{margin:.3em 0;}
+code{font-family:var(--mono);font-size:.88em;background:#eef2f7;color:#0f172a;padding:.12em .4em;}
+pre{background:var(--soft);color:var(--ink);border:1px solid var(--line);padding:14px 16px;
+    overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;
+   border-top:2px solid var(--ink);border-bottom:1px solid var(--ink);}
+td{padding:7px 11px;border-bottom:1px solid var(--hairline);vertical-align:top;}
+tr:nth-child(even) td{background:#fafbfd;}
+hr{border:0;border-top:1px solid var(--line);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:2px solid var(--ink);
+         font-size:11.5px;color:var(--muted);}
+details{border:1px solid var(--line);margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}
+             .dochead .row a{display:none;}
+             pre,blockquote,table{break-inside:avoid-page;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="dochead">
+    <div class="row">
+      <span>ISO 42001 RAG · <code>RAG/docs/INTRANET_HISTORY_MIGRATION.md</code></span>
+      <span><a href="javascript:window.print()">列印 / 存 PDF</a></span>
+    </div>
+    <hr>
+  </div>
+  <div class="content">
+<h1 id="_1">內網歷史資料遷移手冊</h1>
+<blockquote>
+<p>適用系統：ISO 42001 中文法律 RAG 系統<br>
+適用情境：先以空資料啟動新服務，再載入既有內網歷史<br>
+文件版本：1.0<br>
+更新日期：2026-07-14</p>
+</blockquote>
+<h2 id="1">1. 目的與原則</h2>
+<p>本流程將既有內網系統的對話、帳號、向量索引、稽核、監控與管理留痕，載入已完成煙霧測試的新服務。</p>
+<p>核心原則：</p>
+<ul>
+<li>新服務在載入歷史前只能使用測試帳號與測試資料，不得先投入正式使用。</li>
+<li>遷移採「完整備份後整庫替換」，不直接合併兩套 OpenWebUI SQLite、Keycloak 資料、PostgreSQL 或 audit JSONL。</li>
+<li>備份與還原期間停止所有資料寫入端，避免取得不一致快照。</li>
+<li>還原前先自動備份目標機，任何失敗都保留回退材料。</li>
+<li>目標機一律保留目前新版 <code>.env</code> 與 TLS；進內網後只調整 IP、主機名稱及端點，不從舊系統還原設定。</li>
+<li>帳號、對話及稽核備份只能使用核准的加密媒體傳輸。</li>
+</ul>
+<h2 id="2">2. 資料範圍</h2>
+<table>
+<thead>
+<tr>
+<th>資料</th>
+<th>持久化位置</th>
+<th>遷移方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RAG 對話、向量 collection 與 embedding</td>
+<td><code>iso42001rag_pgdata</code></td>
+<td><code>pg_dump</code>／<code>pg_restore</code></td>
+</tr>
+<tr>
+<td>OpenWebUI 使用者、對話、訊息、設定與附件</td>
+<td><code>iso42001rag_openwebui_data</code></td>
+<td>停服後完整 volume 封存／替換</td>
+</tr>
+<tr>
+<td>Keycloak realm、使用者、client 與認證資料</td>
+<td><code>iso42001rag_keycloak_data</code></td>
+<td>停服後完整 volume 封存／替換</td>
+</tr>
+<tr>
+<td>稽核日誌、docstore、版本與 runtime 狀態</td>
+<td><code>RAG/data/</code></td>
+<td>bind runtime 封存／替換</td>
+</tr>
+<tr>
+<td>告警、可用率、V&amp;V 與監控報告</td>
+<td><code>monitoring_addon/data/</code></td>
+<td>bind runtime 封存／替換</td>
+</tr>
+<tr>
+<td>管理操作、工作紀錄與設定備份</td>
+<td><code>admin_console/data/</code></td>
+<td>bind runtime 封存／替換</td>
+</tr>
+<tr>
+<td>新版內網連線、OAuth secret、加密 secret、TLS</td>
+<td>目標機 <code>.env</code>、<code>nginx/ssl/</code></td>
+<td><strong>不遷移、不覆蓋</strong>；只在目標機調整 IP／主機名稱</td>
+</tr>
+</tbody>
+</table>
+<p>只搬專案資料夾不會包含 Docker named volumes。<code>full-stack-code.zip</code> 也刻意排除上述執行期資料與機密，只能用來更新程式碼，不能取代 runtime 備份。</p>
+<h3 id="21">2.1 外網與內網資料隔離</h3>
+<p>外網開發機只能提供「乾淨版本的程式碼」與「離線 Docker images」，不得將外網 runtime 資料一併帶入內網。不要直接對外網開發目錄執行無排除條件的 <code>cp -a</code>、<code>scp -r</code> 或 <code>rsync</code>。</p>
+<p>進內網前應確認：</p>
+<ul>
+<li>image 總包只有 <code>IMAGE_MANIFEST.txt</code> 與 10 個 <code>images/*.tar</code>，不含專案目錄。</li>
+<li><code>rag-api</code> image 建置時由 <code>RAG/.dockerignore</code> 排除 <code>RAG/data/</code>、<code>.env*</code>、憑證、私鑰、快取與開發產物；<code>save_images.sh</code> 會再以無網路暫存容器檢查，不符合就拒絕產包。</li>
+<li>不傳輸外網的 <code>RAG/data/</code>、<code>monitoring_addon/data/</code>、<code>admin_console/data/</code>、<code>runtime_backups/</code>、<code>.env</code> 或 <code>nginx/ssl/</code>。</li>
+<li>新版 <code>.env</code> 在內網目標機保留，只修改內網 IP、主機名與端點；TLS 憑證也在內網產生或由正式機密流程配發。</li>
+<li>歷史備份只能在「舊內網系統」產生，然後依本手冊還原到新版；不可使用外網開發機的 runtime 目錄當作歷史來源。</li>
+</ul>
+<h2 id="3">3. 前置條件</h2>
+<p>來源與目標應先確認：</p>
+<ul>
+<li>Compose project 名稱均為 <code>iso42001rag</code>。</li>
+<li>PostgreSQL、OpenWebUI、Keycloak 使用與備份相容的 image 版本。</li>
+<li>目標機已載入完整離線 images，且有足夠空間同時容納來源備份與自動回退備份。</li>
+<li>新服務的 HTTPS、Keycloak、<code>rag-agent</code>、監控與稽核已用測試資料驗證。</li>
+<li>遷移時間已公告，正式使用者停止操作。</li>
+</ul>
+<p>若日後需要跨大版本升級，應先用舊版本 image 還原成功，再逐一升級服務；不要同時進行資料搬遷與跨版本 schema 變更。</p>
+<h3 id="31">3.1 同一台主機以兩個目錄切換版本</h3>
+<p>假設舊版與新版分別位於：</p>
+<pre><code class="language-text">/home/ISO42001/ISO42001Deploy
+/home/ISO42001/ISO42001Deploy_v1.1
+</code></pre>
+<p>目前 Compose 固定使用 project 名 <code>iso42001rag</code>、固定容器名稱及同一組 named volumes，因此兩個目錄在同一台 Docker 主機上<strong>不是兩套可同時運行的服務</strong>。從新版目錄執行 <code>docker compose up</code> 會接管／重建同一組容器，而不是另外建立一套空白環境。</p>
+<p>備份必須以舊目錄為專案根目錄。若遷移工具只存在新版目錄，先複製備份與驗證工具：</p>
+<pre><code class="language-bash">cp /home/ISO42001/ISO42001Deploy_v1.1/backup_runtime.sh \
+   /home/ISO42001/ISO42001Deploy/
+cp /home/ISO42001/ISO42001Deploy_v1.1/verify_runtime_migration.sh \
+   /home/ISO42001/ISO42001Deploy/
+chmod +x /home/ISO42001/ISO42001Deploy/{backup_runtime.sh,verify_runtime_migration.sh}
+
+cd /home/ISO42001/ISO42001Deploy
+./backup_runtime.sh \
+  --output /home/ISO42001/ISO42001Deploy_v1.1/runtime_backups/pre-v1.1
+</code></pre>
+<p>不要在 <code>ISO42001Deploy_v1.1</code> 直接執行來源備份：named volumes 雖然相同，但 <code>RAG/data</code>、monitoring 與 admin 是 bind mount，會因此讀到新版目錄而漏掉舊目錄歷史。</p>
+<p>備份完成後的同主機切換順序：</p>
+<pre><code class="language-bash"># 1. 停止舊容器；禁止加 -v
+cd /home/ISO42001/ISO42001Deploy
+docker compose stop
+
+# 2. 使用新版 .env，只調整內網 IP／主機名稱／端點
+cd /home/ISO42001/ISO42001Deploy_v1.1
+nano .env
+
+# 3. 只啟動新版目錄下的 db，讓還原工具建立目標回退備份
+docker compose up -d --no-build --pull never db
+
+# 4. 載入舊歷史；完成後工具會啟動新版完整 stack
+./restore_runtime.sh \
+  --backup /home/ISO42001/ISO42001Deploy_v1.1/runtime_backups/pre-v1.1
+</code></pre>
+<p>若必須先以「完全空白且獨立」的新服務進行煙霧測試，應使用另一台主機／VM；同一主機則必須另做一套不同 project、容器名稱、ports 與 volumes 的測試 Compose，目前正式 Compose 不提供這種雙開模式。</p>
+<h2 id="4">4. 在舊內網來源機建立完整備份</h2>
+<p>於舊系統專案根目錄執行：</p>
+<pre><code class="language-bash">./backup_runtime.sh
+</code></pre>
+<p>工具會：</p>
+<ol>
+<li>記錄備份前正在運行的服務。</li>
+<li>暫停 OpenWebUI、RAG、Keycloak、Jupyter、Monitoring 與 Admin。Code Server 保持運行，避免從其終端執行時中斷備份程序。</li>
+<li>產生不含內容的來源資料摘要 <code>source-snapshot.json</code>。</li>
+<li>使用 PostgreSQL 邏輯 dump 備份 RAG 對話與向量索引。</li>
+<li>冷備份 OpenWebUI 與 Keycloak volumes。</li>
+<li>封存 <code>RAG/data</code>、monitoring 與 admin 執行期資料。</li>
+<li>產生 <code>SHA256SUMS</code>，並重新啟動備份前原本運行的服務。</li>
+</ol>
+<p>預設輸出：</p>
+<pre><code class="language-text">runtime_backups/runtime-YYYYMMDD-HHMMSS/
+├── SHA256SUMS
+├── backup-info.txt
+├── source-snapshot.json
+├── postgres.dump
+├── openwebui-data.tar.gz
+├── keycloak-data.tar.gz
+├── bind-runtime.tar.gz
+└── running-services.txt
+</code></pre>
+<p>傳輸前再次驗證：</p>
+<pre><code class="language-bash">cd runtime_backups/runtime-YYYYMMDD-HHMMSS
+sha256sum -c SHA256SUMS
+</code></pre>
+<p>整個目錄含個資、對話與稽核證據，不得放入 Git、一般共享資料夾或未加密媒體；來源 <code>.env</code> 與 TLS 不會包含在備份中。</p>
+<h2 id="5">5. 目標新服務載入歷史</h2>
+<p>先將完整備份目錄放到目標機核准位置，再回到新服務專案根目錄：</p>
+<pre><code class="language-bash">./restore_runtime.sh --backup /核准路徑/runtime-YYYYMMDD-HHMMSS
+</code></pre>
+<p>預設行為：</p>
+<ul>
+<li>先驗證來源 <code>SHA256SUMS</code>。</li>
+<li>要求輸入 <code>RESTORE-RUNTIME</code>，避免誤操作。</li>
+<li>自動建立 <code>runtime_backups/pre-restore-*</code> 目標機回退備份。</li>
+<li>替換 PostgreSQL、OpenWebUI、Keycloak 與三個 bind runtime 目錄。</li>
+<li>保留目標機目前新版 <code>.env</code> 與 TLS，完全不從來源備份覆蓋。</li>
+<li>在服務啟動前以 <code>--compare-exact</code> 比對冷資料筆數與 volume／稽核摘要，確保解壓內容逐項一致。</li>
+<li>精確比對後只移除還原資料庫內舊的 OpenWebUI <code>openai.api_base_urls</code>、<code>openai.api_keys</code>、<code>openai.api_configs</code> 與 <code>webui.url</code>；使用者、對話、權限及其他 UI 設定保持不變，正式啟動時改讀新版 <code>.env</code>／Compose。</li>
+<li>呼叫 <code>deploy.sh</code> 同步 runtime 設定並啟動完整服務。</li>
+<li>自動比對來源與目前的資料筆數、檔案數與稽核摘要。</li>
+</ul>
+<p>進入內網後，先在目標新版 <code>.env</code> 調整 IP、主機名稱及端點，再執行還原。管理者應確認：</p>
+<ul>
+<li><code>LLM_HOST</code>、<code>LLM_API_BASE</code>、<code>EMBED_GRPC_PORT</code></li>
+<li><code>WEBUI_URL</code></li>
+<li><code>OPENID_PROVIDER_URL</code></li>
+<li><code>OAUTH_CLIENT_SECRET</code></li>
+<li>Keycloak realm/client redirect URI</li>
+</ul>
+<p>如果還原後 Keycloak client secret 與新版 <code>.env</code> 的 <code>OAUTH_CLIENT_SECRET</code> 不一致，應在 Keycloak 管理端將 client secret 對齊新版 <code>.env</code>；不要把舊 <code>.env</code> 載回來。<code>WEBUI_SECRET_KEY</code> 也維持新版值，既有瀏覽器工作階段可能需要重新登入，但不應因此刪除 OpenWebUI 歷史對話。</p>
+<p>OpenWebUI 會將部分 <code>ConfigVar</code> 保存在 <code>webui.db</code>，可能優先於環境變數。因此還原工具會在驗證來源冷資料完整後清除上述四組舊連線欄位，避免舊 IP 蓋過新版 <code>.env</code>；此步驟不會清除聊天或帳號。</p>
+<p>需要先檢查資料而不啟動服務時：</p>
+<pre><code class="language-bash">./restore_runtime.sh \
+  --backup /核准路徑/runtime-YYYYMMDD-HHMMSS \
+  --no-start
+</code></pre>
+<p>確認後執行 <code>./deploy.sh</code>，再單獨執行遷移比較。</p>
+<h2 id="6">6. 自動與人工驗收</h2>
+<p>自動比較：</p>
+<pre><code class="language-bash">./verify_runtime_migration.sh \
+  --compare /核准路徑/runtime-YYYYMMDD-HHMMSS/source-snapshot.json
+</code></pre>
+<p>工具只讀取資料筆數、檔案數及稽核摘要，不輸出對話、帳號或稽核內容。至少檢查：</p>
+<ul>
+<li>PostgreSQL <code>conversations</code>、collection、embedding 筆數不得少於來源。</li>
+<li>OpenWebUI 使用者、對話與訊息筆數不得少於來源。</li>
+<li>稽核檔案及行數不得少於來源；行數相同時，內容摘要必須相同。</li>
+<li>Keycloak 與 OpenWebUI volume 不得為空。</li>
+<li>monitoring 與 admin runtime 檔案數不得少於來源。</li>
+</ul>
+<p><code>restore_runtime.sh</code> 會在啟動服務前自動執行更嚴格的冷資料精確比較；一般維運只需在啟動後使用上述 <code>--compare</code>，允許新服務正常追加 session、稽核及監控狀態。</p>
+<p>自動比較通過後仍須人工確認：</p>
+<ul>
+<li>[ ] 舊 Keycloak 帳號可以登入。</li>
+<li>[ ] OpenWebUI 顯示該使用者的舊對話。</li>
+<li>[ ] 舊對話可以正常開啟，且新問題會追加而非覆蓋。</li>
+<li>[ ] <code>rag-agent</code> 能使用既有向量索引回答已收錄法規。</li>
+<li>[ ] 最新 audit JSONL 的雜湊鏈驗證為 <code>valid=True</code>。</li>
+<li>[ ] monitoring 顯示舊可用率、告警與 V&amp;V 報告。</li>
+<li>[ ] <code>.env</code>、TLS 與備份檔案權限符合單位規範。</li>
+<li>[ ] 操作者、時間、來源 SHA-256、結果與異常已記錄。</li>
+</ul>
+<h2 id="7">7. 回退</h2>
+<p>還原開始前，工具會在目標機建立：</p>
+<pre><code class="language-text">runtime_backups/pre-restore-YYYYMMDD-HHMMSS/
+</code></pre>
+<p>若來源歷史載入失敗，可使用相同還原工具載回該目錄：</p>
+<pre><code class="language-bash">./restore_runtime.sh \
+  --backup runtime_backups/pre-restore-YYYYMMDD-HHMMSS
+</code></pre>
+<p>回退本身也是取代操作，仍會要求確認並再建立一份操作前備份。不要刪除失敗現場、來源備份或回退備份，直到驗收與變更紀錄正式結案。</p>
+<h2 id="8">8. 禁止事項</h2>
+<ul>
+<li>不得執行 <code>docker compose down -v</code>。</li>
+<li>不得執行 <code>docker volume prune</code>。</li>
+<li>真實歷史產生後不得執行 <code>reset_data.sh</code>。</li>
+<li>不得把兩套 <code>webui.db</code>、Keycloak H2 或同日期 audit JSONL 直接串接／覆寫合併。</li>
+<li>不得把 <code>runtime_backups/</code>、<code>.env</code>、TLS 私鑰或使用資料提交到 Git。</li>
+<li>不得用來源舊 <code>.env</code> 覆蓋目標新版 <code>.env</code>。</li>
+<li>不得在服務仍接受正式請求時複製 SQLite/H2 volume。</li>
+</ul>
+<h2 id="9">9. 工具說明</h2>
+<pre><code class="language-bash">./backup_runtime.sh --help
+./restore_runtime.sh --help
+./verify_runtime_migration.sh --help
+</code></pre>
+<p>腳本不會自動刪除任何備份。備份保存期限、離線副本、加密、存取授權與銷毀程序應依單位資料治理規範執行。</p>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/INTRANET_HISTORY_MIGRATION.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>

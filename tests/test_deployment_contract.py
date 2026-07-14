@@ -223,6 +223,18 @@ class ReleaseScriptContractTests(unittest.TestCase):
         )
         self.assertIn('ADMIN_IMAGE="iso42001rag-admin:latest"', save_script)
         self.assertIn("images/admin.tar", save_script)
+        self.assertIn("--use-local", save_script)
+        self.assertIn("IMAGE_MANIFEST.txt", save_script)
+        self.assertIn("iso42001rag-images-", save_script)
+        self.assertIn("tar -czf", save_script)
+        self.assertIn("sha256sum", save_script)
+        self.assertIn('basename "$BUNDLE_OUTPUT"', save_script)
+        self.assertIn("--network none", save_script)
+        self.assertIn("test ! -e /app/data", save_script)
+
+        rag_dockerignore = (ROOT / "RAG" / ".dockerignore").read_text(encoding="utf-8")
+        for excluded in ("data/", ".env", "*.key", "*.pem", "*.crt"):
+            self.assertIn(excluded, rag_dockerignore)
 
         self.assertIn(
             "docker compose build rag-api embed-proxy jupyter monitoring code-server admin",
@@ -234,6 +246,54 @@ class ReleaseScriptContractTests(unittest.TestCase):
             self.assertIn(html_name, package_script)
         self.assertRegex(package_script, r"\btests\b")
         self.assertIn("'admin_console/data/*'", package_script)
+
+    def test_runtime_migration_tools_are_packaged_and_safe_by_default(self) -> None:
+        package_script = (ROOT / "make_update_package.sh").read_text(encoding="utf-8")
+        backup_script = (ROOT / "backup_runtime.sh").read_text(encoding="utf-8")
+        restore_script = (ROOT / "restore_runtime.sh").read_text(encoding="utf-8")
+        verify_script = (ROOT / "verify_runtime_migration.sh").read_text(encoding="utf-8")
+
+        for name in (
+            "backup_runtime.sh", "restore_runtime.sh", "verify_runtime_migration.sh",
+        ):
+            path = ROOT / name
+            self.assertTrue(path.exists())
+            self.assertTrue(path.stat().st_mode & stat.S_IXUSR)
+            self.assertIn(name, package_script)
+
+        self.assertIn("runtime_backups/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+        self.assertIn("'runtime_backups/*'", package_script)
+        self.assertIn("pg_dump", backup_script)
+        self.assertIn("source-snapshot.json", backup_script)
+        self.assertNotIn("private-config.tar.gz", backup_script)
+        self.assertIn("RESTORE-RUNTIME", restore_script)
+        self.assertIn("pre-restore-", restore_script)
+        self.assertIn("pg_restore", restore_script)
+        self.assertNotIn("--restore-private-config", restore_script)
+        self.assertIn("保留目標機新版 .env", restore_script)
+        self.assertIn("openai\", \"api_base_urls", restore_script)
+        self.assertIn("openai\", \"api_keys", restore_script)
+        self.assertIn("webui\", \"url", restore_script)
+        self.assertNotIn("down -v", backup_script + restore_script + verify_script)
+        for volume in (
+            "iso42001rag_openwebui_data",
+            "iso42001rag_keycloak_data",
+        ):
+            self.assertIn(volume, backup_script)
+            self.assertIn(volume, restore_script)
+
+    def test_runtime_migration_help_does_not_require_docker(self) -> None:
+        for name in (
+            "backup_runtime.sh", "restore_runtime.sh", "verify_runtime_migration.sh",
+        ):
+            result = subprocess.run(
+                ["bash", name, "--help"],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("用法", result.stdout)
 
 
 class CertificateContractTests(unittest.TestCase):

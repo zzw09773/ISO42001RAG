@@ -67,6 +67,7 @@ RAG/data/audit_logs/audit_YYYY-MM-DD.jsonl
 | `client_ip` | string | 來源 IP（spoof-guarded，見 §2）；無法取得記 `unknown` | **ISO 27001 A.8.15** |
 | `user_query` | string | **使用者**原始查詢文字 | A.9 |
 | `model_response` | string | **模型**生成的完整回覆（不截斷）；用以區分輸入 vs 輸出，稽核引用正確性與幻覺判定 | **A.9 / A.6** |
+| `prompt_baseline` | string | 該筆 query 使用的人類可讀 Prompt 基線版號，例 `1.1.0`；舊紀錄可能無此欄位 | **A.4 AI 工件版控** |
 | `prompt_version_hash` | string | SHA-256 of `PROMPT_VERSIONS` canonical dict；Prompt 基線升版時 hash 會變，可追溯該筆查詢使用的 `SYSTEM_PROMPT_BASELINE`（見 `PROMPT_VERSIONS.md`） | **A.4 AI 工件版控** |
 | `actions` | array[string] | 系統實際執行的工作流軌跡，依序記錄各 node 決策，例：`["classify=llm:legal", "retrieve(docs=5,sources=3)", "generate(citations=2,tokens=613)", "verify=passed(llm)"]` | **A.6 生命週期紀錄** |
 | `scope_check` | string | `in_scope` / `out_of_scope` | A.9 |

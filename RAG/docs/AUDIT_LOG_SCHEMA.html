@@ -214,6 +214,12 @@ summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
 <td><strong>A.9 / A.6</strong></td>
 </tr>
 <tr>
+<td><code>prompt_baseline</code></td>
+<td>string</td>
+<td>該筆 query 使用的人類可讀 Prompt 基線版號，例 <code>1.1.0</code>；舊紀錄可能無此欄位</td>
+<td><strong>A.4 AI 工件版控</strong></td>
+</tr>
+<tr>
 <td><code>prompt_version_hash</code></td>
 <td>string</td>
 <td>SHA-256 of <code>PROMPT_VERSIONS</code> canonical dict；Prompt 基線升版時 hash 會變，可追溯該筆查詢使用的 <code>SYSTEM_PROMPT_BASELINE</code>（見 <code>PROMPT_VERSIONS.md</code>）</td>

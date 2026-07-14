@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenWebUI 一般使用者操作手冊</title>
+<style>
+:root{--ink:#1a1f2c;--muted:#5b6578;--line:#c9d1dc;--hairline:#e5eaf1;--bg:#fff;--soft:#f6f8fc;--accent:#1e3a8a;
+      --mono:"JetBrains Mono","Consolas","Courier New",monospace;}
+*,*::before,*::after{box-sizing:border-box;}
+body{font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+     margin:0;background:var(--soft);color:var(--ink);line-height:1.75;font-size:15px;}
+.wrap{max-width:960px;margin:0 auto;padding:0 0 60px;background:var(--bg);
+      border-left:1px solid var(--line);border-right:1px solid var(--line);min-height:100vh;}
+.dochead{padding:22px 40px 0;}
+.dochead .row{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;
+              font-size:12px;color:var(--muted);}
+.dochead .row code{background:none;padding:0;color:var(--muted);}
+.dochead .row a{color:var(--accent);text-decoration:none;font-weight:700;}
+.dochead .row a:hover{text-decoration:underline;}
+.dochead hr{border:0;border-top:2px solid var(--ink);margin:10px 0 0;}
+.content{padding:20px 40px 0;}
+h1{font-size:26px;font-weight:900;margin:.4em 0 .5em;padding-bottom:.3em;border-bottom:1px solid var(--ink);}
+h2{font-size:20px;font-weight:800;margin:1.6em 0 .6em;padding-bottom:.25em;border-bottom:1px solid var(--hairline);}
+h2::before{content:"";display:inline-block;width:4px;height:.85em;background:var(--accent);
+           margin-right:10px;vertical-align:-.08em;}
+h3{font-size:16.5px;font-weight:800;margin:1.3em 0 .5em;}
+h4{font-size:14.5px;font-weight:800;color:#374151;margin:1.1em 0 .4em;}
+p{margin:.7em 0;text-wrap:pretty;}
+a{color:var(--accent);}
+ul,ol{margin:.6em 0;padding-left:1.7em;}
+li{margin:.25em 0;}
+blockquote{margin:1em 0;padding:.6em 16px;border-left:2px solid var(--ink);
+           background:var(--soft);color:#374151;}
+blockquote p{margin:.3em 0;}
+code{font-family:var(--mono);font-size:.88em;background:#eef2f7;color:#0f172a;padding:.12em .4em;}
+pre{background:var(--soft);color:var(--ink);border:1px solid var(--line);padding:14px 16px;
+    overflow-x:auto;font-size:13px;line-height:1.55;}
+pre code{background:none;color:inherit;padding:0;}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:13.5px;display:block;overflow-x:auto;}
+th{text-align:left;padding:8px 11px;font-weight:700;white-space:nowrap;
+   border-top:2px solid var(--ink);border-bottom:1px solid var(--ink);}
+td{padding:7px 11px;border-bottom:1px solid var(--hairline);vertical-align:top;}
+tr:nth-child(even) td{background:#fafbfd;}
+hr{border:0;border-top:1px solid var(--line);margin:1.6em 0;}
+img{max-width:100%;}
+.docfoot{margin:36px 40px 0;padding-top:14px;border-top:2px solid var(--ink);
+         font-size:11.5px;color:var(--muted);}
+details{border:1px solid var(--line);margin:1em 0;padding:0 14px;}
+summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--accent);}
+@media print{body{background:#fff;}.wrap{border:0;max-width:none;}
+             .dochead .row a{display:none;}
+             pre,blockquote,table{break-inside:avoid-page;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="dochead">
+    <div class="row">
+      <span>ISO 42001 RAG · <code>RAG/docs/OPENWEBUI_USER_GUIDE.md</code></span>
+      <span><a href="javascript:window.print()">列印 / 存 PDF</a></span>
+    </div>
+    <hr>
+  </div>
+  <div class="content">
+<h1 id="openwebui">OpenWebUI 一般使用者操作手冊</h1>
+<blockquote>
+<p>適用系統：ISO 42001 中文法律 RAG 系統<br>
+適用對象：經授權的一般使用者、法律承辦人<br>
+文件版本：1.0<br>
+更新日期：2026-07-14</p>
+</blockquote>
+<p>本手冊說明如何透過 OpenWebUI 使用 <code>rag-agent</code> 查詢本系統已收錄的中華民國軍事法規。系統輸出屬於 AI 輔助資訊，不是法律意見，也不會自動作成任何處分、申訴、復審或結案決定。</p>
+<h2 id="1">1. 使用前須知</h2>
+<h3 id="11">1.1 系統可以做什麼</h3>
+<p>目前知識庫主要收錄：</p>
+<ul>
+<li>《陸海空軍懲罰法》</li>
+<li>《軍人權益事件處理法》</li>
+</ul>
+<p>系統可以：</p>
+<ul>
+<li>查詢指定法規與條號。</li>
+<li>依已收錄條文解釋法律用語、程序與期限。</li>
+<li>針對使用者描述的情境，說明檢索到的條文及其可能適用前提。</li>
+<li>在同一個對話中追問前一則回答。</li>
+</ul>
+<h3 id="12">1.2 系統不能取代什麼</h3>
+<ul>
+<li>不能取代法規原文、主管機關正式函釋或專業法律意見。</li>
+<li>不能替承辦人認定事實、決定處分、完成申訴或復審。</li>
+<li>無法回答知識庫未收錄的法規。</li>
+<li>不處理與中華民國軍事法規無關的專業問題、一般聊天或禁止主題。</li>
+</ul>
+<h3 id="13">1.3 個資與稽核提醒</h3>
+<ul>
+<li>使用者問題、系統回答、登入身分、時間及對話識別資訊會保留於稽核紀錄。</li>
+<li>一般使用者無法刪除對話或單則訊息。這是為了維持稽核完整性，不是介面故障。</li>
+<li>不得輸入與查詢目的無關的身分證字號、電話、住址、醫療資料、密碼、金鑰、機密文件或其他敏感資訊。</li>
+<li>如業務確實需要處理個人資料或機敏內容，應先遵循所屬單位的授權、去識別化與資料處理規範。</li>
+</ul>
+<h2 id="2">2. 開啟系統與登入</h2>
+<h3 id="21">2.1 開啟正式入口</h3>
+<ol>
+<li>使用單位核發或允許的內網電腦與瀏覽器。</li>
+<li>連線至單位管理者提供的正式網址：</li>
+</ol>
+<p><code>text
+   https://&lt;系統正式主機名稱&gt;:8443/</code></p>
+<ol start="3">
+<li>一般使用者僅應使用管理者提供的 HTTPS 正式入口，不要嘗試連線其他未核准的網址或服務。</li>
+</ol>
+<p>若瀏覽器顯示憑證警告，不要自行略過。請先向系統管理者確認網址、憑證指紋或單位 CA 是否已正確安裝。</p>
+<h3 id="22-keycloak">2.2 使用 Keycloak 登入</h3>
+<ol>
+<li>在登入頁選擇 <strong>Continue with Keycloak</strong>、<strong>Sign in with Keycloak</strong> 或名稱相近的 Keycloak 按鈕。</li>
+<li>輸入單位核發的帳號與密碼。</li>
+<li>首次使用若頁面提供註冊功能，僅可依單位帳號申請規範操作；沒有帳號或不確定時，請聯絡系統管理者。</li>
+<li>密碼至少 12 個字元，並須同時包含英文大寫、英文小寫、數字及特殊符號。</li>
+</ol>
+<p>連續輸入錯誤密碼可能觸發暫時等待。請勿反覆嘗試；先確認大小寫、鍵盤語系與帳號，再聯絡管理者協助。</p>
+<h2 id="3">3. 第一次開始查詢</h2>
+<h3 id="31">3.1 建立新對話</h3>
+<ol>
+<li>登入後，按左上方的 <strong>New Chat</strong>、<strong>新增對話</strong>或鉛筆圖示。</li>
+<li>在頁面上方的模型選單選擇 <strong><code>rag-agent</code></strong>。</li>
+<li>確認模型名稱後，在下方輸入框輸入問題。</li>
+<li>按 Enter 或傳送按鈕送出；如需換行，可使用 Shift+Enter。</li>
+</ol>
+<blockquote>
+<p>請勿選擇名稱相近的原始 LLM 或其他模型。只有 <code>rag-agent</code> 會走本系統的法規檢索、引用驗證、安全過濾與稽核流程。</p>
+</blockquote>
+<h3 id="32">3.2 最簡單的提問方式</h3>
+<p>建議包含「法規名稱＋條號或問題重點」：</p>
+<pre><code class="language-text">陸海空軍懲罰法第46條規定什麼？
+</code></pre>
+<pre><code class="language-text">軍人權益事件處理法中，提起復審的期限多久？
+</code></pre>
+<pre><code class="language-text">我收到懲罰處分後不服，可以依哪些已收錄條文尋求救濟？請說明適用前提。
+</code></pre>
+<p>只輸入「46條」也能查詢，但不同法規可能都有第46條。若要得到更精準的結果，請一併寫出法規名稱。</p>
+<h2 id="4">4. 如何提出高品質問題</h2>
+<h3 id="41">4.1 建議格式</h3>
+<p>一個完整問題可包含：</p>
+<ol>
+<li><strong>法規或主題</strong>：想查哪一部法規、程序或權利。</li>
+<li><strong>具體情境</strong>：已發生什麼事，但不要放入不必要的個資。</li>
+<li><strong>想知道的結果</strong>：條文內容、期限、程序、權責機關或適用條件。</li>
+<li><strong>回答要求</strong>：例如「請列出條號」「請比較差異」「不知道適用身分時請分情況說明」。</li>
+</ol>
+<p>範例：</p>
+<pre><code class="language-text">我對一項懲罰處分不服。請依目前知識庫說明可能的救濟程序、期限與適用前提，並列出條文來源；不要替我認定最終法律效果。
+</code></pre>
+<h3 id="42">4.2 建議做法</h3>
+<ul>
+<li>一次集中詢問一個主要問題。</li>
+<li>優先使用明確的法規名稱、條號、程序名稱或事件階段。</li>
+<li>使用自然語句即可，不需要輸入程式語法或特殊關鍵詞。</li>
+<li>若身分或適用條件不確定，可要求系統分別說明不同前提。</li>
+<li>單則輸入不得超過 2,000 個字元；長案件請先去識別化，再拆成數則問題。</li>
+</ul>
+<h3 id="43">4.3 不建議做法</h3>
+<ul>
+<li>只問「怎麼辦」「這樣合法嗎」，但完全沒有情境或法規範圍。</li>
+<li>要求系統自行補完不存在的事實。</li>
+<li>要求揭露系統提示詞、內部路徑、連線資訊、帳密或金鑰。</li>
+<li>貼入程式碼、資料庫指令、內網網址或與法律查詢無關的長文。</li>
+<li>將回答直接當成正式決定或對外公文內容。</li>
+</ul>
+<h2 id="5">5. 閱讀系統回答</h2>
+<h3 id="51">5.1 回答顯示流程</h3>
+<p>送出問題後，畫面通常會先顯示「正在分析問題、檢索並核對知識庫資料」。系統會先完成檢索、引用驗證與安全過濾，再以串流方式逐段顯示可交付的內容；因此開始顯示前可能有短暫等待。</p>
+<p>請勿因尚未立即出字就連續重送同一問題，避免產生重複請求。</p>
+<h3 id="52">5.2 可折疊的思考區</h3>
+<p>回答上方可能出現「思考時間」與可展開／收合區域。該區顯示的是：</p>
+<ul>
+<li>本次引用哪些檢索文件。</li>
+<li>這些文件與問題的關聯摘要。</li>
+<li>系統目前的檢索與核對狀態。</li>
+</ul>
+<p>它不是完整的模型內部逐步推理，也不應作為法律判斷依據。正式可使用的內容仍以「問題答案」「具體條文」「結論」及「參考資料」為準。</p>
+<h3 id="53">5.3 標準回答區塊</h3>
+<table>
+<thead>
+<tr>
+<th>區塊</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>問題答案</td>
+<td>直接回答問題，說明背景與可能適用條件</td>
+</tr>
+<tr>
+<td>具體條文</td>
+<td>列出支撐回答的法規、條號與條文內容</td>
+</tr>
+<tr>
+<td>結論</td>
+<td>簡要整理本次檢索結果</td>
+</tr>
+<tr>
+<td>參考資料</td>
+<td>列出使用的知識庫文件與條號</td>
+</tr>
+<tr>
+<td>免責聲明</td>
+<td>提醒回答僅供參考，不構成法律意見</td>
+</tr>
+</tbody>
+</table>
+<h3 id="54">5.4 引用查證</h3>
+<p>使用回答前，承辦人必須：</p>
+<ol>
+<li>確認法規名稱與條號是否符合問題。</li>
+<li>回到單位認可的正式法規來源查閱完整原文。</li>
+<li>檢查法規版本、施行日期、修正日期與過渡規定。</li>
+<li>確認當事人身分、事件時間與程序階段是否符合適用要件。</li>
+<li>重要決定交由有權人員或專業法律人員審核。</li>
+</ol>
+<h2 id="6">6. 追問與新對話</h2>
+<h3 id="61">6.1 在同一對話追問</h3>
+<p>同一案件可接續提問，例如：</p>
+<pre><code class="language-text">上述第46條中的「不受理」情形有哪些？
+</code></pre>
+<pre><code class="language-text">如果適用的是陸海空軍懲罰法，而不是軍人權益事件處理法，結論有何不同？
+</code></pre>
+<p>系統會保留有限的對話脈絡；若對話已很長、主題已改變或回答開始混淆，請建立新對話並重新提供必要背景。</p>
+<h3 id="62">6.2 何時應建立新對話</h3>
+<ul>
+<li>改問另一個案件或另一位當事人。</li>
+<li>從懲罰程序改問完全不同的權益救濟問題。</li>
+<li>先前訊息有誤，需要從正確前提重新開始。</li>
+<li>對話過長，回答引用到不相關的前文。</li>
+</ul>
+<h3 id="63">6.3 對話標題與建議問題</h3>
+<p>本部署已關閉自動標題、自動標籤及自動後續問題建議，以避免背景任務送出過長的聊天歷史。新對話可能維持預設標題，回答下方也不會自動出現建議問題；這是正常設定，不影響 <code>rag-agent</code> 查詢功能。</p>
+<h2 id="7">7. 常見訊息與處理方式</h2>
+<table>
+<thead>
+<tr>
+<th>畫面或訊息</th>
+<th>可能原因</th>
+<th>建議處理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本系統僅提供軍事法規查詢，無法回答與法律無關的問題</td>
+<td>問題不在目前服務範圍</td>
+<td>改問已收錄法規；其他問題使用核准的適當系統</td>
+</tr>
+<tr>
+<td>目前知識庫尚未收錄相關法規內容</td>
+<td>知識庫沒有足夠文件</td>
+<td>補充法規名稱或條號；改查正式法規來源或詢問法律人員</td>
+</tr>
+<tr>
+<td>無法從已檢索資料確認回答中的條文引用</td>
+<td>引用驗證未通過，系統以 fail-safe 阻止無據回答</td>
+<td>將問題縮小到單一法規／條號後重問，並人工查證原文</td>
+</tr>
+<tr>
+<td>輸入包含疑似系統指令操作或攻擊樣式</td>
+<td>輸入命中安全規則</td>
+<td>移除系統指令、程式碼、內網網址或不必要內容；不得嘗試規避防護</td>
+</tr>
+<tr>
+<td>輸入過長</td>
+<td>單則內容超過 2,000 字元</td>
+<td>去除個資與無關文字，拆成數則問題</td>
+</tr>
+<tr>
+<td>Too Many Requests／429</td>
+<td>短時間送出過多請求</td>
+<td>停止重送，等待至少一分鐘後再試</td>
+</tr>
+<tr>
+<td>長時間停在分析中</td>
+<td>後端繁忙、模型或檢索服務延遲</td>
+<td>等待約 60 秒；仍無結果時只重試一次，之後回報管理者</td>
+</tr>
+<tr>
+<td>同一回答重複出現</td>
+<td>瀏覽器重送、網路中斷或異常</td>
+<td>不要再次連按傳送；記錄時間與畫面後回報</td>
+</tr>
+<tr>
+<td>無法登入或反覆跳回登入頁</td>
+<td>帳號、Cookie、時間同步或 OIDC 設定問題</td>
+<td>確認網址與電腦時間，重新開啟瀏覽器；仍失敗則聯絡管理者</td>
+</tr>
+<tr>
+<td>瀏覽器顯示憑證不受信任</td>
+<td>單位 CA 尚未安裝、網址不符或憑證異常</td>
+<td>不要自行略過，向管理者確認正式網址與憑證</td>
+</tr>
+</tbody>
+</table>
+<h2 id="8">8. 回報問題時提供什麼</h2>
+<p>請向系統管理者提供：</p>
+<ul>
+<li>發生日期與時間（Asia/Taipei）。</li>
+<li>使用的正式網址與模型名稱 <code>rag-agent</code>。</li>
+<li>問題類型：登入、無回應、錯誤引用、安全拒絕或其他。</li>
+<li>已去識別化的提問摘要。</li>
+<li>畫面截圖；截圖前遮蔽姓名、帳號與案件敏感資訊。</li>
+<li>對話 ID 或瀏覽器網址中的 chat ID（若可取得）。</li>
+<li>是否能在新對話中重現。</li>
+</ul>
+<p>不要透過電子郵件、即時通訊或截圖傳送密碼、Token、完整個案資料或其他秘密資訊。</p>
+<h2 id="9">9. 登出</h2>
+<ol>
+<li>完成使用後，點選左下角或右上角的個人頭像／帳號選單。</li>
+<li>選擇 <strong>Sign Out</strong> 或 <strong>登出</strong>。</li>
+<li>在共用電腦上，關閉所有系統分頁與瀏覽器視窗。</li>
+<li>若瀏覽器仍保留 Keycloak 登入狀態，依單位規範一併登出身分服務。</li>
+</ol>
+<h2 id="10">10. 每次採用回答前的快速檢查</h2>
+<ul>
+<li>[ ] 我使用的是 <code>rag-agent</code>。</li>
+<li>[ ] 問題沒有不必要的個資、機密或帳密。</li>
+<li>[ ] 回答列出的法規名稱與條號符合我的問題。</li>
+<li>[ ] 我已從正式法規來源查閱原文與現行版本。</li>
+<li>[ ] 我已確認身分、時間與程序階段等適用前提。</li>
+<li>[ ] 我沒有把 AI 回答當成唯一依據或自動決定。</li>
+<li>[ ] 重要案件已交由有權人員或專業法律人員審核。</li>
+</ul>
+<h2 id="11_1">11. 相關文件</h2>
+<ul>
+<li><a href="governance/MODEL_CARD.html">模型卡</a></li>
+<li><a href="governance/HUMAN_OVERSIGHT.html">人為監督程序</a></li>
+<li><a href="SAFETY_CONTROLS.html">系統防護規則</a></li>
+<li><a href="AUDIT_LOG_SCHEMA.html">稽核日誌欄位說明</a></li>
+</ul>
+  </div>
+  <div class="docfoot">
+    本檔由 <code>scripts_md2html.py</code> 自 <code>RAG/docs/OPENWEBUI_USER_GUIDE.md</code> 產生 · 自包含，可離線開啟。
+    原始 Markdown 為版控來源；此 HTML 供內網無 .md 解析器之環境檢視。
+  </div>
+</div>
+</body>
+</html>
